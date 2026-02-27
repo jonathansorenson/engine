@@ -165,21 +165,29 @@ LOGIN_HTML = """<!DOCTYPE html>
 # ═══════════════════════════════════════════════════════════════
 
 def seed_admin_user():
-    """Create the default admin user if no users exist."""
+    """Create or update the admin user from env vars."""
     db = SessionLocal()
     try:
-        user_count = db.query(User).count()
-        if user_count == 0:
+        admin_email = settings.admin_email.lower().strip()
+        existing = db.query(User).filter(User.email == admin_email).first()
+        if existing:
+            # Always sync password from env var so changes take effect on redeploy
+            existing.hashed_password = hash_password(settings.admin_password)
+            existing.role = "admin"
+            existing.is_active = True
+            db.commit()
+            print(f"Updated admin user: {admin_email}")
+        else:
             admin = User(
-                email=settings.admin_email.lower().strip(),
+                email=admin_email,
                 hashed_password=hash_password(settings.admin_password),
                 name="Admin",
                 role="admin",
-                fund_id=settings.admin_email.lower().strip(),
+                fund_id=admin_email,
             )
             db.add(admin)
             db.commit()
-            print(f"Created admin user: {settings.admin_email}")
+            print(f"Created admin user: {admin_email}")
     except Exception as e:
         print(f"Error seeding admin user: {e}")
         db.rollback()
