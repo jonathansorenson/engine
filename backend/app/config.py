@@ -31,9 +31,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
-    # Engine password gate
-    engine_password: str = "crelytic2026"
+    # Auth
     secret_key: str = "change-me-to-a-random-32-char-string-in-production"
+    admin_email: str = "jonathan_sorenson@losttree.com"
+    admin_password: str = "crelytic2026"
 
     class Config:
         env_file = ".env"

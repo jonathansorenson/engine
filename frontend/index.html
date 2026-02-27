@@ -920,19 +920,21 @@
         };
 
         // Components
-        const Header = ({ currentPage, dealName }) => (
+        const Header = ({ currentPage, dealName, userName }) => (
             <div className="header">
                 <div className="header-left">
                     <div className="breadcrumb">
                         {currentPage === 'list' ? 'Deal Underwriting' : dealName}
                     </div>
                 </div>
-                <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     {DEMO_MODE && <span style={{ fontSize: '0.75rem', opacity: 0.6, border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '2px 8px' }}>DEMO</span>}
+                    {userName && <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{userName}</span>}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                         <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>CRE</span>
                         <span style={{ color: '#00BFA5', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>lytic</span>
                     </div>
+                    {!DEMO_MODE && <a href="/engine/logout" style={{ fontSize: '0.75rem', color: '#94a3b8', textDecoration: 'none', padding: '4px 10px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px' }}>Sign Out</a>}
                 </div>
             </div>
         );
@@ -956,6 +958,40 @@
                     )}
                 </div>
             );
+        };
+
+        const exportDealToExcel = async (deal, overrides, assumptions) => {
+            const payload = {
+                property_name: deal.property_name || 'Untitled Deal',
+                address: deal.address,
+                property_type: deal.property_type,
+                asking_price: overrides?.asking_price || deal.asking_price,
+                noi: overrides?.noi || deal.noi,
+                cap_rate: overrides?.cap_rate || deal.cap_rate,
+                rentable_sf: overrides?.rentable_sf || deal.rentable_sf,
+                assumptions: assumptions || deal.assumptions,
+                rent_roll: deal.rent_roll || [],
+            };
+            try {
+                const res = await fetch(`${API_URL}/api/v1/export`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error('Export failed');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${(deal.property_name || 'Deal').replace(/\s+/g, '_')}_Analysis.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('Failed to export to Excel: ' + error.message);
+            }
         };
 
         const deleteDeal = async (dealId) => {
@@ -1950,16 +1986,28 @@
                         <button className="btn btn-secondary btn-sm" onClick={onBack}>
                             ← Back to Deals
                         </button>
-                        <label style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-                            padding: '0.4rem 1rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600,
-                            background: 'var(--green)', color: 'white', cursor: uploadingRentRoll ? 'wait' : 'pointer',
-                            opacity: uploadingRentRoll ? 0.6 : 1,
-                        }}>
-                            📎 {uploadingRentRoll ? 'Uploading...' : 'Attach Rent Roll (Excel)'}
-                            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleRentRollUpload}
-                                disabled={uploadingRentRoll} style={{ display: 'none' }} />
-                        </label>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <label style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                                padding: '0.4rem 1rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600,
+                                background: 'var(--green)', color: 'white', cursor: uploadingRentRoll ? 'wait' : 'pointer',
+                                opacity: uploadingRentRoll ? 0.6 : 1,
+                            }}>
+                                📎 {uploadingRentRoll ? 'Uploading...' : 'Attach Rent Roll (Excel)'}
+                                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleRentRollUpload}
+                                    disabled={uploadingRentRoll} style={{ display: 'none' }} />
+                            </label>
+                            <button
+                                onClick={() => exportDealToExcel(deal, overrides, assumptions)}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                                    padding: '0.4rem 1rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600,
+                                    background: 'var(--blue)', color: 'white', border: 'none', cursor: 'pointer',
+                                }}
+                            >
+                                📊 Export to Excel
+                            </button>
+                        </div>
                     </div>
 
                     <div className="property-header">
@@ -2209,6 +2257,19 @@
             const [currentView, setCurrentView] = useState('list');
             const [selectedDealId, setSelectedDealId] = useState(null);
             const [deal, setDeal] = useState(null);
+            const [userName, setUserName] = useState('');
+
+            // Fetch current user info on mount
+            useEffect(() => {
+                if (!DEMO_MODE) {
+                    fetch(`${API_URL}/me`)
+                        .then(r => r.ok ? r.json() : null)
+                        .then(data => {
+                            if (data) setUserName(data.name || data.email || '');
+                        })
+                        .catch(() => {});
+                }
+            }, []);
 
             const handleSelectDeal = async (dealId) => {
                 const dealData = await fetchDeal(dealId);
@@ -2234,6 +2295,7 @@
                     <Header
                         currentPage={currentView}
                         dealName={deal?.property_name}
+                        userName={userName}
                     />
 
                     {currentView === 'list' && (
