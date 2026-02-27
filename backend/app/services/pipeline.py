@@ -373,9 +373,11 @@ def extract_excel_rent_roll(excel_path: str) -> Optional[List[Dict[str, Any]]]:
 # PDF TEXT EXTRACTION
 # ═══════════════════════════════════════════════════════════════
 
-def extract_text_from_pdf(pdf_path: str) -> Tuple[str, List[Dict[str, Any]]]:
-    """Extract text and tables from PDF using pdfplumber."""
+def extract_text_from_pdf(pdf_path: str) -> Tuple[str, List[Dict[str, Any]], str]:
+    """Extract text and tables from PDF using pdfplumber.
+    Returns (full_text, tables, page1_text)."""
     full_text = ""
+    page1_text = ""
     tables = []
 
     try:
@@ -383,6 +385,9 @@ def extract_text_from_pdf(pdf_path: str) -> Tuple[str, List[Dict[str, Any]]]:
             for page in pdf.pages:
                 page_text = page.extract_text() or ""
                 full_text += page_text + "\n"
+
+                if page.page_number == 1:
+                    page1_text = page_text
 
                 page_tables = page.extract_tables()
                 if page_tables:
@@ -397,7 +402,7 @@ def extract_text_from_pdf(pdf_path: str) -> Tuple[str, List[Dict[str, Any]]]:
         import traceback
         traceback.print_exc()
 
-    return full_text, tables
+    return full_text, tables, page1_text
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -434,8 +439,9 @@ def find_all_dollar_amounts(text: str) -> List[Dict[str, Any]]:
     return amounts
 
 
-def extract_property_details(text: str) -> Dict[str, Any]:
-    """Extract property details from text with expanded pattern matching."""
+def extract_property_details(text: str, page1_text: str = "") -> Dict[str, Any]:
+    """Extract property details from text with expanded pattern matching.
+    page1_text is used for asking price extraction (restricted to page 1 only)."""
     details = {}
 
     # Use first ~12K chars for property-level details (avoid sponsor bios at end)
@@ -564,35 +570,17 @@ def extract_property_details(text: str) -> Dict[str, Any]:
                 details["year_built"] = y
                 break
 
-    # ── Asking price ──
-    amounts = find_all_dollar_amounts(text)
-    price_keywords = ["asking", "price", "list", "offering", "purchase", "acquisition", "sale", "value"]
-    for amt in amounts:
+    # ── Asking price — ONLY from page 1 ──
+    # Price must be clearly stated on page 1. No guessing or fallback.
+    # If not found, the frontend derives price from NOI / Cap Rate.
+    price_source = page1_text if page1_text else text[:3000]
+    p1_amounts = find_all_dollar_amounts(price_source)
+    price_keywords = ["asking", "price", "list", "offering", "purchase", "acquisition", "sale"]
+    for amt in p1_amounts:
         if any(kw in amt["context"] for kw in price_keywords):
             if amt["value"] > 100000:
                 details["asking_price"] = amt["value"]
                 break
-
-    # If no labeled price, look for loan-related amounts (common in financing memos)
-    if "asking_price" not in details:
-        loan_pattern = r"(?:Loan\s*Amount|Financing)[\s:]*\$?([\d,]+)"
-        loan_match = re.search(loan_pattern, text[:10000], re.IGNORECASE)
-        if loan_match:
-            loan_amt = float(loan_match.group(1).replace(",", ""))
-            if loan_amt > 1_000_000:
-                # Estimate property value from loan at ~65% LTV
-                details["asking_price"] = round(loan_amt / 0.65, 0)
-
-    # Fallback: largest dollar amount > $1M
-    if "asking_price" not in details and amounts:
-        large_amounts = [a for a in amounts if a["value"] >= 1_000_000]
-        if large_amounts:
-            large_amounts.sort(key=lambda a: a["value"], reverse=True)
-            skip_keywords = ["revenue", "expense", "income", "tax", "fee", "cost", "budget", "loan", "debt"]
-            for amt in large_amounts:
-                if not any(kw in amt["context"] for kw in skip_keywords):
-                    details["asking_price"] = amt["value"]
-                    break
 
     return details
 
@@ -805,11 +793,11 @@ def parse_offering_memorandum(
     # Extract from PDF
     if pdf_path:
         try:
-            text, tables = extract_text_from_pdf(pdf_path)
+            text, tables, page1_text = extract_text_from_pdf(pdf_path)
             result["raw_text"] = text
 
-            # Extract property details
-            property_details = extract_property_details(text)
+            # Extract property details (page1_text used for price extraction)
+            property_details = extract_property_details(text, page1_text=page1_text)
             result["property"].update(property_details)
 
             # Extract financials

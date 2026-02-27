@@ -836,15 +836,18 @@
             const fin = pd.financials || {};
             const assumptions = apiDeal.assumptions || pd.assumptions || {};
 
-            const asking_price = prop.asking_price || fin.asking_price || 0;
+            const raw_asking_price = prop.asking_price || fin.asking_price || 0;
             const noi = fin.noi || 0;
             const total_sf = prop.total_sf || fin.total_sf || 0;
             const cap_rate = fin.cap_rate
                 ? (fin.cap_rate > 1 ? fin.cap_rate / 100 : fin.cap_rate)
-                : (asking_price > 0 ? noi / asking_price : 0);
+                : 0.07;  // Default 7% cap if not extracted
+            // If no asking price found on page 1, derive from NOI / Cap Rate
+            const asking_price = raw_asking_price > 0 ? raw_asking_price : (noi > 0 && cap_rate > 0 ? Math.round(noi / cap_rate) : 0);
 
             return {
                 id: apiDeal.id,
+                _raw_asking_price: raw_asking_price,  // Track whether price was extracted from OM
                 property_name: prop.name || apiDeal.name || apiDeal.original_filename || 'Untitled Deal',
                 address: prop.address || prop.city ? `${prop.address || ''}${prop.city ? ', ' + prop.city : ''}${prop.state ? ' ' + prop.state : ''}`.trim() : 'N/A',
                 property_type: prop.property_type || 'N/A',
@@ -1912,6 +1915,8 @@
             const [deal, setDeal] = useState(initialDeal);
             const [activeTab, setActiveTab] = useState('overview');
             const [uploadingRentRoll, setUploadingRentRoll] = useState(false);
+            // Track whether the OM had an explicit asking price (found on page 1)
+            const priceWasExtracted = (initialDeal._raw_asking_price || 0) > 0;
             // Editable overrides for parsed values
             const [overrides, setOverrides] = useState({
                 asking_price: initialDeal.asking_price || 0,
@@ -1931,8 +1936,14 @@
             const updateOverride = (key, value) => {
                 setOverrides(prev => {
                     const updated = { ...prev, [key]: value };
-                    // Auto-recalc cap rate if price or NOI changes
-                    if ((key === 'asking_price' || key === 'noi') && updated.asking_price > 0) {
+                    if (key === 'cap_rate' && !priceWasExtracted && updated.noi > 0 && value > 0) {
+                        // No extracted price — derive price from NOI / Cap Rate
+                        updated.asking_price = Math.round(updated.noi / value);
+                    } else if (key === 'noi' && !priceWasExtracted && updated.cap_rate > 0) {
+                        // NOI changed and no extracted price — recalculate price
+                        updated.asking_price = Math.round(value / updated.cap_rate);
+                    } else if ((key === 'asking_price' || key === 'noi') && updated.asking_price > 0) {
+                        // Price was extracted or manually set — recalc cap rate
                         updated.cap_rate = updated.noi / updated.asking_price;
                     }
                     return updated;
