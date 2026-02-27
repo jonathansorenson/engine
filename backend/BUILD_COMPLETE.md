@@ -143,7 +143,7 @@ backend/
 
 **Middleware**:
 - Automatic fund ID injection
-- Fallback to "lost-tree-default" for internal tools
+- Fallback to "crelytic-default" for internal tools
 - Request-level scoping
 
 **Multi-tenant**:

@@ -68,7 +68,7 @@ A complete, production-ready FastAPI backend for commercial real estate deal und
 11. **`app/auth/middleware.py`** (18 lines)
     - HTTP middleware for fund ID injection
     - Extracts fund_id from Bearer token
-    - Falls back to "lost-tree-default" for internal tools
+    - Falls back to "crelytic-default" for internal tools
     - Adds fund_id to request.state for all endpoints
 
 12. **`app/auth/__init__.py`** (6 lines)
@@ -362,7 +362,7 @@ curl -X PUT \
 - PDF parsing uses pdfplumber which handles complex layouts
 - Excel parsing uses fuzzy matching for flexible column detection
 - Claude streaming uses the Anthropic SDK with event streaming
-- All endpoints require fund_id either from JWT or default to "lost-tree-default"
+- All endpoints require fund_id either from JWT or default to "crelytic-default"
 - File uploads are temporarily stored and cleaned up after parsing
 - Chat history is persisted and retrieved on demand
 

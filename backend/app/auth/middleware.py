@@ -1,7 +1,7 @@
 from fastapi import Request
 from app.auth.utils import extract_fund_id_from_token
 
-DEFAULT_FUND_ID = "lost-tree-default"
+DEFAULT_FUND_ID = "crelytic-default"
 
 
 async def add_fund_id_to_request(request: Request, call_next):

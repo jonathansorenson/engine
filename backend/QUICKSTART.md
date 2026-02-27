@@ -158,7 +158,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/cre_deals
 
 ## Authentication (Optional)
 
-By default, all requests are scoped to fund `lost-tree-default`.
+By default, all requests are scoped to fund `crelytic-default`.
 
 To use custom fund IDs, pass a JWT:
 ```bash

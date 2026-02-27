@@ -1,5 +1,5 @@
 ================================================================================
-MANIFEST — Lost Tree Capital CRE Deal Underwriting Tool (Frontend)
+MANIFEST — CRE Lytic CRE Deal Underwriting Tool (Frontend)
 ================================================================================
 
 PROJECT DELIVERY: February 26, 2025
@@ -480,7 +480,7 @@ Status: Production Ready
 Framework: React 18
 Language: JavaScript ES6+
 
-Copyright © 2025 Lost Tree Capital. All rights reserved.
+Copyright © 2025 CRE Lytic. All rights reserved.
 
 This tool is provided for institutional use. All financial calculations
 are informational only and should be verified by qualified professionals.

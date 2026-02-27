@@ -165,7 +165,7 @@ curl http://localhost:8000/api/v1/deals/550e8400-e29b-41d4-a716-446655440000/cha
 
 ## Authentication
 
-The backend uses JWT-based authentication. By default, if no authorization header is provided, requests are scoped to `lost-tree-default` fund.
+The backend uses JWT-based authentication. By default, if no authorization header is provided, requests are scoped to `crelytic-default` fund.
 
 **With JWT**:
 ```bash

@@ -1,5 +1,5 @@
 ================================================================================
-    LOST TREE CAPITAL — CRE DEAL UNDERWRITING TOOL (FRONTEND)
+    CRE LYTIC — DEAL UNDERWRITING ENGINE (FRONTEND)
     Production-Ready Single-File React Application
 ================================================================================
 
@@ -391,7 +391,7 @@ Questions or issues?
 LICENSE & DISCLAIMER:
 ================================================================================
 
-Copyright © 2025 Lost Tree Capital. All rights reserved.
+Copyright © 2025 CRE Lytic. All rights reserved.
 
 This tool is provided as-is for institutional use. All financial calculations
 are provided for informational purposes only and should not be relied upon

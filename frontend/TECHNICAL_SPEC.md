@@ -548,4 +548,4 @@ window.DEBUG = true;
 
 **Last Updated**: February 2025
 **Status**: Production Ready
-**Maintainer**: Lost Tree Capital Engineering
+**Maintainer**: CRE Lytic Engineering

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lost Tree Capital — Deal Underwriting</title>
+    <title>CRE Lytic — Deal Underwriting</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.min.js"></script>
@@ -920,16 +920,24 @@
         };
 
         // Components
-        const Header = ({ currentPage, dealName, userName }) => (
+        const Header = ({ currentPage, dealName, userName, userRole, onAdminClick, onHomeClick }) => (
             <div className="header">
                 <div className="header-left">
-                    <div className="breadcrumb">
-                        {currentPage === 'list' ? 'Deal Underwriting' : dealName}
+                    <div className="breadcrumb" onClick={onHomeClick} style={{ cursor: 'pointer' }}>
+                        {currentPage === 'list' ? 'Deal Underwriting' : currentPage === 'admin' ? 'Admin — User Management' : dealName}
                     </div>
                 </div>
                 <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     {DEMO_MODE && <span style={{ fontSize: '0.75rem', opacity: 0.6, border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '2px 8px' }}>DEMO</span>}
                     {userName && <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{userName}</span>}
+                    {userRole === 'admin' && (
+                        <button onClick={onAdminClick} style={{
+                            fontSize: '0.75rem', color: '#00BFA5', background: 'transparent', border: '1px solid #00BFA5',
+                            borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontWeight: 600
+                        }}>
+                            {currentPage === 'admin' ? 'Back to Deals' : 'Manage Users'}
+                        </button>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                         <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>CRE</span>
                         <span style={{ color: '#00BFA5', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>lytic</span>
@@ -2252,12 +2260,263 @@
             }
         }
 
+        // Admin Panel — User Management
+        const AdminPanel = ({ onBack }) => {
+            const [users, setUsers] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [showCreate, setShowCreate] = useState(false);
+            const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'analyst' });
+            const [editingId, setEditingId] = useState(null);
+            const [editData, setEditData] = useState({});
+            const [error, setError] = useState('');
+
+            const loadUsers = async () => {
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/admin/users`);
+                    if (!res.ok) throw new Error('Failed to load users');
+                    const data = await res.json();
+                    setUsers(data);
+                } catch (e) {
+                    setError(e.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => { loadUsers(); }, []);
+
+            const handleCreate = async (e) => {
+                e.preventDefault();
+                setError('');
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/admin/users`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newUser),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Failed to create user');
+                    }
+                    setNewUser({ email: '', password: '', name: '', role: 'analyst' });
+                    setShowCreate(false);
+                    await loadUsers();
+                } catch (e) {
+                    setError(e.message);
+                }
+            };
+
+            const handleUpdate = async (userId) => {
+                setError('');
+                try {
+                    const payload = { ...editData };
+                    if (!payload.password) delete payload.password;
+                    const res = await fetch(`${API_URL}/api/v1/admin/users/${userId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Failed to update user');
+                    }
+                    setEditingId(null);
+                    setEditData({});
+                    await loadUsers();
+                } catch (e) {
+                    setError(e.message);
+                }
+            };
+
+            const handleToggleActive = async (user) => {
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/admin/users/${user.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ is_active: !user.is_active }),
+                    });
+                    if (!res.ok) throw new Error('Failed to update user');
+                    await loadUsers();
+                } catch (e) {
+                    setError(e.message);
+                }
+            };
+
+            const handleDelete = async (user) => {
+                if (!confirm(`Permanently delete ${user.email}? This cannot be undone.`)) return;
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/admin/users/${user.id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Failed to delete user');
+                    await loadUsers();
+                } catch (e) {
+                    setError(e.message);
+                }
+            };
+
+            if (loading) return <div className="container"><div className="loading"></div> Loading users...</div>;
+
+            const inputStyle = {
+                padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px',
+                fontSize: '0.85rem', width: '100%', background: 'white',
+            };
+            const roleBadge = (role) => ({
+                padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+                background: role === 'admin' ? '#fef3c7' : role === 'analyst' ? '#dbeafe' : '#e2e8f0',
+                color: role === 'admin' ? '#92400e' : role === 'analyst' ? '#1e40af' : '#475569',
+            });
+
+            return (
+                <div className="container">
+                    <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--navy)' }}>User Management</h1>
+                        <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
+                            {showCreate ? 'Cancel' : '+ Add User'}
+                        </button>
+                    </div>
+
+                    {error && (
+                        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                            {error}
+                            <span onClick={() => setError('')} style={{ float: 'right', cursor: 'pointer', fontWeight: 700 }}>x</span>
+                        </div>
+                    )}
+
+                    {showCreate && (
+                        <div className="card" style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--navy)' }}>Create New User</h3>
+                            <form onSubmit={handleCreate}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Name</label>
+                                        <input style={inputStyle} placeholder="Full name" value={newUser.name}
+                                            onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Email *</label>
+                                        <input style={inputStyle} type="email" placeholder="user@company.com" required value={newUser.email}
+                                            onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Password *</label>
+                                        <input style={inputStyle} type="password" placeholder="Temporary password" required value={newUser.password}
+                                            onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Role</label>
+                                        <select style={inputStyle} value={newUser.role}
+                                            onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}>
+                                            <option value="analyst">Analyst</option>
+                                            <option value="viewer">Viewer</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button type="submit" className="btn btn-primary" style={{ fontSize: '0.85rem' }}>Create User</button>
+                                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.85rem' }} onClick={() => setShowCreate(false)}>Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    <div className="card">
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th style={{ textAlign: 'right' }}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {users.map(user => (
+                                    <tr key={user.id}>
+                                        <td>
+                                            {editingId === user.id ? (
+                                                <input style={{ ...inputStyle, width: '150px' }} value={editData.name || ''}
+                                                    onChange={e => setEditData(p => ({ ...p, name: e.target.value }))} />
+                                            ) : (
+                                                <span style={{ fontWeight: 500 }}>{user.name || '—'}</span>
+                                            )}
+                                        </td>
+                                        <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{user.email}</td>
+                                        <td>
+                                            {editingId === user.id ? (
+                                                <select style={{ ...inputStyle, width: '110px' }} value={editData.role || user.role}
+                                                    onChange={e => setEditData(p => ({ ...p, role: e.target.value }))}>
+                                                    <option value="analyst">Analyst</option>
+                                                    <option value="viewer">Viewer</option>
+                                                    <option value="admin">Admin</option>
+                                                </select>
+                                            ) : (
+                                                <span style={roleBadge(user.role)}>{user.role}</span>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <span style={{
+                                                padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700,
+                                                background: user.is_active ? '#dcfce7' : '#fee2e2',
+                                                color: user.is_active ? '#166534' : '#991b1b',
+                                            }}>
+                                                {user.is_active ? 'Active' : 'Disabled'}
+                                            </span>
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            {editingId === user.id ? (
+                                                <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                                                    <input style={{ ...inputStyle, width: '120px' }} type="password" placeholder="New password"
+                                                        onChange={e => setEditData(p => ({ ...p, password: e.target.value }))} />
+                                                    <button onClick={() => handleUpdate(user.id)}
+                                                        style={{ padding: '4px 10px', background: 'var(--green)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}>
+                                                        Save
+                                                    </button>
+                                                    <button onClick={() => { setEditingId(null); setEditData({}); }}
+                                                        style={{ padding: '4px 10px', background: 'var(--border)', color: 'var(--text-primary)', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                                                    <button onClick={() => { setEditingId(user.id); setEditData({ name: user.name, role: user.role }); }}
+                                                        style={{ padding: '4px 10px', background: 'var(--blue)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                        Edit
+                                                    </button>
+                                                    <button onClick={() => handleToggleActive(user)}
+                                                        style={{ padding: '4px 10px', background: user.is_active ? '#fbbf24' : '#22c55e', color: user.is_active ? '#78350f' : 'white', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                        {user.is_active ? 'Disable' : 'Enable'}
+                                                    </button>
+                                                    <button onClick={() => handleDelete(user)}
+                                                        style={{ padding: '4px 10px', background: 'var(--red)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {users.length === 0 && (
+                                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No users found</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <strong>Roles:</strong> Admin — full access + user management | Analyst — upload, parse, analyze deals | Viewer — view shared deals only
+                    </div>
+                </div>
+            );
+        };
+
         // Main App
         function App() {
             const [currentView, setCurrentView] = useState('list');
             const [selectedDealId, setSelectedDealId] = useState(null);
             const [deal, setDeal] = useState(null);
             const [userName, setUserName] = useState('');
+            const [userRole, setUserRole] = useState('');
 
             // Fetch current user info on mount
             useEffect(() => {
@@ -2265,7 +2524,10 @@
                     fetch(`${API_URL}/me`)
                         .then(r => r.ok ? r.json() : null)
                         .then(data => {
-                            if (data) setUserName(data.name || data.email || '');
+                            if (data) {
+                                setUserName(data.name || data.email || '');
+                                setUserRole(data.role || '');
+                            }
                         })
                         .catch(() => {});
                 }
@@ -2296,6 +2558,9 @@
                         currentPage={currentView}
                         dealName={deal?.property_name}
                         userName={userName}
+                        userRole={userRole}
+                        onAdminClick={() => setCurrentView(currentView === 'admin' ? 'list' : 'admin')}
+                        onHomeClick={() => { setCurrentView('list'); setSelectedDealId(null); setDeal(null); }}
                     />
 
                     {currentView === 'list' && (
@@ -2316,6 +2581,10 @@
                         <ErrorBoundary onBack={handleBack}>
                             <DashboardView deal={deal} onBack={handleBack} />
                         </ErrorBoundary>
+                    )}
+
+                    {currentView === 'admin' && (
+                        <AdminPanel onBack={() => setCurrentView('list')} />
                     )}
                 </>
             );

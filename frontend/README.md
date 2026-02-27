@@ -1,4 +1,4 @@
-# Lost Tree Capital — CRE Deal Underwriting Tool (Frontend)
+# CRE Lytic — Deal Underwriting Engine (Frontend)
 
 A professional, institutional-grade single-file React application for commercial real estate deal underwriting. Built with React 18, Chart.js, and inline CSS for instant deployment.
 
@@ -248,4 +248,4 @@ Requires ES6+ support and Fetch API.
 
 ## License
 
-Copyright © 2025 Lost Tree Capital. All rights reserved.
+Copyright © 2025 CRE Lytic. All rights reserved.
