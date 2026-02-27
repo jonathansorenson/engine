@@ -1,0 +1,2267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lost Tree Capital — Deal Underwriting</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --navy: #1e3a5f;
+            --blue: #2563eb;
+            --green: #10b981;
+            --red: #ef4444;
+            --amber: #f59e0b;
+            --slate: #64748b;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--navy) 0%, #0f2438 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-divider {
+            width: 1px;
+            height: 1.5rem;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .breadcrumb {
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: var(--blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: var(--card);
+            color: var(--navy);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Tables */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--card);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .table thead {
+            background-color: var(--bg);
+            border-bottom: 2px solid var(--border);
+        }
+
+        .table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--navy);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9375rem;
+        }
+
+        .table tbody tr:hover {
+            background-color: var(--bg);
+            cursor: pointer;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--navy);
+            margin-bottom: 1rem;
+        }
+
+        /* KPI Cards */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: var(--card);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .kpi-label {
+            font-size: 0.8125rem;
+            color: var(--slate);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--navy);
+            font-family: 'Courier New', monospace;
+        }
+
+        .kpi-trend {
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .kpi-trend.positive {
+            color: var(--green);
+        }
+
+        .kpi-trend.negative {
+            color: var(--red);
+        }
+
+        /* Dashboard Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .assumptions-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .slider-group {
+            background: var(--card);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .slider-item {
+            margin-bottom: 1.5rem;
+        }
+
+        .slider-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .slider-name {
+            font-weight: 600;
+            color: var(--navy);
+            font-size: 0.9375rem;
+        }
+
+        .slider-value {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            color: var(--blue);
+            font-size: 0.9375rem;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, var(--red), var(--amber), var(--green));
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            border: 2px solid var(--blue);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            border: 2px solid var(--blue);
+        }
+
+        .slider-range {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--slate);
+            margin-top: 0.5rem;
+        }
+
+        /* Chat Widget */
+        .chat-widget {
+            background: var(--card);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 2rem;
+        }
+
+        .chat-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            color: var(--navy);
+            font-size: 0.9375rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .chat-message {
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9375rem;
+            line-height: 1.4;
+        }
+
+        .chat-message.user {
+            background: var(--blue);
+            color: white;
+            align-self: flex-end;
+            max-width: 80%;
+        }
+
+        .chat-message.assistant {
+            background: var(--bg);
+            color: var(--text-primary);
+            align-self: flex-start;
+            max-width: 90%;
+        }
+
+        .chat-input-area {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chat-input {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.9375rem;
+            font-family: inherit;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        /* Sensitivity Table */
+        .sensitivity-table {
+            width: 100%;
+            overflow-x: auto;
+            margin-bottom: 2rem;
+        }
+
+        .sensitivity-grid {
+            border-collapse: collapse;
+            min-width: 800px;
+            background: var(--card);
+            border-radius: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .sensitivity-grid th {
+            background: var(--navy);
+            color: white;
+            padding: 0.75rem;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.8125rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sensitivity-grid td {
+            padding: 0.75rem;
+            text-align: center;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            font-family: 'Courier New', monospace;
+            border: 1px solid var(--border);
+        }
+
+        .sensitivity-grid tr:first-child td:first-child {
+            background: var(--bg);
+        }
+
+        .sensitivity-cell {
+            position: relative;
+        }
+
+        .sensitivity-cell.above {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--green);
+        }
+
+        .sensitivity-cell.below {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--red);
+        }
+
+        /* Upload Area */
+        .upload-container {
+            max-width: 600px;
+            margin: 3rem auto;
+        }
+
+        .dropzone {
+            border: 2px dashed var(--blue);
+            border-radius: 1rem;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(37, 99, 235, 0.02);
+        }
+
+        .dropzone:hover,
+        .dropzone.active {
+            background: rgba(37, 99, 235, 0.08);
+            border-color: #1d4ed8;
+        }
+
+        .dropzone-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .dropzone-text {
+            font-size: 1.0625rem;
+            font-weight: 600;
+            color: var(--navy);
+            margin-bottom: 0.5rem;
+        }
+
+        .dropzone-hint {
+            font-size: 0.9375rem;
+            color: var(--slate);
+            margin-bottom: 1.5rem;
+        }
+
+        .file-list {
+            margin-top: 1.5rem;
+            text-align: left;
+        }
+
+        .file-item {
+            background: var(--bg);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9375rem;
+        }
+
+        .file-icon {
+            font-size: 1.5rem;
+            min-width: 24px;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 0.35rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--green);
+        }
+
+        .status-draft {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--amber);
+        }
+
+        .status-completed {
+            background: rgba(37, 99, 235, 0.1);
+            color: var(--blue);
+        }
+
+        /* Loading State */
+        .loading {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--blue);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Property Header */
+        .property-header {
+            background: var(--card);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+        }
+
+        .property-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 0.5rem;
+        }
+
+        .property-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .property-detail {
+            border-left: 3px solid var(--blue);
+            padding-left: 1rem;
+        }
+
+        .property-detail-label {
+            font-size: 0.75rem;
+            color: var(--slate);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+
+        .property-detail-value {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chat-widget {
+                position: relative;
+                top: 0;
+                height: auto;
+                min-height: 300px;
+            }
+
+            .kpi-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .kpi-row {
+                grid-template-columns: 1fr;
+            }
+
+            .property-details {
+                grid-template-columns: 1fr;
+            }
+
+            .sensitivity-grid {
+                font-size: 0.8rem;
+            }
+
+            .sensitivity-grid td,
+            .sensitivity-grid th {
+                padding: 0.5rem;
+            }
+
+            .table th,
+            .table td {
+                padding: 0.75rem;
+            }
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 2rem;
+        }
+
+        /* Section Titles */
+        .section-title {
+            font-size: 1.3125rem;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 1.5rem;
+            background: var(--blue);
+            border-radius: 2px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--slate);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--navy);
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        // Configuration
+        const API_URL = window.location.origin + '/engine';
+        const DEMO_MODE = false; // Set to true to preview UI without backend
+
+        // Utility Functions
+        const formatCurrency = (value) => {
+            if (value >= 1000000) {
+                return `$${(value / 1000000).toFixed(1)}M`;
+            } else if (value >= 1000) {
+                return `$${(value / 1000).toFixed(1)}K`;
+            }
+            return `$${value.toFixed(0)}`;
+        };
+
+        const formatPercent = (value) => `${(value * 100).toFixed(2)}%`;
+
+        const formatPSF = (value) => `$${value.toFixed(2)}/SF`;
+
+        const formatSF = (value) => `${(value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} SF`;
+
+        const formatRatio = (value) => `${(value || 0).toFixed(2)}x`;
+
+        // Financial Calculations
+        const monthlyPayment = (principal, annualRate, amortYears) => {
+            const r = annualRate / 12;
+            const n = amortYears * 12;
+            if (r === 0) return principal / n;
+            return principal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+        };
+
+        const annualDebtService = (principal, annualRate, amortYears) => {
+            return monthlyPayment(principal, annualRate, amortYears) * 12;
+        };
+
+        const loanBalanceAtYear = (principal, annualRate, amortYears, yearN) => {
+            const r = annualRate / 12;
+            const n = amortYears * 12;
+            const p = yearN * 12;
+            const pmt = monthlyPayment(principal, annualRate, amortYears);
+            if (r === 0) return principal - (pmt * p);
+            return principal * Math.pow(1 + r, p) - pmt * (Math.pow(1 + r, p) - 1) / r;
+        };
+
+        const calculateIRR = (cashFlows, guess = 0.10) => {
+            let rate = guess;
+            for (let i = 0; i < 100; i++) {
+                let npv = 0, dnpv = 0;
+                for (let t = 0; t < cashFlows.length; t++) {
+                    npv += cashFlows[t] / Math.pow(1 + rate, t);
+                    dnpv -= t * cashFlows[t] / Math.pow(1 + rate, t + 1);
+                }
+                if (Math.abs(dnpv) < 1e-12) break;
+                const newRate = rate - npv / dnpv;
+                if (Math.abs(newRate - rate) < 1e-8) return newRate;
+                rate = newRate;
+            }
+            return rate;
+        };
+
+        // Demo Data
+        const DEMO_DEALS = [
+            {
+                id: '1',
+                property_name: 'Westlake Commerce Center',
+                address: '1234 Commerce Drive, Austin, TX 78704',
+                property_type: 'Industrial',
+                asking_price: 45000000,
+                noi: 2700000,
+                rentable_sf: 320000,
+                cap_rate: 0.06,
+                dscr: 1.35,
+                ltv: 0.65,
+                status: 'active',
+                created_at: '2025-02-01',
+                assumptions: {
+                    exit_cap_rate: 0.065,
+                    noi_growth: 0.02,
+                    hold_period: 5,
+                    ltv: 0.65,
+                    interest_rate: 0.045,
+                    amortization_years: 25
+                },
+                rent_roll: [
+                    { unit: 'Suite A', tenant: 'Tech Logistics Inc', sf: 50000, rent_psf: 8.50, annual_rent: 425000, expiry: '2027-06-30' },
+                    { unit: 'Suite B', tenant: 'Distribution Plus', sf: 80000, rent_psf: 7.50, annual_rent: 600000, expiry: '2028-12-31' },
+                    { unit: 'Suite C', tenant: 'Supply Chain Co', sf: 60000, rent_psf: 8.00, annual_rent: 480000, expiry: '2026-09-30' },
+                    { unit: 'Suite D', tenant: 'Vacant', sf: 130000, rent_psf: 0, annual_rent: 0, expiry: 'N/A' }
+                ]
+            },
+            {
+                id: '2',
+                property_name: 'Central Plaza Office',
+                address: '5678 Business Boulevard, Denver, CO 80202',
+                property_type: 'Office',
+                asking_price: 32000000,
+                noi: 1920000,
+                rentable_sf: 240000,
+                cap_rate: 0.06,
+                dscr: 1.42,
+                ltv: 0.60,
+                status: 'draft',
+                created_at: '2025-02-15',
+                assumptions: {
+                    exit_cap_rate: 0.07,
+                    noi_growth: 0.015,
+                    hold_period: 7,
+                    ltv: 0.60,
+                    interest_rate: 0.04,
+                    amortization_years: 25
+                },
+                rent_roll: []
+            }
+        ];
+
+        // API Functions
+        const fetchDeals = async () => {
+            if (DEMO_MODE) {
+                return DEMO_DEALS;
+            }
+            try {
+                const res = await fetch(`${API_URL}/api/v1/deals`);
+                if (!res.ok) throw new Error('Failed to fetch deals');
+                const apiDeals = await res.json();
+                // Map API field names to what the UI expects
+                return apiDeals.map(d => ({
+                    ...d,
+                    property_name: d.name || d.property_name || 'Untitled Deal',
+                    asking_price: d.asking_price || 0,
+                    noi: d.noi || 0,
+                    cap_rate: d.cap_rate ? (d.cap_rate > 1 ? d.cap_rate / 100 : d.cap_rate) : 0,
+                }));
+            } catch (error) {
+                console.error('Error fetching deals:', error);
+                return [];
+            }
+        };
+
+        // Map API response (nested parsed_data) to flat deal object the UI expects
+        const mapApiDealToFlatDeal = (apiDeal) => {
+            if (!apiDeal) return null;
+            const pd = apiDeal.parsed_data || {};
+            const prop = pd.property || {};
+            const fin = pd.financials || {};
+            const assumptions = apiDeal.assumptions || pd.assumptions || {};
+
+            const asking_price = prop.asking_price || fin.asking_price || 0;
+            const noi = fin.noi || 0;
+            const total_sf = prop.total_sf || fin.total_sf || 0;
+            const cap_rate = fin.cap_rate
+                ? (fin.cap_rate > 1 ? fin.cap_rate / 100 : fin.cap_rate)
+                : (asking_price > 0 ? noi / asking_price : 0);
+
+            return {
+                id: apiDeal.id,
+                property_name: prop.name || apiDeal.name || apiDeal.original_filename || 'Untitled Deal',
+                address: prop.address || prop.city ? `${prop.address || ''}${prop.city ? ', ' + prop.city : ''}${prop.state ? ' ' + prop.state : ''}`.trim() : 'N/A',
+                property_type: prop.property_type || 'N/A',
+                asking_price: asking_price,
+                noi: noi,
+                rentable_sf: total_sf,
+                cap_rate: cap_rate,
+                dscr: noi > 0 && asking_price > 0 ? noi / (annualDebtService(asking_price * 0.65, 0.055, 25)) : 0,
+                ltv: assumptions.ltv ? (assumptions.ltv > 1 ? assumptions.ltv / 100 : assumptions.ltv) : 0.65,
+                status: apiDeal.status || 'parsed',
+                created_at: apiDeal.created_at,
+                assumptions: {
+                    exit_cap_rate: assumptions.exit_cap_rate ? (assumptions.exit_cap_rate > 1 ? assumptions.exit_cap_rate / 100 : assumptions.exit_cap_rate) : (cap_rate > 0 ? cap_rate + 0.005 : 0.065),
+                    noi_growth: assumptions.noi_growth ? (assumptions.noi_growth > 1 ? assumptions.noi_growth / 100 : assumptions.noi_growth) : 0.02,
+                    hold_period: assumptions.hold_period || 5,
+                    ltv: assumptions.ltv ? (assumptions.ltv > 1 ? assumptions.ltv / 100 : assumptions.ltv) : 0.65,
+                    interest_rate: assumptions.interest_rate ? (assumptions.interest_rate > 1 ? assumptions.interest_rate / 100 : assumptions.interest_rate) : 0.055,
+                    amortization_years: assumptions.amortization_years || 25,
+                },
+                rent_roll: (pd.rent_roll || []).map(r => ({
+                    unit: r.unit || 'N/A',
+                    tenant: r.tenant || 'Vacant',
+                    sf: r.sf || 0,
+                    rent_psf: r.rent_psf || (r.annual_rent && r.sf ? r.annual_rent / r.sf : 0),
+                    annual_rent: r.annual_rent || (r.sf && r.rent_psf ? r.sf * r.rent_psf : 0),
+                    expiry: r.lease_end || r.expiry || null,
+                })),
+                parsing_report: apiDeal.parsing_report,
+                raw_text: pd.raw_text,
+            };
+        };
+
+        const fetchDeal = async (dealId) => {
+            if (DEMO_MODE) {
+                return DEMO_DEALS.find(d => d.id === dealId);
+            }
+            try {
+                const res = await fetch(`${API_URL}/api/v1/deals/${dealId}`);
+                if (!res.ok) throw new Error('Failed to fetch deal');
+                const apiDeal = await res.json();
+                return mapApiDealToFlatDeal(apiDeal);
+            } catch (error) {
+                console.error('Error fetching deal:', error);
+                return null;
+            }
+        };
+
+        const uploadDeal = async (files) => {
+            if (DEMO_MODE) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return { id: Date.now().toString(), property_name: 'New Deal' };
+            }
+            const formData = new FormData();
+            files.forEach(file => {
+                const ext = file.name.toLowerCase().split('.').pop();
+                if (ext === 'pdf') {
+                    formData.append('pdf_file', file);
+                } else if (['xlsx', 'xls', 'csv'].includes(ext)) {
+                    formData.append('excel_file', file);
+                }
+            });
+            try {
+                const res = await fetch(`${API_URL}/api/v1/deals`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!res.ok) throw new Error('Upload failed');
+                return await res.json();
+            } catch (error) {
+                console.error('Upload error:', error);
+                throw error;
+            }
+        };
+
+        // Components
+        const Header = ({ currentPage, dealName }) => (
+            <div className="header">
+                <div className="header-left">
+                    <div className="breadcrumb">
+                        {currentPage === 'list' ? 'Deal Underwriting' : dealName}
+                    </div>
+                </div>
+                <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {DEMO_MODE && <span style={{ fontSize: '0.75rem', opacity: 0.6, border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '2px 8px' }}>DEMO</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>CRE</span>
+                        <span style={{ color: '#00BFA5', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>lytic</span>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const KPICard = ({ label, value, trend, format = 'currency' }) => {
+            let formattedValue = value;
+            if (format === 'currency') formattedValue = formatCurrency(value);
+            else if (format === 'percent') formattedValue = formatPercent(value);
+            else if (format === 'psf') formattedValue = formatPSF(value);
+            else if (format === 'sf') formattedValue = formatSF(value);
+            else if (format === 'ratio') formattedValue = formatRatio(value);
+
+            return (
+                <div className="kpi-card">
+                    <div className="kpi-label">{label}</div>
+                    <div className="kpi-value">{formattedValue}</div>
+                    {trend && (
+                        <div className={`kpi-trend ${trend > 0 ? 'positive' : 'negative'}`}>
+                            {trend > 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const deleteDeal = async (dealId) => {
+            try {
+                const res = await fetch(`${API_URL}/api/v1/deals/${dealId}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Delete failed');
+                return true;
+            } catch (error) {
+                console.error('Delete error:', error);
+                return false;
+            }
+        };
+
+        const DealListView = ({ onSelectDeal, onUpload }) => {
+            const [deals, setDeals] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                const load = async () => {
+                    const data = await fetchDeals();
+                    setDeals(data || []);
+                    setLoading(false);
+                };
+                load();
+            }, []);
+
+            const handleDelete = async (e, dealId, dealName) => {
+                e.stopPropagation();
+                if (!confirm(`Delete "${dealName || 'this deal'}"? This cannot be undone.`)) return;
+                const success = await deleteDeal(dealId);
+                if (success) {
+                    setDeals(prev => prev.filter(d => d.id !== dealId));
+                } else {
+                    alert('Failed to delete deal');
+                }
+            };
+
+            if (loading) {
+                return <div className="container"><div className="loading"></div> Loading deals...</div>;
+            }
+
+            return (
+                <div className="container">
+                    <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--navy)' }}>Underwriting Pipeline</h1>
+                        <button className="btn btn-primary" onClick={onUpload}>
+                            ➕ Upload New Deal
+                        </button>
+                    </div>
+
+                    {deals.length === 0 ? (
+                        <div className="card">
+                            <div className="empty-state">
+                                <div className="empty-state-icon">📋</div>
+                                <div className="empty-state-title">No deals yet</div>
+                                <p>Upload your first deal to get started</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Property Name</th>
+                                        <th>Asking Price</th>
+                                        <th>Cap Rate</th>
+                                        <th>NOI</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {deals.map(deal => (
+                                        <tr key={deal.id} onClick={() => onSelectDeal(deal.id)}>
+                                            <td><strong>{deal.property_name}</strong></td>
+                                            <td>{formatCurrency(deal.asking_price)}</td>
+                                            <td>{formatPercent(deal.cap_rate)}</td>
+                                            <td>{formatCurrency(deal.noi)}</td>
+                                            <td>
+                                                <span className={`status-badge status-${deal.status}`}>
+                                                    {deal.status}
+                                                </span>
+                                            </td>
+                                            <td>{new Date(deal.created_at).toLocaleDateString()}</td>
+                                            <td style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button className="btn btn-sm btn-secondary" onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onSelectDeal(deal.id);
+                                                }}>
+                                                    View
+                                                </button>
+                                                <button className="btn btn-sm" onClick={(e) => handleDelete(e, deal.id, deal.property_name)}
+                                                    style={{ background: 'var(--red)', color: 'white', border: 'none', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                    ✕
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const UploadView = ({ onCancel, onSuccess }) => {
+            const [files, setFiles] = useState([]);
+            const [uploading, setUploading] = useState(false);
+            const [dragActive, setDragActive] = useState(false);
+
+            const handleDrag = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragActive(e.type === 'dragenter' || e.type === 'dragover');
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragActive(false);
+                const dropped = [...e.dataTransfer.files];
+                setFiles(prev => [...prev, ...dropped]);
+            };
+
+            const handleAnalyze = async () => {
+                if (files.length === 0) return;
+                setUploading(true);
+                try {
+                    const result = await uploadDeal(files);
+                    onSuccess(result.id);
+                } catch (error) {
+                    alert('Error uploading deal: ' + error.message);
+                    setUploading(false);
+                }
+            };
+
+            const getFileIcon = (file) => {
+                if (file.type.includes('pdf')) return '📄';
+                if (file.type.includes('excel') || file.type.includes('spreadsheet')) return '📊';
+                return '📁';
+            };
+
+            return (
+                <div className="container">
+                    <button className="btn btn-secondary btn-sm" onClick={onCancel} style={{ marginBottom: '2rem' }}>
+                        ← Back
+                    </button>
+
+                    <div className="upload-container">
+                        <div
+                            className={`dropzone ${dragActive ? 'active' : ''}`}
+                            onDragEnter={handleDrag}
+                            onDragLeave={handleDrag}
+                            onDragOver={handleDrag}
+                            onDrop={handleDrop}
+                            onClick={() => document.getElementById('fileInput').click()}
+                        >
+                            <div className="dropzone-icon">📥</div>
+                            <div className="dropzone-text">Drop files here or click to browse</div>
+                            <div className="dropzone-hint">PDF or Excel files (offering memorandum, financial statements)</div>
+                            <input
+                                id="fileInput"
+                                type="file"
+                                multiple
+                                accept=".pdf,.xlsx,.xls"
+                                onChange={(e) => setFiles([...files, ...e.target.files])}
+                                style={{ display: 'none' }}
+                            />
+                        </div>
+
+                        {files.length > 0 && (
+                            <div className="file-list">
+                                {Array.from(files).map((file, idx) => (
+                                    <div key={idx} className="file-item">
+                                        <div className="file-icon">{getFileIcon(file)}</div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 600 }}>{file.name}</div>
+                                            <div style={{ fontSize: '0.8125rem', color: 'var(--slate)' }}>
+                                                {(file.size / 1024 / 1024).toFixed(1)} MB
+                                            </div>
+                                        </div>
+                                        <button
+                                            className="btn btn-sm btn-secondary"
+                                            onClick={() => setFiles(files.filter((_, i) => i !== idx))}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleAnalyze}
+                                    disabled={uploading}
+                                    style={{ marginTop: '1.5rem', width: '100%' }}
+                                >
+                                    {uploading ? (
+                                        <>
+                                            <span className="loading"></span> Analyzing Deal...
+                                        </>
+                                    ) : (
+                                        '🔍 Analyze Deal'
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const SensitivityTable = ({ asking_price, noi, assumptions }) => {
+            const capRates = [0.050, 0.0525, 0.055, 0.0575, 0.060, 0.0625, 0.065, 0.0675, 0.070, 0.0725, 0.080];
+            const noiGrowths = [-0.05, -0.025, 0, 0.025, 0.05, 0.075, 0.10];
+
+            const getValue = (cap, growth) => {
+                const exitNOI = noi * Math.pow(1 + growth, assumptions.hold_period);
+                const value = exitNOI / cap;
+                return value;
+            };
+
+            return (
+                <div>
+                    <div className="section-title">Sensitivity Analysis: Property Value</div>
+                    <div className="sensitivity-table">
+                        <table className="sensitivity-grid">
+                            <thead>
+                                <tr>
+                                    <th>NOI Growth / Exit Cap</th>
+                                    {capRates.map(cap => (
+                                        <th key={cap}>{formatPercent(cap)}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {noiGrowths.map(growth => {
+                                    const values = capRates.map(cap => getValue(cap, growth));
+                                    const maxVal = Math.max(...values);
+                                    const minVal = Math.min(...values);
+
+                                    return (
+                                        <tr key={growth}>
+                                            <th style={{ background: 'var(--bg)', textAlign: 'left', fontWeight: 600, color: 'var(--navy)' }}>
+                                                {formatPercent(growth)}
+                                            </th>
+                                            {capRates.map(cap => {
+                                                const value = getValue(cap, growth);
+                                                const isAbove = value > asking_price;
+                                                return (
+                                                    <td
+                                                        key={cap}
+                                                        className={`sensitivity-cell ${isAbove ? 'above' : 'below'}`}
+                                                    >
+                                                        {formatCurrency(value / 1000000)}M
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const CashFlowTable = ({ noi, asking_price, assumptions, rentable_sf }) => {
+            const cashFlows = [];
+            let balance = asking_price * (assumptions.ltv || 0.65);
+            const ds = annualDebtService(balance, assumptions.interest_rate, assumptions.amortization_years);
+
+            for (let year = 1; year <= assumptions.hold_period; year++) {
+                const yearNOI = noi * Math.pow(1 + assumptions.noi_growth, year);
+                const capReserves = rentable_sf * 0.4; // $0.40/SF
+                const cashFlow = yearNOI - ds - capReserves;
+                balance = loanBalanceAtYear(asking_price * (assumptions.ltv || 0.65), assumptions.interest_rate, assumptions.amortization_years, year);
+
+                cashFlows.push({ year, noi: yearNOI, ds, capReserves, cashFlow, balance });
+            }
+
+            return (
+                <div>
+                    <div className="section-title">10-Year Cash Flow Projection</div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Year</th>
+                                    <th>NOI</th>
+                                    <th>Debt Service</th>
+                                    <th>Cap Reserves</th>
+                                    <th>Cash Flow</th>
+                                    <th>Loan Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {cashFlows.map(cf => (
+                                    <tr key={cf.year}>
+                                        <td><strong>{cf.year}</strong></td>
+                                        <td>{formatCurrency(cf.noi)}</td>
+                                        <td>{formatCurrency(cf.ds)}</td>
+                                        <td>{formatCurrency(cf.capReserves)}</td>
+                                        <td style={{ fontWeight: 600, color: cf.cashFlow > 0 ? 'var(--green)' : 'var(--red)' }}>
+                                            {formatCurrency(cf.cashFlow)}
+                                        </td>
+                                        <td>{formatCurrency(cf.balance)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const IRRMatrix = ({ noi, asking_price, assumptions }) => {
+            const exitCaps = [0.055, 0.060, 0.065, 0.070, 0.075, 0.080];
+            const holdPeriods = [3, 5, 7, 10];
+
+            const calculateIRRCell = (exitCap, hold) => {
+                const equity = asking_price * (1 - (assumptions.ltv || 0.65));
+                const debt = asking_price * (assumptions.ltv || 0.65);
+
+                const cfs = [-equity];
+                for (let y = 1; y <= hold; y++) {
+                    const yearNOI = noi * Math.pow(1 + assumptions.noi_growth, y);
+                    const ds = annualDebtService(debt, assumptions.interest_rate, assumptions.amortization_years);
+                    const capReserves = assumptions.sf ? assumptions.sf * 0.4 : 0;
+                    cfs.push(yearNOI - ds - capReserves);
+                }
+
+                // Sale proceeds
+                const exitNOI = noi * Math.pow(1 + assumptions.noi_growth, hold);
+                const salePrice = exitNOI / exitCap;
+                const loanBal = loanBalanceAtYear(debt, assumptions.interest_rate, assumptions.amortization_years, hold);
+                cfs[cfs.length - 1] += (salePrice - loanBal);
+
+                return calculateIRR(cfs);
+            };
+
+            return (
+                <div>
+                    <div className="section-title">IRR Sensitivity Analysis</div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="sensitivity-grid">
+                            <thead>
+                                <tr>
+                                    <th>Exit Cap / Hold Period</th>
+                                    {holdPeriods.map(hold => (
+                                        <th key={hold}>{hold}Y</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {exitCaps.map(cap => (
+                                    <tr key={cap}>
+                                        <th style={{ background: 'var(--bg)', textAlign: 'left', fontWeight: 600, color: 'var(--navy)' }}>
+                                            {formatPercent(cap)}
+                                        </th>
+                                        {holdPeriods.map(hold => {
+                                            const irr = calculateIRRCell(cap, hold);
+                                            return (
+                                                <td
+                                                    key={hold}
+                                                    className={`sensitivity-cell ${irr > 0.15 ? 'above' : 'below'}`}
+                                                >
+                                                    {formatPercent(irr)}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const ChatWidget = ({ dealId }) => {
+            const [messages, setMessages] = useState([
+                { id: 1, type: 'assistant', text: "I've analyzed this offering memorandum. Ask me anything about the deal — financials, risk factors, comparable analysis, or scenario modeling." }
+            ]);
+            const [input, setInput] = useState('');
+            const [loading, setLoading] = useState(false);
+            const messagesEnd = useRef(null);
+
+            const scrollToBottom = () => {
+                messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
+            };
+
+            useEffect(() => {
+                scrollToBottom();
+            }, [messages]);
+
+            const handleSendMessage = async (e) => {
+                e.preventDefault();
+                if (!input.trim() || loading) return;
+
+                const userMessage = input.trim();
+                setInput('');
+                setMessages(prev => [...prev, { id: prev.length + 1, type: 'user', text: userMessage }]);
+                setLoading(true);
+
+                if (DEMO_MODE) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    setMessages(prev => [...prev, {
+                        id: prev.length + 1,
+                        type: 'assistant',
+                        text: `Great question about "${userMessage}". Based on the deal analysis, this is a strong value-add opportunity with significant upside potential. The current cap rate of 6.0% offers attractive yield, and the rent growth assumptions are conservative relative to market trends.`
+                    }]);
+                    setLoading(false);
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/deals/${dealId}/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: userMessage })
+                    });
+
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    let assistantMessage = '';
+                    let messageId = messages.length + 1;
+
+                    setMessages(prev => [...prev, { id: messageId, type: 'assistant', text: '' }]);
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value);
+                        assistantMessage += chunk;
+
+                        setMessages(prev => {
+                            const updated = [...prev];
+                            updated[updated.length - 1].text = assistantMessage;
+                            return updated;
+                        });
+                    }
+                } catch (error) {
+                    setMessages(prev => [...prev, {
+                        id: prev.length + 1,
+                        type: 'assistant',
+                        text: 'Error connecting to chat service. Please try again.'
+                    }]);
+                }
+
+                setLoading(false);
+            };
+
+            return (
+                <div className="chat-widget">
+                    <div className="chat-header">💬 Deal Insights</div>
+                    <div className="chat-messages">
+                        {messages.map(msg => (
+                            <div key={msg.id} className={`chat-message ${msg.type}`}>
+                                {msg.text}
+                            </div>
+                        ))}
+                        <div ref={messagesEnd} />
+                    </div>
+                    <form className="chat-input-area" onSubmit={handleSendMessage}>
+                        <input
+                            type="text"
+                            className="chat-input"
+                            placeholder="Ask about the deal..."
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            disabled={loading}
+                        />
+                        <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !input.trim()}>
+                            {loading ? <span className="loading"></span> : '→'}
+                        </button>
+                    </form>
+                </div>
+            );
+        };
+
+        const RentRollTable = ({ rentRoll }) => {
+            if (!rentRoll || rentRoll.length === 0) {
+                return (
+                    <div>
+                        <div className="section-title">Rent Roll</div>
+                        <div className="card">
+                            <div className="empty-state">
+                                <div className="empty-state-icon">🏢</div>
+                                <div className="empty-state-title">No rent roll data</div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <div className="section-title">Rent Roll</div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Unit</th>
+                                    <th>Tenant</th>
+                                    <th>SF</th>
+                                    <th>Rent PSF</th>
+                                    <th>Annual Rent</th>
+                                    <th>Lease Expiry</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rentRoll.map((unit, idx) => (
+                                    <tr key={idx}>
+                                        <td><strong>{unit.unit}</strong></td>
+                                        <td>{unit.tenant}</td>
+                                        <td>{formatSF(unit.sf)}</td>
+                                        <td>{formatPSF(unit.rent_psf)}</td>
+                                        <td>{formatCurrency(unit.annual_rent)}</td>
+                                        <td>{unit.expiry}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        // ═══════════════════════════════════════════════════════
+        // ANALYSIS TAB — Debt Constant, Leverage Check, WALT
+        // ═══════════════════════════════════════════════════════
+        const AnalysisPanel = ({ deal, assumptions }) => {
+            const [amortYears, setAmortYears] = useState(assumptions.amortization_years || 25);
+            const [intRate, setIntRate] = useState((assumptions.interest_rate || 0.055) * 100);
+            const [targetWALT, setTargetWALT] = useState(5.0);
+
+            // Debt Constant = ADS / Loan Amount
+            const loanAmount = deal.asking_price * (assumptions.ltv || 0.65);
+            const ads = annualDebtService(loanAmount, intRate / 100, amortYears);
+            const debtConstant = loanAmount > 0 ? (ads / loanAmount) : 0;
+            const capRate = deal.cap_rate || (deal.noi / deal.asking_price);
+
+            // Leverage spread
+            const spread = capRate - debtConstant;
+            // Gradient: -3% (deep red) → 0 (yellow) → +3% (deep green)
+            const clampedSpread = Math.max(-0.03, Math.min(0.03, spread));
+            const pct = (clampedSpread + 0.03) / 0.06; // 0 = deep red, 0.5 = yellow, 1 = green
+            const leverageColor = pct < 0.5
+                ? `rgb(${Math.round(220)}, ${Math.round(pct * 2 * 180)}, ${Math.round(pct * 2 * 30)})`
+                : `rgb(${Math.round((1 - pct) * 2 * 220)}, ${Math.round(160 + (pct - 0.5) * 2 * 40)}, ${Math.round(30 + (pct - 0.5) * 2 * 100)})`;
+            const leverageLabel = spread > 0.005 ? 'Positive Leverage' : spread < -0.005 ? 'Negative Leverage' : 'Neutral';
+
+            // WALT calculation from rent roll
+            const rentRoll = deal.rent_roll || [];
+            const now = new Date();
+            let totalWeightedYears = 0;
+            let totalSF = 0;
+            rentRoll.forEach(lease => {
+                const sf = lease.sf || 0;
+                const expiry = lease.expiry || lease.lease_end;
+                if (expiry && sf > 0) {
+                    const expiryDate = new Date(expiry);
+                    const yearsRemaining = Math.max(0, (expiryDate - now) / (365.25 * 24 * 60 * 60 * 1000));
+                    totalWeightedYears += yearsRemaining * sf;
+                    totalSF += sf;
+                }
+            });
+            const currentWALT = totalSF > 0 ? totalWeightedYears / totalSF : 0;
+            const waltMeetsTarget = currentWALT >= targetWALT;
+
+            // Debt constant reference table across rates
+            const refRates = [3, 4, 5, 5.5, 6, 6.5, 7, 7.5, 8];
+            const refAmorts = [15, 20, 25, 30];
+
+            const panelStyle = {
+                background: 'var(--card)', borderRadius: '12px', border: '1px solid var(--border)',
+                padding: '1.5rem', marginBottom: '1.5rem'
+            };
+            const sectionTitle = {
+                fontSize: '1rem', fontWeight: 700, color: 'var(--navy)', marginBottom: '1rem',
+                display: 'flex', alignItems: 'center', gap: '0.5rem'
+            };
+
+            return (
+                <div>
+                    {/* Debt Constant Calculator */}
+                    <div style={panelStyle}>
+                        <div style={sectionTitle}>⚙️ Debt Constant Calculator</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '1.5rem' }}>
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Amortization</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <input type="number" min="10" max="35" step="1"
+                                            value={amortYears}
+                                            onChange={e => { const v = parseInt(e.target.value); if (v >= 10 && v <= 35) setAmortYears(v); }}
+                                            style={{ width: '50px', padding: '0.15rem 0.3rem', fontSize: '0.85rem', fontWeight: 700,
+                                                fontFamily: 'monospace', border: '1px solid var(--border)', borderRadius: '4px',
+                                                textAlign: 'right', outline: 'none' }} />
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>yrs</span>
+                                    </div>
+                                </div>
+                                <input type="range" className="slider" min="10" max="35" step="1"
+                                    value={amortYears} onChange={e => setAmortYears(parseInt(e.target.value))}
+                                    style={{ width: '100%' }} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--slate)' }}>
+                                    <span>10 yrs</span><span>35 yrs</span>
+                                </div>
+                            </div>
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Interest Rate</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <input type="number" min="0" max="15" step="0.01"
+                                            value={intRate.toFixed(2)}
+                                            onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0 && v <= 15) setIntRate(v); }}
+                                            style={{ width: '65px', padding: '0.15rem 0.3rem', fontSize: '0.85rem', fontWeight: 700,
+                                                fontFamily: 'monospace', border: '1px solid var(--border)', borderRadius: '4px',
+                                                textAlign: 'right', outline: 'none' }} />
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>%</span>
+                                    </div>
+                                </div>
+                                <input type="range" className="slider" min="3" max="9" step="0.125"
+                                    value={intRate} onChange={e => setIntRate(parseFloat(e.target.value))}
+                                    style={{ width: '100%' }} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--slate)' }}>
+                                    <span>3.00%</span><span>9.00%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Big Debt Constant Display */}
+                        <div style={{ textAlign: 'center', padding: '1.5rem', background: 'var(--bg)', borderRadius: '10px', marginBottom: '1.5rem' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.25rem' }}>Debt Constant</div>
+                            <div style={{ fontSize: '2.5rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>
+                                {(debtConstant * 100).toFixed(3)}%
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                                ADS: {formatCurrency(ads)} &nbsp;|&nbsp; Loan: {formatCurrency(loanAmount)}
+                            </div>
+                        </div>
+
+                        {/* Reference Table */}
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 600 }}>Debt Constant Reference (Rate × Amortization)</div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                                <thead>
+                                    <tr style={{ background: 'var(--navy)', color: 'white' }}>
+                                        <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left' }}>Rate ↓ / Amort →</th>
+                                        {refAmorts.map(a => <th key={a} style={{ padding: '0.4rem 0.6rem', textAlign: 'center' }}>{a} yr</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {refRates.map(rate => (
+                                        <tr key={rate} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: '0.4rem 0.6rem', fontWeight: 600, fontFamily: 'monospace' }}>{rate.toFixed(1)}%</td>
+                                            {refAmorts.map(amort => {
+                                                const dc = annualDebtService(1, rate / 100, amort);
+                                                const isActive = Math.abs(rate - intRate) < 0.2 && amort === amortYears;
+                                                return (
+                                                    <td key={amort} style={{
+                                                        padding: '0.4rem 0.6rem', textAlign: 'center', fontFamily: 'monospace',
+                                                        background: isActive ? 'var(--navy)' : 'transparent',
+                                                        color: isActive ? 'white' : 'var(--text-primary)',
+                                                        fontWeight: isActive ? 700 : 400,
+                                                        borderRadius: isActive ? '4px' : 0
+                                                    }}>{(dc * 100).toFixed(2)}%</td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Leverage Indicator: Cap Rate vs Debt Constant */}
+                    <div style={panelStyle}>
+                        <div style={sectionTitle}>📊 Leverage Analysis — Cap Rate vs Debt Constant</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Going-In Cap Rate</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>{(capRate * 100).toFixed(2)}%</div>
+                            </div>
+                            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Debt Constant</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>{(debtConstant * 100).toFixed(2)}%</div>
+                            </div>
+                            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Spread</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'monospace', color: leverageColor }}>
+                                    {spread >= 0 ? '+' : ''}{(spread * 100).toFixed(2)}%
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Gradient Bar */}
+                        <div style={{ position: 'relative', height: '48px', borderRadius: '8px', overflow: 'hidden', marginBottom: '0.5rem',
+                            background: 'linear-gradient(to right, #dc2626, #dc2626 20%, #f59e0b 45%, #f59e0b 55%, #10b981 80%, #10b981)' }}>
+                            {/* Marker */}
+                            <div style={{
+                                position: 'absolute', top: '2px', bottom: '2px', width: '4px',
+                                background: 'white', borderRadius: '2px', boxShadow: '0 0 8px rgba(0,0,0,0.5)',
+                                left: `${Math.max(2, Math.min(98, pct * 100))}%`, transform: 'translateX(-50%)'
+                            }} />
+                            <div style={{
+                                position: 'absolute', bottom: '-22px',
+                                left: `${Math.max(5, Math.min(95, pct * 100))}%`, transform: 'translateX(-50%)',
+                                fontSize: '0.7rem', fontWeight: 700, color: leverageColor, whiteSpace: 'nowrap'
+                            }}>{leverageLabel}</div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--slate)', marginTop: '1.5rem' }}>
+                            <span>← Negative Leverage (Debt Constant &gt; Cap Rate)</span>
+                            <span>Positive Leverage (Cap Rate &gt; Debt Constant) →</span>
+                        </div>
+                    </div>
+
+                    {/* WALT Target */}
+                    <div style={panelStyle}>
+                        <div style={sectionTitle}>📅 WALT Target</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Target WALT</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 700, fontFamily: 'monospace' }}>{targetWALT.toFixed(1)} years</span>
+                                </div>
+                                <input type="range" className="slider" min="1" max="15" step="0.5"
+                                    value={targetWALT} onChange={e => setTargetWALT(parseFloat(e.target.value))}
+                                    style={{ width: '100%' }} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--slate)' }}>
+                                    <span>1 yr</span><span>15 yrs</span>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div style={{
+                                    padding: '1rem 2rem', borderRadius: '12px', textAlign: 'center',
+                                    background: waltMeetsTarget ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                    border: `2px solid ${waltMeetsTarget ? 'var(--green)' : 'var(--red)'}`,
+                                }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.25rem' }}>Current WALT</div>
+                                    <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'monospace', color: waltMeetsTarget ? 'var(--green)' : 'var(--red)' }}>
+                                        {currentWALT.toFixed(1)} yrs
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: waltMeetsTarget ? 'var(--green)' : 'var(--red)', marginTop: '0.25rem' }}>
+                                        {waltMeetsTarget ? '✓ Meets Target' : '✗ Below Target'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {rentRoll.length === 0 && (
+                            <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.8rem', color: '#92400e' }}>
+                                ⚠ No rent roll data available — WALT cannot be calculated. Upload an Excel file with lease expiry dates.
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Debt Metrics: Debt/Foot & Debt Yield ── */}
+                    <div style={panelStyle}>
+                        <div style={sectionTitle}>💰 Debt Metrics</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1rem' }}>
+                            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Loan Amount</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>{formatCurrency(loanAmount)}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{((assumptions.ltv || 0.65) * 100).toFixed(0)}% LTV</div>
+                            </div>
+                            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Debt / Foot</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>
+                                    {deal.rentable_sf > 0 ? formatCurrency(loanAmount / deal.rentable_sf) : '—'}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>per RSF</div>
+                            </div>
+                            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Debt Yield</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: loanAmount > 0 && (deal.noi / loanAmount) >= 0.08 ? 'var(--green)' : loanAmount > 0 && (deal.noi / loanAmount) >= 0.06 ? '#f59e0b' : 'var(--red)' }}>
+                                    {loanAmount > 0 ? ((deal.noi / loanAmount) * 100).toFixed(2) + '%' : '—'}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>NOI ÷ Loan</div>
+                            </div>
+                            <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>DSCR</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: ads > 0 && (deal.noi / ads) >= 1.25 ? 'var(--green)' : ads > 0 && (deal.noi / ads) >= 1.0 ? '#f59e0b' : 'var(--red)' }}>
+                                    {ads > 0 ? (deal.noi / ads).toFixed(2) + 'x' : '—'}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>NOI ÷ ADS</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── NOI / Debt Service / Free Cash Flow Table ── */}
+                    {(() => {
+                        const holdYears = assumptions.hold_period || 5;
+                        const noiGrowth = assumptions.noi_growth ? (assumptions.noi_growth > 1 ? assumptions.noi_growth / 100 : assumptions.noi_growth) : 0.02;
+                        const baseNOI = deal.noi || 0;
+                        const yearRows = [];
+                        for (let yr = 1; yr <= holdYears; yr++) {
+                            const projNOI = baseNOI * Math.pow(1 + noiGrowth, yr);
+                            yearRows.push({ year: yr, noi: projNOI, ads: ads, fcf: projNOI - ads });
+                        }
+                        const totalNOI = yearRows.reduce((s, r) => s + r.noi, 0);
+                        const totalADS = yearRows.reduce((s, r) => s + r.ads, 0);
+                        const totalFCF = yearRows.reduce((s, r) => s + r.fcf, 0);
+
+                        return (
+                            <div style={panelStyle}>
+                                <div style={sectionTitle}>📈 NOI vs Debt Service — {holdYears}-Year Hold</div>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'var(--navy)', color: 'white' }}>
+                                                <th style={{ padding: '0.6rem 0.8rem', textAlign: 'left' }}>Year</th>
+                                                <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>NOI</th>
+                                                <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>Debt Service (ADS)</th>
+                                                <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>Free Cash Flow</th>
+                                                <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>DSCR</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {yearRows.map(r => (
+                                                <tr key={r.year} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                    <td style={{ padding: '0.5rem 0.8rem', fontWeight: 600, fontFamily: 'monospace' }}>Year {r.year}</td>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace' }}>{formatCurrency(r.noi)}</td>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--red)' }}>({formatCurrency(r.ads)})</td>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: r.fcf >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                                        {r.fcf >= 0 ? formatCurrency(r.fcf) : '(' + formatCurrency(Math.abs(r.fcf)) + ')'}
+                                                    </td>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', color: r.ads > 0 && (r.noi / r.ads) >= 1.25 ? 'var(--green)' : r.ads > 0 && (r.noi / r.ads) >= 1.0 ? '#f59e0b' : 'var(--red)' }}>
+                                                        {r.ads > 0 ? (r.noi / r.ads).toFixed(2) + 'x' : '—'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            <tr style={{ background: 'var(--bg)', fontWeight: 700, borderTop: '2px solid var(--navy)' }}>
+                                                <td style={{ padding: '0.6rem 0.8rem', fontFamily: 'monospace' }}>Total</td>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace' }}>{formatCurrency(totalNOI)}</td>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--red)' }}>({formatCurrency(totalADS)})</td>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: totalFCF >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                                    {totalFCF >= 0 ? formatCurrency(totalFCF) : '(' + formatCurrency(Math.abs(totalFCF)) + ')'}
+                                                </td>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace' }}>
+                                                    {totalADS > 0 ? (totalNOI / totalADS).toFixed(2) + 'x' : '—'}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div style={{ marginTop: '0.75rem', fontSize: '0.7rem', color: 'var(--slate)' }}>
+                                    NOI growth: {(noiGrowth * 100).toFixed(1)}%/yr &nbsp;|&nbsp; Hold period: {holdYears} yrs &nbsp;|&nbsp; Adjust in Overview tab assumptions
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
+            );
+        };
+
+        // Inline editable field — click to edit, Enter/blur to save
+        const EditableValue = ({ value, onSave, format, prefix = '', suffix = '' }) => {
+            const [editing, setEditing] = useState(false);
+            const [inputVal, setInputVal] = useState('');
+            const inputRef = useRef(null);
+
+            useEffect(() => {
+                if (editing && inputRef.current) inputRef.current.focus();
+            }, [editing]);
+
+            const startEdit = () => {
+                setInputVal(typeof value === 'number' ? value.toString() : '');
+                setEditing(true);
+            };
+
+            const save = () => {
+                const parsed = parseFloat(inputVal.replace(/[,$\s]/g, ''));
+                if (!isNaN(parsed) && parsed >= 0) onSave(parsed);
+                setEditing(false);
+            };
+
+            if (editing) {
+                return (
+                    <input ref={inputRef} type="text" value={inputVal}
+                        onChange={e => setInputVal(e.target.value)}
+                        onBlur={save}
+                        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+                        style={{
+                            width: '100%', padding: '0.25rem 0.4rem', fontSize: '1.1rem', fontWeight: 700,
+                            fontFamily: 'monospace', border: '2px solid var(--blue)', borderRadius: '4px',
+                            outline: 'none', background: 'white', color: 'var(--navy)', textAlign: 'right'
+                        }}
+                    />
+                );
+            }
+
+            let display = value;
+            if (format === 'currency') display = formatCurrency(value);
+            else if (format === 'sf') display = formatSF(value);
+            else if (format === 'percent') display = formatPercent(value);
+
+            return (
+                <span onClick={startEdit} title="Click to edit"
+                    style={{ cursor: 'pointer', borderBottom: '1px dashed var(--blue)', paddingBottom: '1px' }}>
+                    {prefix}{display}{suffix}
+                </span>
+            );
+        };
+
+        const DashboardView = ({ deal: initialDeal, onBack }) => {
+            const [deal, setDeal] = useState(initialDeal);
+            const [activeTab, setActiveTab] = useState('overview');
+            const [uploadingRentRoll, setUploadingRentRoll] = useState(false);
+            // Editable overrides for parsed values
+            const [overrides, setOverrides] = useState({
+                asking_price: initialDeal.asking_price || 0,
+                noi: initialDeal.noi || 0,
+                cap_rate: initialDeal.cap_rate || 0,
+                rentable_sf: initialDeal.rentable_sf || 0,
+            });
+            const [assumptions, setAssumptions] = useState(initialDeal.assumptions || {
+                exit_cap_rate: 0.065,
+                noi_growth: 0.02,
+                hold_period: 5,
+                ltv: 0.65,
+                interest_rate: 0.045,
+                amortization_years: 25
+            });
+
+            const updateOverride = (key, value) => {
+                setOverrides(prev => {
+                    const updated = { ...prev, [key]: value };
+                    // Auto-recalc cap rate if price or NOI changes
+                    if ((key === 'asking_price' || key === 'noi') && updated.asking_price > 0) {
+                        updated.cap_rate = updated.noi / updated.asking_price;
+                    }
+                    return updated;
+                });
+            };
+
+            const updateAssumption = (key, value) => {
+                setAssumptions(prev => ({ ...prev, [key]: value }));
+            };
+
+            const handleSliderChange = (key, value) => {
+                updateAssumption(key, parseFloat(value));
+            };
+
+            const handleRentRollUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setUploadingRentRoll(true);
+                try {
+                    const formData = new FormData();
+                    formData.append('excel_file', file);
+                    const res = await fetch(`${API_URL}/api/v1/deals/${deal.id}/rent-roll`, {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Upload failed');
+                    }
+                    const updatedApiDeal = await res.json();
+                    const updatedDeal = mapApiDealToFlatDeal(updatedApiDeal);
+                    setDeal(updatedDeal);
+                    alert(`Rent roll attached: ${updatedDeal.rent_roll.length} units loaded`);
+                } catch (error) {
+                    alert('Error attaching rent roll: ' + error.message);
+                } finally {
+                    setUploadingRentRoll(false);
+                    e.target.value = '';
+                }
+            };
+
+            // Calculate key metrics from editable overrides
+            const askingPrice = overrides.asking_price || 0;
+            const noi = overrides.noi || 0;
+            const capRate = overrides.cap_rate || 0;
+            const rentableSF = overrides.rentable_sf || 1;
+            const equity = askingPrice * (1 - assumptions.ltv);
+            const debt = askingPrice * assumptions.ltv;
+            const ds = debt > 0 ? annualDebtService(debt, assumptions.interest_rate, assumptions.amortization_years) : 1;
+            const dscr = ds > 0 ? noi / ds : 0;
+            const pricePerSF = rentableSF > 0 ? askingPrice / rentableSF : 0;
+
+            // Build a merged deal object for child components
+            const effectiveDeal = { ...deal, asking_price: askingPrice, noi, cap_rate: capRate, rentable_sf: overrides.rentable_sf };
+
+            return (
+                <div className="container">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <button className="btn btn-secondary btn-sm" onClick={onBack}>
+                            ← Back to Deals
+                        </button>
+                        <label style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                            padding: '0.4rem 1rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600,
+                            background: 'var(--green)', color: 'white', cursor: uploadingRentRoll ? 'wait' : 'pointer',
+                            opacity: uploadingRentRoll ? 0.6 : 1,
+                        }}>
+                            📎 {uploadingRentRoll ? 'Uploading...' : 'Attach Rent Roll (Excel)'}
+                            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleRentRollUpload}
+                                disabled={uploadingRentRoll} style={{ display: 'none' }} />
+                        </label>
+                    </div>
+
+                    <div className="property-header">
+                        <div className="property-title" onClick={() => {
+                            const newName = prompt('Edit property name:', deal.property_name);
+                            if (newName && newName.trim()) setDeal(prev => ({ ...prev, property_name: newName.trim() }));
+                        }} style={{ cursor: 'pointer', borderBottom: '1px dashed var(--blue)' }}
+                            title="Click to edit name">
+                            {deal.property_name} <span style={{ fontSize: '0.7rem', color: 'var(--blue)' }}>✎</span>
+                        </div>
+                        <div className="property-details">
+                            <div className="property-detail">
+                                <div className="property-detail-label">Address <span style={{ fontSize: '0.6rem', color: 'var(--blue)' }}>✎</span></div>
+                                <div className="property-detail-value" onClick={() => {
+                                    const newAddr = prompt('Edit address:', deal.address);
+                                    if (newAddr && newAddr.trim()) setDeal(prev => ({ ...prev, address: newAddr.trim() }));
+                                }} style={{ cursor: 'pointer', borderBottom: '1px dashed var(--blue)' }}
+                                    title="Click to edit">{deal.address}</div>
+                            </div>
+                            <div className="property-detail">
+                                <div className="property-detail-label">Property Type <span style={{ fontSize: '0.6rem', color: 'var(--blue)' }}>✎</span></div>
+                                <div className="property-detail-value" onClick={() => {
+                                    const newType = prompt('Edit property type:', deal.property_type);
+                                    if (newType && newType.trim()) setDeal(prev => ({ ...prev, property_type: newType.trim() }));
+                                }} style={{ cursor: 'pointer', borderBottom: '1px dashed var(--blue)' }}
+                                    title="Click to edit">{deal.property_type}</div>
+                            </div>
+                            <div className="property-detail">
+                                <div className="property-detail-label">Rentable SF</div>
+                                <div className="property-detail-value">
+                                    <EditableValue value={overrides.rentable_sf} format="sf"
+                                        onSave={v => updateOverride('rentable_sf', v)} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="kpi-row">
+                        <div className="kpi-card">
+                            <div className="kpi-label">Asking Price <span style={{ fontSize: '0.6rem', color: 'var(--blue)' }}>✎</span></div>
+                            <div className="kpi-value">
+                                <EditableValue value={overrides.asking_price} format="currency"
+                                    onSave={v => updateOverride('asking_price', v)} />
+                            </div>
+                        </div>
+                        <div className="kpi-card">
+                            <div className="kpi-label">Cap Rate</div>
+                            <div className="kpi-value">{formatPercent(capRate)}</div>
+                        </div>
+                        <div className="kpi-card">
+                            <div className="kpi-label">NOI <span style={{ fontSize: '0.6rem', color: 'var(--blue)' }}>✎</span></div>
+                            <div className="kpi-value">
+                                <EditableValue value={overrides.noi} format="currency"
+                                    onSave={v => updateOverride('noi', v)} />
+                            </div>
+                        </div>
+                        <KPICard label="$/SF" value={pricePerSF} format="psf" />
+                        <KPICard label="DSCR" value={dscr} format="ratio" />
+                        <KPICard label="LTV" value={assumptions.ltv} format="percent" />
+                    </div>
+
+                    {/* Tab Navigation */}
+                    <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid var(--border)', marginBottom: '1.5rem' }}>
+                        {[
+                            { id: 'overview', label: 'Overview' },
+                            { id: 'analysis', label: 'Analysis' },
+                        ].map(tab => (
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                style={{
+                                    padding: '0.75rem 1.5rem', fontSize: '0.875rem', fontWeight: 600,
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    color: activeTab === tab.id ? 'var(--navy)' : 'var(--slate)',
+                                    borderBottom: activeTab === tab.id ? '2px solid var(--navy)' : '2px solid transparent',
+                                    marginBottom: '-2px', transition: 'all 0.2s'
+                                }}>{tab.label}</button>
+                        ))}
+                    </div>
+
+                    {activeTab === 'analysis' && (
+                        <AnalysisPanel deal={effectiveDeal} assumptions={assumptions} />
+                    )}
+
+                    {activeTab === 'overview' && <><div className="dashboard-grid">
+                        <div className="assumptions-panel">
+                            <div className="slider-group">
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--navy)' }}>📊 Assumptions</div>
+                                </div>
+
+                                <div className="slider-item">
+                                    <div className="slider-label">
+                                        <span className="slider-name">Exit Cap Rate</span>
+                                        <span className="slider-value">{formatPercent(assumptions.exit_cap_rate)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        className="slider"
+                                        min="0.04"
+                                        max="0.09"
+                                        step="0.001"
+                                        value={assumptions.exit_cap_rate}
+                                        onChange={(e) => handleSliderChange('exit_cap_rate', e.target.value)}
+                                    />
+                                    <div className="slider-range">
+                                        <span>4.0%</span>
+                                        <span>9.0%</span>
+                                    </div>
+                                </div>
+
+                                <div className="slider-item">
+                                    <div className="slider-label">
+                                        <span className="slider-name">NOI Growth</span>
+                                        <span className="slider-value">{formatPercent(assumptions.noi_growth)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        className="slider"
+                                        min="-0.05"
+                                        max="0.15"
+                                        step="0.001"
+                                        value={assumptions.noi_growth}
+                                        onChange={(e) => handleSliderChange('noi_growth', e.target.value)}
+                                    />
+                                    <div className="slider-range">
+                                        <span>-5%</span>
+                                        <span>15%</span>
+                                    </div>
+                                </div>
+
+                                <div className="slider-item">
+                                    <div className="slider-label">
+                                        <span className="slider-name">Hold Period</span>
+                                        <span className="slider-value">{assumptions.hold_period} yrs</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        className="slider"
+                                        min="1"
+                                        max="15"
+                                        step="1"
+                                        value={assumptions.hold_period}
+                                        onChange={(e) => handleSliderChange('hold_period', e.target.value)}
+                                    />
+                                    <div className="slider-range">
+                                        <span>1 yr</span>
+                                        <span>15 yrs</span>
+                                    </div>
+                                </div>
+
+                                <div className="slider-item">
+                                    <div className="slider-label">
+                                        <span className="slider-name">LTV</span>
+                                        <span className="slider-value">{formatPercent(assumptions.ltv)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        className="slider"
+                                        min="0"
+                                        max="0.80"
+                                        step="0.01"
+                                        value={assumptions.ltv}
+                                        onChange={(e) => handleSliderChange('ltv', e.target.value)}
+                                    />
+                                    <div className="slider-range">
+                                        <span>0%</span>
+                                        <span>80%</span>
+                                    </div>
+                                </div>
+
+                                <div className="slider-item">
+                                    <div className="slider-label">
+                                        <span className="slider-name">Interest Rate</span>
+                                        <span className="slider-value">{formatPercent(assumptions.interest_rate)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        className="slider"
+                                        min="0.03"
+                                        max="0.08"
+                                        step="0.001"
+                                        value={assumptions.interest_rate}
+                                        onChange={(e) => handleSliderChange('interest_rate', e.target.value)}
+                                    />
+                                    <div className="slider-range">
+                                        <span>3%</span>
+                                        <span>8%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <ChatWidget dealId={deal.id} />
+                    </div>
+
+                    <SensitivityTable asking_price={askingPrice} noi={noi} assumptions={assumptions} />
+
+                    <CashFlowTable
+                        noi={noi}
+                        asking_price={askingPrice}
+                        assumptions={{ ...assumptions, sf: overrides.rentable_sf }}
+                        rentable_sf={overrides.rentable_sf}
+                    />
+
+                    <IRRMatrix noi={noi} asking_price={askingPrice} assumptions={{ ...assumptions, sf: overrides.rentable_sf }} />
+
+                    <div style={{ marginTop: '3rem' }}>
+                        <RentRollTable rentRoll={deal.rent_roll} />
+                    </div>
+                    </>}
+                </div>
+            );
+        };
+
+        // Error Boundary to prevent blank screens
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="container">
+                            <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+                                <h2 style={{ color: 'var(--navy)', marginBottom: '0.5rem' }}>Dashboard Rendering Error</h2>
+                                <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                                    The parsed data may be incomplete or in an unexpected format.
+                                </p>
+                                <pre style={{ background: 'var(--bg)', padding: '1rem', borderRadius: '8px', fontSize: '0.75rem', textAlign: 'left', overflow: 'auto', marginBottom: '1rem', color: 'var(--red)' }}>
+                                    {this.state.error?.message}
+                                </pre>
+                                <button className="btn btn-secondary" onClick={this.props.onBack}>← Back to Deals</button>
+                            </div>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
+        // Main App
+        function App() {
+            const [currentView, setCurrentView] = useState('list');
+            const [selectedDealId, setSelectedDealId] = useState(null);
+            const [deal, setDeal] = useState(null);
+
+            const handleSelectDeal = async (dealId) => {
+                const dealData = await fetchDeal(dealId);
+                if (dealData) {
+                    setDeal(dealData);
+                    setSelectedDealId(dealId);
+                    setCurrentView('dashboard');
+                }
+            };
+
+            const handleUploadSuccess = async (dealId) => {
+                await handleSelectDeal(dealId);
+            };
+
+            const handleBack = () => {
+                setCurrentView('list');
+                setSelectedDealId(null);
+                setDeal(null);
+            };
+
+            return (
+                <>
+                    <Header
+                        currentPage={currentView}
+                        dealName={deal?.property_name}
+                    />
+
+                    {currentView === 'list' && (
+                        <DealListView
+                            onSelectDeal={handleSelectDeal}
+                            onUpload={() => setCurrentView('upload')}
+                        />
+                    )}
+
+                    {currentView === 'upload' && (
+                        <UploadView
+                            onCancel={() => setCurrentView('list')}
+                            onSuccess={handleUploadSuccess}
+                        />
+                    )}
+
+                    {currentView === 'dashboard' && deal && (
+                        <ErrorBoundary onBack={handleBack}>
+                            <DashboardView deal={deal} onBack={handleBack} />
+                        </ErrorBoundary>
+                    )}
+                </>
+            );
+        }
+
+        // Render app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
