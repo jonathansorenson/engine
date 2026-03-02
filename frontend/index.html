@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRE Lytic — Deal Underwriting</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.min.js"></script>
@@ -16,35 +17,48 @@
         }
 
         :root {
-            --navy: #1e3a5f;
-            --blue: #2563eb;
-            --green: #10b981;
-            --red: #ef4444;
-            --amber: #f59e0b;
-            --slate: #64748b;
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --border: #e2e8f0;
-            --text-primary: #0f172a;
-            --text-secondary: #475569;
+            --navy: #0A1628;
+            --navy-light: #0F2236;
+            --blue: #4A8FD4;
+            --teal: #00BFA5;
+            --green: #34D399;
+            --red: #F87171;
+            --amber: #FBbf24;
+            --slate: #8A9BB0;
+            --bg: #0A1628;
+            --card: #0F2236;
+            --border: #1E3347;
+            --text-primary: #E8EDF2;
+            --text-secondary: #8A9BB0;
+            --surface: #132A42;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            font-family: 'DM Sans', system-ui, sans-serif;
             background-color: var(--bg);
             color: var(--text-primary);
             line-height: 1.5;
         }
 
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--navy); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--slate); }
+
         /* Header */
         .header {
-            background: linear-gradient(135deg, var(--navy) 0%, #0f2438 100%);
+            background: rgba(10, 22, 40, 0.9);
+            backdrop-filter: blur(4px);
             color: white;
-            padding: 1.5rem 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(30, 51, 71, 0.8);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .header-left {
@@ -62,7 +76,7 @@
         .logo-divider {
             width: 1px;
             height: 1.5rem;
-            background: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.15);
         }
 
         .breadcrumb {
@@ -87,39 +101,41 @@
         .btn {
             padding: 0.75rem 1.5rem;
             border: none;
-            border-radius: 0.5rem;
-            font-size: 0.9375rem;
-            font-weight: 500;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            font-family: 'DM Sans', system-ui, sans-serif;
         }
 
         .btn-primary {
-            background-color: var(--blue);
+            background-color: var(--teal);
             color: white;
         }
 
         .btn-primary:hover {
-            background-color: #1d4ed8;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            background-color: #00A890;
+            box-shadow: 0 4px 12px rgba(0, 191, 165, 0.3);
         }
 
         .btn-secondary {
-            background-color: var(--card);
-            color: var(--navy);
+            background-color: var(--surface);
+            color: var(--text-primary);
             border: 1px solid var(--border);
         }
 
         .btn-secondary:hover {
-            background-color: var(--bg);
+            background-color: var(--card);
+            border-color: var(--blue);
         }
 
         .btn-sm {
             padding: 0.5rem 1rem;
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
         }
 
         .btn:disabled {
@@ -132,71 +148,77 @@
             width: 100%;
             border-collapse: collapse;
             background: var(--card);
-            border-radius: 0.5rem;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border);
         }
 
         .table thead {
-            background-color: var(--bg);
-            border-bottom: 2px solid var(--border);
+            background-color: var(--surface);
+            border-bottom: 1px solid var(--border);
         }
 
         .table th {
-            padding: 1rem;
+            padding: 0.875rem 1rem;
             text-align: left;
             font-weight: 600;
-            color: var(--navy);
-            font-size: 0.875rem;
+            color: var(--slate);
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .table td {
-            padding: 1rem;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.9375rem;
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid rgba(30, 51, 71, 0.5);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8125rem;
         }
 
         .table tbody tr:hover {
-            background-color: var(--bg);
+            background-color: rgba(30, 51, 71, 0.4);
             cursor: pointer;
         }
 
         /* Cards */
         .card {
             background: var(--card);
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            padding: 1.25rem;
             border: 1px solid var(--border);
         }
 
         .card-title {
-            font-size: 1rem;
+            font-size: 0.875rem;
             font-weight: 600;
-            color: var(--navy);
+            color: var(--text-primary);
             margin-bottom: 1rem;
         }
 
         /* KPI Cards */
         .kpi-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
             margin-bottom: 2rem;
         }
 
         .kpi-card {
             background: var(--card);
-            border-radius: 0.75rem;
+            border-radius: 12px;
             padding: 1.25rem;
             border: 1px solid var(--border);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: border-color 0.2s;
+        }
+
+        .kpi-card:hover {
+            border-color: rgba(74, 143, 212, 0.3);
         }
 
         .kpi-label {
-            font-size: 0.8125rem;
+            font-size: 0.6875rem;
             color: var(--slate);
             font-weight: 500;
             text-transform: uppercase;
@@ -205,14 +227,14 @@
         }
 
         .kpi-value {
-            font-size: 1.75rem;
+            font-size: 1.25rem;
             font-weight: 700;
-            color: var(--navy);
-            font-family: 'Courier New', monospace;
+            color: white;
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .kpi-trend {
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             margin-top: 0.5rem;
             display: flex;
             align-items: center;
@@ -243,8 +265,8 @@
 
         .slider-group {
             background: var(--card);
-            border-radius: 0.75rem;
-            padding: 1.5rem;
+            border-radius: 12px;
+            padding: 1.25rem;
             border: 1px solid var(--border);
         }
 
@@ -265,22 +287,22 @@
 
         .slider-name {
             font-weight: 600;
-            color: var(--navy);
-            font-size: 0.9375rem;
+            color: var(--text-primary);
+            font-size: 0.8125rem;
         }
 
         .slider-value {
-            font-family: 'Courier New', monospace;
+            font-family: 'JetBrains Mono', monospace;
             font-weight: 700;
             color: var(--blue);
-            font-size: 0.9375rem;
+            font-size: 0.8125rem;
         }
 
         .slider {
             width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: linear-gradient(to right, var(--red), var(--amber), var(--green));
+            height: 4px;
+            border-radius: 2px;
+            background: var(--border);
             outline: none;
             -webkit-appearance: none;
         }
@@ -288,29 +310,29 @@
         .slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            background: white;
+            background: var(--blue);
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-            border: 2px solid var(--blue);
+            box-shadow: 0 2px 8px rgba(74, 143, 212, 0.4);
+            border: 2px solid var(--card);
         }
 
         .slider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            background: white;
+            background: var(--blue);
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-            border: 2px solid var(--blue);
+            box-shadow: 0 2px 8px rgba(74, 143, 212, 0.4);
+            border: 2px solid var(--card);
         }
 
         .slider-range {
             display: flex;
             justify-content: space-between;
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             color: var(--slate);
             margin-top: 0.5rem;
         }
@@ -318,22 +340,21 @@
         /* Chat Widget */
         .chat-widget {
             background: var(--card);
-            border-radius: 0.75rem;
+            border-radius: 12px;
             border: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             height: 500px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
             position: sticky;
-            top: 2rem;
+            top: 5rem;
         }
 
         .chat-header {
             padding: 1rem;
             border-bottom: 1px solid var(--border);
             font-weight: 600;
-            color: var(--navy);
-            font-size: 0.9375rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
         }
 
         .chat-messages {
@@ -347,23 +368,25 @@
 
         .chat-message {
             padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.9375rem;
+            border-radius: 8px;
+            font-size: 0.8125rem;
             line-height: 1.4;
         }
 
         .chat-message.user {
-            background: var(--blue);
-            color: white;
+            background: rgba(74, 143, 212, 0.15);
+            color: var(--blue);
             align-self: flex-end;
             max-width: 80%;
+            border: 1px solid rgba(74, 143, 212, 0.3);
         }
 
         .chat-message.assistant {
-            background: var(--bg);
+            background: var(--surface);
             color: var(--text-primary);
             align-self: flex-start;
             max-width: 90%;
+            border: 1px solid var(--border);
         }
 
         .chat-input-area {
@@ -376,16 +399,18 @@
         .chat-input {
             flex: 1;
             border: 1px solid var(--border);
-            border-radius: 0.5rem;
+            border-radius: 8px;
             padding: 0.75rem;
-            font-size: 0.9375rem;
+            font-size: 0.8125rem;
             font-family: inherit;
+            background: var(--surface);
+            color: var(--text-primary);
         }
 
         .chat-input:focus {
             outline: none;
             border-color: var(--blue);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            box-shadow: 0 0 0 3px rgba(74, 143, 212, 0.15);
         }
 
         /* Sensitivity Table */
@@ -399,18 +424,18 @@
             border-collapse: collapse;
             min-width: 800px;
             background: var(--card);
-            border-radius: 0.75rem;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border);
         }
 
         .sensitivity-grid th {
-            background: var(--navy);
-            color: white;
+            background: var(--surface);
+            color: var(--slate);
             padding: 0.75rem;
             text-align: center;
             font-weight: 600;
-            font-size: 0.8125rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -418,14 +443,15 @@
         .sensitivity-grid td {
             padding: 0.75rem;
             text-align: center;
-            font-size: 0.9375rem;
+            font-size: 0.8125rem;
             font-weight: 500;
-            font-family: 'Courier New', monospace;
-            border: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid rgba(30, 51, 71, 0.5);
+            color: var(--text-primary);
         }
 
         .sensitivity-grid tr:first-child td:first-child {
-            background: var(--bg);
+            background: var(--surface);
         }
 
         .sensitivity-cell {
@@ -433,12 +459,12 @@
         }
 
         .sensitivity-cell.above {
-            background: rgba(16, 185, 129, 0.1);
+            background: rgba(16, 185, 129, 0.15);
             color: var(--green);
         }
 
         .sensitivity-cell.below {
-            background: rgba(239, 68, 68, 0.1);
+            background: rgba(248, 113, 113, 0.15);
             color: var(--red);
         }
 
@@ -449,19 +475,19 @@
         }
 
         .dropzone {
-            border: 2px dashed var(--blue);
-            border-radius: 1rem;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
             padding: 3rem;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s ease;
-            background: rgba(37, 99, 235, 0.02);
+            background: rgba(15, 34, 54, 0.5);
         }
 
         .dropzone:hover,
         .dropzone.active {
-            background: rgba(37, 99, 235, 0.08);
-            border-color: #1d4ed8;
+            background: rgba(74, 143, 212, 0.08);
+            border-color: var(--blue);
         }
 
         .dropzone-icon {
@@ -470,14 +496,14 @@
         }
 
         .dropzone-text {
-            font-size: 1.0625rem;
+            font-size: 1rem;
             font-weight: 600;
-            color: var(--navy);
+            color: var(--text-primary);
             margin-bottom: 0.5rem;
         }
 
         .dropzone-hint {
-            font-size: 0.9375rem;
+            font-size: 0.875rem;
             color: var(--slate);
             margin-bottom: 1.5rem;
         }
@@ -488,14 +514,15 @@
         }
 
         .file-item {
-            background: var(--bg);
-            border-radius: 0.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             padding: 1rem;
             display: flex;
             align-items: center;
             gap: 0.75rem;
             margin-bottom: 0.5rem;
-            font-size: 0.9375rem;
+            font-size: 0.875rem;
         }
 
         .file-icon {
@@ -556,7 +583,8 @@
         .property-title {
             font-size: 2rem;
             font-weight: 700;
-            color: var(--navy);
+            color: white;
+            font-family: 'DM Serif Display', serif;
             margin-bottom: 0.5rem;
         }
 
@@ -649,7 +677,7 @@
         .section-title {
             font-size: 1.3125rem;
             font-weight: 700;
-            color: var(--navy);
+            color: var(--text-primary);
             margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
@@ -680,7 +708,7 @@
         .empty-state-title {
             font-size: 1.125rem;
             font-weight: 600;
-            color: var(--navy);
+            color: var(--text-primary);
             margin-bottom: 0.5rem;
         }
     </style>
@@ -948,8 +976,8 @@
                         </button>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                        <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>CRE</span>
-                        <span style={{ color: '#00BFA5', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'Inter', system-ui, sans-serif" }}>lytic</span>
+                        <span style={{ color: '#ffffff', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'DM Sans', system-ui, sans-serif" }}>CRE</span>
+                        <span style={{ color: '#00BFA5', fontWeight: 700, fontSize: '1.25rem', letterSpacing: '-0.5px', fontFamily: "'DM Sans', system-ui, sans-serif" }}>lytic</span>
                     </div>
                     {!DEMO_MODE && <a href="/engine/logout" style={{ fontSize: '0.75rem', color: '#94a3b8', textDecoration: 'none', padding: '4px 10px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px' }}>Sign Out</a>}
                 </div>
@@ -1053,7 +1081,7 @@
             return (
                 <div className="container">
                     <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--navy)' }}>Underwriting Pipeline</h1>
+                        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Underwriting Pipeline</h1>
                         <button className="btn btn-primary" onClick={onUpload}>
                             ➕ Upload New Deal
                         </button>
@@ -1253,7 +1281,7 @@
 
                                     return (
                                         <tr key={growth}>
-                                            <th style={{ background: 'var(--bg)', textAlign: 'left', fontWeight: 600, color: 'var(--navy)' }}>
+                                            <th style={{ background: 'var(--bg)', textAlign: 'left', fontWeight: 600, color: 'var(--text-primary)' }}>
                                                 {formatPercent(growth)}
                                             </th>
                                             {capRates.map(cap => {
@@ -1385,7 +1413,7 @@
                             <tbody>
                                 {exitCaps.map(cap => (
                                     <tr key={cap}>
-                                        <th style={{ background: 'var(--bg)', textAlign: 'left', fontWeight: 600, color: 'var(--navy)' }}>
+                                        <th style={{ background: 'var(--bg)', textAlign: 'left', fontWeight: 600, color: 'var(--text-primary)' }}>
                                             {formatPercent(cap)}
                                         </th>
                                         {holdPeriods.map(hold => {
@@ -1609,7 +1637,7 @@
                 padding: '1.5rem', marginBottom: '1.5rem'
             };
             const sectionTitle = {
-                fontSize: '1rem', fontWeight: 700, color: 'var(--navy)', marginBottom: '1rem',
+                fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1rem',
                 display: 'flex', alignItems: 'center', gap: '0.5rem'
             };
 
@@ -1627,7 +1655,7 @@
                                             value={amortYears}
                                             onChange={e => { const v = parseInt(e.target.value); if (v >= 10 && v <= 35) setAmortYears(v); }}
                                             style={{ width: '50px', padding: '0.15rem 0.3rem', fontSize: '0.85rem', fontWeight: 700,
-                                                fontFamily: 'monospace', border: '1px solid var(--border)', borderRadius: '4px',
+                                                fontFamily: "'JetBrains Mono', monospace", border: '1px solid var(--border)', borderRadius: '4px',
                                                 textAlign: 'right', outline: 'none' }} />
                                         <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>yrs</span>
                                     </div>
@@ -1647,7 +1675,7 @@
                                             value={intRate.toFixed(2)}
                                             onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0 && v <= 15) setIntRate(v); }}
                                             style={{ width: '65px', padding: '0.15rem 0.3rem', fontSize: '0.85rem', fontWeight: 700,
-                                                fontFamily: 'monospace', border: '1px solid var(--border)', borderRadius: '4px',
+                                                fontFamily: "'JetBrains Mono', monospace", border: '1px solid var(--border)', borderRadius: '4px',
                                                 textAlign: 'right', outline: 'none' }} />
                                         <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>%</span>
                                     </div>
@@ -1664,7 +1692,7 @@
                         {/* Big Debt Constant Display */}
                         <div style={{ textAlign: 'center', padding: '1.5rem', background: 'var(--bg)', borderRadius: '10px', marginBottom: '1.5rem' }}>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.25rem' }}>Debt Constant</div>
-                            <div style={{ fontSize: '2.5rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>
+                            <div style={{ fontSize: '2.5rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>
                                 {(debtConstant * 100).toFixed(3)}%
                             </div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
@@ -1677,7 +1705,7 @@
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
                                 <thead>
-                                    <tr style={{ background: 'var(--navy)', color: 'white' }}>
+                                    <tr style={{ background: 'var(--surface)', color: 'var(--slate)' }}>
                                         <th style={{ padding: '0.4rem 0.6rem', textAlign: 'left' }}>Rate ↓ / Amort →</th>
                                         {refAmorts.map(a => <th key={a} style={{ padding: '0.4rem 0.6rem', textAlign: 'center' }}>{a} yr</th>)}
                                     </tr>
@@ -1685,15 +1713,15 @@
                                 <tbody>
                                     {refRates.map(rate => (
                                         <tr key={rate} style={{ borderBottom: '1px solid var(--border)' }}>
-                                            <td style={{ padding: '0.4rem 0.6rem', fontWeight: 600, fontFamily: 'monospace' }}>{rate.toFixed(1)}%</td>
+                                            <td style={{ padding: '0.4rem 0.6rem', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{rate.toFixed(1)}%</td>
                                             {refAmorts.map(amort => {
                                                 const dc = annualDebtService(1, rate / 100, amort);
                                                 const isActive = Math.abs(rate - intRate) < 0.2 && amort === amortYears;
                                                 return (
                                                     <td key={amort} style={{
-                                                        padding: '0.4rem 0.6rem', textAlign: 'center', fontFamily: 'monospace',
-                                                        background: isActive ? 'var(--navy)' : 'transparent',
-                                                        color: isActive ? 'white' : 'var(--text-primary)',
+                                                        padding: '0.4rem 0.6rem', textAlign: 'center', fontFamily: "'JetBrains Mono', monospace",
+                                                        background: isActive ? 'rgba(74,143,212,0.25)' : 'transparent',
+                                                        color: isActive ? 'var(--blue)' : 'var(--text-primary)',
                                                         fontWeight: isActive ? 700 : 400,
                                                         borderRadius: isActive ? '4px' : 0
                                                     }}>{(dc * 100).toFixed(2)}%</td>
@@ -1712,15 +1740,15 @@
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                             <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Going-In Cap Rate</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>{(capRate * 100).toFixed(2)}%</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>{(capRate * 100).toFixed(2)}%</div>
                             </div>
                             <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Debt Constant</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>{(debtConstant * 100).toFixed(2)}%</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>{(debtConstant * 100).toFixed(2)}%</div>
                             </div>
                             <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Spread</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'monospace', color: leverageColor }}>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: leverageColor }}>
                                     {spread >= 0 ? '+' : ''}{(spread * 100).toFixed(2)}%
                                 </div>
                             </div>
@@ -1732,7 +1760,7 @@
                             {/* Marker */}
                             <div style={{
                                 position: 'absolute', top: '2px', bottom: '2px', width: '4px',
-                                background: 'white', borderRadius: '2px', boxShadow: '0 0 8px rgba(0,0,0,0.5)',
+                                background: 'var(--blue)', borderRadius: '2px', boxShadow: '0 0 8px rgba(74,143,212,0.5)',
                                 left: `${Math.max(2, Math.min(98, pct * 100))}%`, transform: 'translateX(-50%)'
                             }} />
                             <div style={{
@@ -1754,7 +1782,7 @@
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                                     <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Target WALT</span>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: 700, fontFamily: 'monospace' }}>{targetWALT.toFixed(1)} years</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{targetWALT.toFixed(1)} years</span>
                                 </div>
                                 <input type="range" className="slider" min="1" max="15" step="0.5"
                                     value={targetWALT} onChange={e => setTargetWALT(parseFloat(e.target.value))}
@@ -1770,7 +1798,7 @@
                                     border: `2px solid ${waltMeetsTarget ? 'var(--green)' : 'var(--red)'}`,
                                 }}>
                                     <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.25rem' }}>Current WALT</div>
-                                    <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'monospace', color: waltMeetsTarget ? 'var(--green)' : 'var(--red)' }}>
+                                    <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: waltMeetsTarget ? 'var(--green)' : 'var(--red)' }}>
                                         {currentWALT.toFixed(1)} yrs
                                     </div>
                                     <div style={{ fontSize: '0.8rem', fontWeight: 600, color: waltMeetsTarget ? 'var(--green)' : 'var(--red)', marginTop: '0.25rem' }}>
@@ -1792,26 +1820,26 @@
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1rem' }}>
                             <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Loan Amount</div>
-                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>{formatCurrency(loanAmount)}</div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>{formatCurrency(loanAmount)}</div>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{((assumptions.ltv || 0.65) * 100).toFixed(0)}% LTV</div>
                             </div>
                             <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Debt / Foot</div>
-                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--navy)' }}>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)' }}>
                                     {deal.rentable_sf > 0 ? formatCurrency(loanAmount / deal.rentable_sf) : '—'}
                                 </div>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>per RSF</div>
                             </div>
                             <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Debt Yield</div>
-                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: loanAmount > 0 && (deal.noi / loanAmount) >= 0.08 ? 'var(--green)' : loanAmount > 0 && (deal.noi / loanAmount) >= 0.06 ? '#f59e0b' : 'var(--red)' }}>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: loanAmount > 0 && (deal.noi / loanAmount) >= 0.08 ? 'var(--green)' : loanAmount > 0 && (deal.noi / loanAmount) >= 0.06 ? '#f59e0b' : 'var(--red)' }}>
                                     {loanAmount > 0 ? ((deal.noi / loanAmount) * 100).toFixed(2) + '%' : '—'}
                                 </div>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>NOI ÷ Loan</div>
                             </div>
                             <div style={{ textAlign: 'center', padding: '1rem', background: 'var(--bg)', borderRadius: '8px' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>DSCR</div>
-                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: 'monospace', color: ads > 0 && (deal.noi / ads) >= 1.25 ? 'var(--green)' : ads > 0 && (deal.noi / ads) >= 1.0 ? '#f59e0b' : 'var(--red)' }}>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: ads > 0 && (deal.noi / ads) >= 1.25 ? 'var(--green)' : ads > 0 && (deal.noi / ads) >= 1.0 ? '#f59e0b' : 'var(--red)' }}>
                                     {ads > 0 ? (deal.noi / ads).toFixed(2) + 'x' : '—'}
                                 </div>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>NOI ÷ ADS</div>
@@ -1839,7 +1867,7 @@
                                 <div style={{ overflowX: 'auto' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                                         <thead>
-                                            <tr style={{ background: 'var(--navy)', color: 'white' }}>
+                                            <tr style={{ background: 'var(--surface)', color: 'var(--slate)' }}>
                                                 <th style={{ padding: '0.6rem 0.8rem', textAlign: 'left' }}>Year</th>
                                                 <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>NOI</th>
                                                 <th style={{ padding: '0.6rem 0.8rem', textAlign: 'right' }}>Debt Service (ADS)</th>
@@ -1850,25 +1878,25 @@
                                         <tbody>
                                             {yearRows.map(r => (
                                                 <tr key={r.year} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                    <td style={{ padding: '0.5rem 0.8rem', fontWeight: 600, fontFamily: 'monospace' }}>Year {r.year}</td>
-                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace' }}>{formatCurrency(r.noi)}</td>
-                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--red)' }}>({formatCurrency(r.ads)})</td>
-                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: r.fcf >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                                    <td style={{ padding: '0.5rem 0.8rem', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>Year {r.year}</td>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(r.noi)}</td>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", color: 'var(--red)' }}>({formatCurrency(r.ads)})</td>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: r.fcf >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                                         {r.fcf >= 0 ? formatCurrency(r.fcf) : '(' + formatCurrency(Math.abs(r.fcf)) + ')'}
                                                     </td>
-                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', color: r.ads > 0 && (r.noi / r.ads) >= 1.25 ? 'var(--green)' : r.ads > 0 && (r.noi / r.ads) >= 1.0 ? '#f59e0b' : 'var(--red)' }}>
+                                                    <td style={{ padding: '0.5rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", color: r.ads > 0 && (r.noi / r.ads) >= 1.25 ? 'var(--green)' : r.ads > 0 && (r.noi / r.ads) >= 1.0 ? '#f59e0b' : 'var(--red)' }}>
                                                         {r.ads > 0 ? (r.noi / r.ads).toFixed(2) + 'x' : '—'}
                                                     </td>
                                                 </tr>
                                             ))}
-                                            <tr style={{ background: 'var(--bg)', fontWeight: 700, borderTop: '2px solid var(--navy)' }}>
-                                                <td style={{ padding: '0.6rem 0.8rem', fontFamily: 'monospace' }}>Total</td>
-                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace' }}>{formatCurrency(totalNOI)}</td>
-                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--red)' }}>({formatCurrency(totalADS)})</td>
-                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: totalFCF >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                            <tr style={{ background: 'var(--bg)', fontWeight: 700, borderTop: '2px solid var(--border)' }}>
+                                                <td style={{ padding: '0.6rem 0.8rem', fontFamily: "'JetBrains Mono', monospace" }}>Total</td>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(totalNOI)}</td>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", color: 'var(--red)' }}>({formatCurrency(totalADS)})</td>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: totalFCF >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                                     {totalFCF >= 0 ? formatCurrency(totalFCF) : '(' + formatCurrency(Math.abs(totalFCF)) + ')'}
                                                 </td>
-                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: 'monospace' }}>
+                                                <td style={{ padding: '0.6rem 0.8rem', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>
                                                     {totalADS > 0 ? (totalNOI / totalADS).toFixed(2) + 'x' : '—'}
                                                 </td>
                                             </tr>
@@ -1914,8 +1942,8 @@
                         onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
                         style={{
                             width: '100%', padding: '0.25rem 0.4rem', fontSize: '1.1rem', fontWeight: 700,
-                            fontFamily: 'monospace', border: '2px solid var(--blue)', borderRadius: '4px',
-                            outline: 'none', background: 'white', color: 'var(--navy)', textAlign: 'right'
+                            fontFamily: "'JetBrains Mono', monospace", border: '2px solid var(--blue)', borderRadius: '4px',
+                            outline: 'none', background: 'var(--surface)', color: 'var(--text-primary)', textAlign: 'right'
                         }}
                     />
                 );
@@ -2129,8 +2157,8 @@
                                 style={{
                                     padding: '0.75rem 1.5rem', fontSize: '0.875rem', fontWeight: 600,
                                     background: 'none', border: 'none', cursor: 'pointer',
-                                    color: activeTab === tab.id ? 'var(--navy)' : 'var(--slate)',
-                                    borderBottom: activeTab === tab.id ? '2px solid var(--navy)' : '2px solid transparent',
+                                    color: activeTab === tab.id ? 'var(--blue)' : 'var(--slate)',
+                                    borderBottom: activeTab === tab.id ? '2px solid var(--blue)' : '2px solid transparent',
                                     marginBottom: '-2px', transition: 'all 0.2s'
                                 }}>{tab.label}</button>
                         ))}
@@ -2144,7 +2172,7 @@
                         <div className="assumptions-panel">
                             <div className="slider-group">
                                 <div style={{ marginBottom: '1.5rem' }}>
-                                    <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--navy)' }}>📊 Assumptions</div>
+                                    <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>📊 Assumptions</div>
                                 </div>
 
                                 <div className="slider-item">
@@ -2262,7 +2290,7 @@
                                                 <span style={{
                                                     position: 'absolute', height: '20px', width: '20px',
                                                     left: assumptions.interest_only ? '25px' : '3px', bottom: '3px',
-                                                    background: 'white', borderRadius: '50%', transition: 'left 0.2s',
+                                                    background: '#E8EDF2', borderRadius: '50%', transition: 'left 0.2s',
                                                 }}></span>
                                             </span>
                                         </label>
@@ -2327,7 +2355,7 @@
                         <div className="container">
                             <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
                                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
-                                <h2 style={{ color: 'var(--navy)', marginBottom: '0.5rem' }}>Dashboard Rendering Error</h2>
+                                <h2 style={{ color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Dashboard Rendering Error</h2>
                                 <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
                                     The parsed data may be incomplete or in an unexpected format.
                                 </p>
@@ -2440,25 +2468,25 @@
 
             const inputStyle = {
                 padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: '6px',
-                fontSize: '0.85rem', width: '100%', background: 'white',
+                fontSize: '0.85rem', width: '100%', background: 'var(--surface)', color: 'var(--text-primary)',
             };
             const roleBadge = (role) => ({
                 padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
-                background: role === 'admin' ? '#fef3c7' : role === 'analyst' ? '#dbeafe' : '#e2e8f0',
-                color: role === 'admin' ? '#92400e' : role === 'analyst' ? '#1e40af' : '#475569',
+                background: role === 'admin' ? 'rgba(251,191,36,0.15)' : role === 'analyst' ? 'rgba(74,143,212,0.15)' : 'rgba(138,155,176,0.15)',
+                color: role === 'admin' ? '#FBbf24' : role === 'analyst' ? '#4A8FD4' : '#8A9BB0',
             });
 
             return (
                 <div className="container">
                     <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--navy)' }}>User Management</h1>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>User Management</h1>
                         <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
                             {showCreate ? 'Cancel' : '+ Add User'}
                         </button>
                     </div>
 
                     {error && (
-                        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                        <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem' }}>
                             {error}
                             <span onClick={() => setError('')} style={{ float: 'right', cursor: 'pointer', fontWeight: 700 }}>x</span>
                         </div>
@@ -2466,7 +2494,7 @@
 
                     {showCreate && (
                         <div className="card" style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
-                            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--navy)' }}>Create New User</h3>
+                            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text-primary)' }}>Create New User</h3>
                             <form onSubmit={handleCreate}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                                     <div>
@@ -2540,8 +2568,8 @@
                                         <td>
                                             <span style={{
                                                 padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700,
-                                                background: user.is_active ? '#dcfce7' : '#fee2e2',
-                                                color: user.is_active ? '#166534' : '#991b1b',
+                                                background: user.is_active ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)',
+                                                color: user.is_active ? 'var(--green)' : 'var(--red)',
                                             }}>
                                                 {user.is_active ? 'Active' : 'Disabled'}
                                             </span>
@@ -2567,7 +2595,7 @@
                                                         Edit
                                                     </button>
                                                     <button onClick={() => handleToggleActive(user)}
-                                                        style={{ padding: '4px 10px', background: user.is_active ? '#fbbf24' : '#22c55e', color: user.is_active ? '#78350f' : 'white', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                        style={{ padding: '4px 10px', background: user.is_active ? 'rgba(251,191,36,0.2)' : 'rgba(52,211,153,0.2)', color: user.is_active ? '#FBbf24' : 'var(--green)', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
                                                         {user.is_active ? 'Disable' : 'Enable'}
                                                     </button>
                                                     <button onClick={() => handleDelete(user)}
