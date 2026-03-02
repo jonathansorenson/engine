@@ -725,6 +725,10 @@
             return monthlyPayment(principal, annualRate, amortYears) * 12;
         };
 
+        const annualDebtServiceIO = (principal, annualRate) => {
+            return principal * annualRate;
+        };
+
         const loanBalanceAtYear = (principal, annualRate, amortYears, yearN) => {
             const r = annualRate / 12;
             const n = amortYears * 12;
@@ -1276,21 +1280,31 @@
 
         const CashFlowTable = ({ noi, asking_price, assumptions, rentable_sf }) => {
             const cashFlows = [];
-            let balance = asking_price * (assumptions.ltv || 0.65);
-            const ds = annualDebtService(balance, assumptions.interest_rate, assumptions.amortization_years);
+            const initialDebt = asking_price * (assumptions.ltv || 0.65);
+            const equity = asking_price * (1 - (assumptions.ltv || 0.65));
+            const isIO = assumptions.interest_only;
+            const holdYears = isIO ? (assumptions.io_term || 5) : assumptions.hold_period;
+            const ds = isIO
+                ? annualDebtServiceIO(initialDebt, assumptions.interest_rate)
+                : annualDebtService(initialDebt, assumptions.interest_rate, assumptions.amortization_years);
 
-            for (let year = 1; year <= assumptions.hold_period; year++) {
+            for (let year = 1; year <= holdYears; year++) {
                 const yearNOI = noi * Math.pow(1 + assumptions.noi_growth, year);
                 const capReserves = rentable_sf * 0.4; // $0.40/SF
                 const cashFlow = yearNOI - ds - capReserves;
-                balance = loanBalanceAtYear(asking_price * (assumptions.ltv || 0.65), assumptions.interest_rate, assumptions.amortization_years, year);
+                const balance = isIO
+                    ? initialDebt
+                    : loanBalanceAtYear(initialDebt, assumptions.interest_rate, assumptions.amortization_years, year);
+                const coc = equity > 0 ? (yearNOI - ds) / equity : 0;
 
-                cashFlows.push({ year, noi: yearNOI, ds, capReserves, cashFlow, balance });
+                cashFlows.push({ year, noi: yearNOI, ds, capReserves, cashFlow, balance, coc });
             }
 
             return (
                 <div>
-                    <div className="section-title">10-Year Cash Flow Projection</div>
+                    <div className="section-title">
+                        Cash Flow Projection {isIO && <span style={{ fontSize: '0.7rem', background: 'rgba(0,191,165,0.15)', color: '#00BFA5', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, marginLeft: '8px' }}>IO</span>}
+                    </div>
                     <div style={{ overflowX: 'auto' }}>
                         <table className="table">
                             <thead>
@@ -1301,6 +1315,7 @@
                                     <th>Cap Reserves</th>
                                     <th>Cash Flow</th>
                                     <th>Loan Balance</th>
+                                    <th>Cash-on-Cash</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1314,6 +1329,9 @@
                                             {formatCurrency(cf.cashFlow)}
                                         </td>
                                         <td>{formatCurrency(cf.balance)}</td>
+                                        <td style={{ fontWeight: 600, color: cf.coc > 0.08 ? 'var(--green)' : cf.coc > 0 ? 'var(--amber)' : 'var(--red)' }}>
+                                            {formatPercent(cf.coc)}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -1330,11 +1348,14 @@
             const calculateIRRCell = (exitCap, hold) => {
                 const equity = asking_price * (1 - (assumptions.ltv || 0.65));
                 const debt = asking_price * (assumptions.ltv || 0.65);
+                const isIO = assumptions.interest_only;
 
                 const cfs = [-equity];
                 for (let y = 1; y <= hold; y++) {
                     const yearNOI = noi * Math.pow(1 + assumptions.noi_growth, y);
-                    const ds = annualDebtService(debt, assumptions.interest_rate, assumptions.amortization_years);
+                    const ds = isIO
+                        ? annualDebtServiceIO(debt, assumptions.interest_rate)
+                        : annualDebtService(debt, assumptions.interest_rate, assumptions.amortization_years);
                     const capReserves = assumptions.sf ? assumptions.sf * 0.4 : 0;
                     cfs.push(yearNOI - ds - capReserves);
                 }
@@ -1342,7 +1363,7 @@
                 // Sale proceeds
                 const exitNOI = noi * Math.pow(1 + assumptions.noi_growth, hold);
                 const salePrice = exitNOI / exitCap;
-                const loanBal = loanBalanceAtYear(debt, assumptions.interest_rate, assumptions.amortization_years, hold);
+                const loanBal = isIO ? debt : loanBalanceAtYear(debt, assumptions.interest_rate, assumptions.amortization_years, hold);
                 cfs[cfs.length - 1] += (salePrice - loanBal);
 
                 return calculateIRR(cfs);
@@ -1926,13 +1947,16 @@
                 cap_rate: initialDeal.cap_rate || 0,
                 rentable_sf: initialDeal.rentable_sf || 0,
             });
-            const [assumptions, setAssumptions] = useState(initialDeal.assumptions || {
+            const [assumptions, setAssumptions] = useState({
                 exit_cap_rate: 0.065,
                 noi_growth: 0.02,
                 hold_period: 5,
                 ltv: 0.65,
                 interest_rate: 0.045,
-                amortization_years: 25
+                amortization_years: 25,
+                interest_only: false,
+                io_term: 5,
+                ...(initialDeal.assumptions || {}),
             });
 
             const updateOverride = (key, value) => {
@@ -1994,8 +2018,11 @@
             const rentableSF = overrides.rentable_sf || 1;
             const equity = askingPrice * (1 - assumptions.ltv);
             const debt = askingPrice * assumptions.ltv;
-            const ds = debt > 0 ? annualDebtService(debt, assumptions.interest_rate, assumptions.amortization_years) : 1;
+            const ds = debt > 0
+                ? (assumptions.interest_only ? annualDebtServiceIO(debt, assumptions.interest_rate) : annualDebtService(debt, assumptions.interest_rate, assumptions.amortization_years))
+                : 0;
             const dscr = ds > 0 ? noi / ds : 0;
+            const cashOnCash = equity > 0 ? (noi - ds) / equity : 0;
             const pricePerSF = rentableSF > 0 ? askingPrice / rentableSF : 0;
 
             // Build a merged deal object for child components
@@ -2086,7 +2113,9 @@
                             </div>
                         </div>
                         <KPICard label="$/SF" value={pricePerSF} format="psf" />
+                        <KPICard label="Equity Required" value={equity} format="currency" />
                         <KPICard label="DSCR" value={dscr} format="ratio" />
+                        <KPICard label="Cash-on-Cash" value={cashOnCash} format="percent" />
                         <KPICard label="LTV" value={assumptions.ltv} format="percent" />
                     </div>
 
@@ -2216,6 +2245,47 @@
                                         <span>3%</span>
                                         <span>8%</span>
                                     </div>
+                                </div>
+
+                                <div className="slider-item" style={{ paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span className="slider-name">Interest Only</span>
+                                        <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '26px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={assumptions.interest_only}
+                                                onChange={() => updateAssumption('interest_only', !assumptions.interest_only)}
+                                                style={{ opacity: 0, width: 0, height: 0 }} />
+                                            <span style={{
+                                                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                                background: assumptions.interest_only ? '#00BFA5' : '#1E3347',
+                                                borderRadius: '13px', transition: 'background 0.2s',
+                                            }}>
+                                                <span style={{
+                                                    position: 'absolute', height: '20px', width: '20px',
+                                                    left: assumptions.interest_only ? '25px' : '3px', bottom: '3px',
+                                                    background: 'white', borderRadius: '50%', transition: 'left 0.2s',
+                                                }}></span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--slate)', marginTop: '4px' }}>
+                                        {assumptions.interest_only ? 'IO — interest payments only, full balloon at exit' : 'Amortizing — principal + interest payments'}
+                                    </div>
+                                    {assumptions.interest_only && (
+                                        <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                                            {[3, 5, 7, 10].map(term => (
+                                                <button key={term} onClick={() => updateAssumption('io_term', term)}
+                                                    style={{
+                                                        flex: 1, padding: '6px 0', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600,
+                                                        cursor: 'pointer', transition: 'all 0.2s',
+                                                        background: (assumptions.io_term || 5) === term ? '#00BFA5' : 'rgba(30,51,71,0.6)',
+                                                        color: (assumptions.io_term || 5) === term ? 'white' : 'var(--slate)',
+                                                        border: (assumptions.io_term || 5) === term ? '1px solid #00BFA5' : '1px solid var(--border)',
+                                                    }}>
+                                                    {term}Y
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

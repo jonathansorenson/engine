@@ -11,6 +11,8 @@ class DealAssumptionsUpdate(BaseModel):
     ltv: Optional[float] = None
     interest_rate: Optional[float] = None
     amortization_years: Optional[int] = None
+    interest_only: Optional[bool] = None
+    io_term: Optional[int] = None
 
 
 class DealListItem(BaseModel):
