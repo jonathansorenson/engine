@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Deal
 from app.schemas.deal import DealResponse, DealListItem, DealAssumptionsUpdate
 from app.services.pipeline import parse_offering_memorandum
+from app.services.argus_parser import is_argus_file, parse_argus_file
 from app.config import settings
 
 router = APIRouter(prefix="/api/v1/deals", tags=["deals"])
@@ -71,7 +72,11 @@ async def upload_and_parse_deal(
         deal.status = "parsing"
         db.commit()
 
-        parse_result = parse_offering_memorandum(pdf_path=pdf_path, excel_path=excel_path)
+        # Detect ARGUS Excel exports and route to specialized parser
+        if excel_path and is_argus_file(excel_path):
+            parse_result = parse_argus_file(excel_path)
+        else:
+            parse_result = parse_offering_memorandum(pdf_path=pdf_path, excel_path=excel_path)
 
         # Update deal with parsed data
         deal.parsed_data = parse_result["parsed_data"]

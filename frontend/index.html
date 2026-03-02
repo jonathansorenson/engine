@@ -877,6 +877,8 @@
                 })),
                 parsing_report: apiDeal.parsing_report,
                 raw_text: pd.raw_text,
+                source: pd.source || 'om',
+                argus_detail: pd.argus_detail || null,
             };
         };
 
@@ -1164,7 +1166,7 @@
                         >
                             <div className="dropzone-icon">📥</div>
                             <div className="dropzone-text">Drop files here or click to browse</div>
-                            <div className="dropzone-hint">PDF or Excel files (offering memorandum, financial statements)</div>
+                            <div className="dropzone-hint">PDF or Excel files (offering memorandum, ARGUS export, financial statements)</div>
                             <input
                                 id="fileInput"
                                 type="file"
@@ -2035,7 +2037,7 @@
                             if (newName && newName.trim()) setDeal(prev => ({ ...prev, property_name: newName.trim() }));
                         }} style={{ cursor: 'pointer', borderBottom: '1px dashed var(--blue)' }}
                             title="Click to edit name">
-                            {deal.property_name} <span style={{ fontSize: '0.7rem', color: 'var(--blue)' }}>✎</span>
+                            {deal.property_name} {deal.source === 'argus' && <span style={{ fontSize: '0.6rem', background: 'rgba(0,191,165,0.15)', color: '#00BFA5', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, marginLeft: '8px', verticalAlign: 'middle' }}>ARGUS</span>} <span style={{ fontSize: '0.7rem', color: 'var(--blue)' }}>✎</span>
                         </div>
                         <div className="property-details">
                             <div className="property-detail">
