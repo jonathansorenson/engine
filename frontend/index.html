@@ -1016,6 +1016,8 @@
                 rentable_sf: overrides?.rentable_sf || deal.rentable_sf,
                 assumptions: assumptions || deal.assumptions,
                 rent_roll: deal.rent_roll || [],
+                source: deal.source || 'om',
+                argus_detail: deal.argus_detail || null,
             };
             try {
                 const res = await fetch(`${API_URL}/api/v1/export`, {
