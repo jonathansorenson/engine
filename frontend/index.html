@@ -911,6 +911,10 @@
                 raw_text: pd.raw_text,
                 source: pd.source || 'om',
                 argus_detail: pd.argus_detail || null,
+                // V2 fields
+                version: apiDeal.version || '1',
+                v2_state: apiDeal.v2_state || null,
+                parsed_data: apiDeal.parsed_data || null,
             };
         };
 
@@ -1055,11 +1059,16 @@
         const DealListView = ({ onSelectDeal, onUpload }) => {
             const [deals, setDeals] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [dealCount, setDealCount] = useState({ count: 0, limit: 10, can_upload: true });
 
             useEffect(() => {
                 const load = async () => {
-                    const data = await fetchDeals();
+                    const [data, countRes] = await Promise.all([
+                        fetchDeals(),
+                        fetch(`${API_URL}/api/v1/deals/count`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
+                    ]);
                     setDeals(data || []);
+                    if (countRes) setDealCount(countRes);
                     setLoading(false);
                 };
                 load();
@@ -1071,6 +1080,7 @@
                 const success = await deleteDeal(dealId);
                 if (success) {
                     setDeals(prev => prev.filter(d => d.id !== dealId));
+                    setDealCount(prev => ({ ...prev, count: Math.max(0, prev.count - 1), can_upload: true }));
                 } else {
                     alert('Failed to delete deal');
                 }
@@ -1083,9 +1093,13 @@
             return (
                 <div className="container">
                     <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Underwriting Pipeline</h1>
-                        <button className="btn btn-primary" onClick={onUpload}>
-                            ➕ Upload New Deal
+                        <div>
+                            <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>Underwriting Pipeline</h1>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{dealCount.count} / {dealCount.limit} deals</span>
+                        </div>
+                        <button className="btn btn-primary" onClick={onUpload} disabled={!dealCount.can_upload}
+                            style={!dealCount.can_upload ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                            {dealCount.can_upload ? '➕ Upload New Deal' : `Deal Limit Reached (${dealCount.limit})`}
                         </button>
                     </div>
 
@@ -1114,7 +1128,7 @@
                                 <tbody>
                                     {deals.map(deal => (
                                         <tr key={deal.id} onClick={() => onSelectDeal(deal.id)}>
-                                            <td><strong>{deal.property_name}</strong></td>
+                                            <td><strong>{deal.property_name}</strong>{deal.version === '2' && <span style={{ marginLeft: '8px', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '700', backgroundColor: 'var(--blue)', color: '#fff' }}>V2</span>}</td>
                                             <td>{formatCurrency(deal.asking_price)}</td>
                                             <td>{formatPercent(deal.cap_rate)}</td>
                                             <td>{formatCurrency(deal.noi)}</td>
@@ -1964,6 +1978,2067 @@
             );
         };
 
+
+// V2 Formatting Helpers
+const isN = v => v != null && isFinite(v) && !isNaN(v);
+const fmtP = (v, d=1) => isN(v) ? v.toFixed(d) + "%" : "—";
+const fmtM = v => isN(v) ? "$" + (v / 1e6).toFixed(2) + "M" : "—";
+const fmtK = v => isN(v) ? "$" + Math.round(v).toLocaleString() : "—";
+const fmtX = v => isN(v) ? v.toFixed(2) + "x" : "—";
+
+// V2 IRR Calculator (500 iterations, more robust)
+const calcIRRv2 = (cfs) => {
+  if (!cfs || cfs.length < 2) return null;
+  if (!cfs.some(x => x > 0) || !cfs.some(x => x < 0)) return null;
+  let r = 0.1;
+  for (let i = 0; i < 500; i++) {
+    let f = 0, df = 0;
+    for (let t = 0; t < cfs.length; t++) {
+      const d = Math.pow(1 + r, t);
+      f += cfs[t] / d;
+      df -= t * cfs[t] / (d * (1 + r));
+    }
+    if (Math.abs(df) < 1e-14) break;
+    const r2 = r - f / df;
+    if (Math.abs(r2 - r) < 1e-10) { r = r2; break; }
+    r = r2;
+    if (r < -0.9999) return null;
+  }
+  return isN(r) && r > -0.9999 ? r * 100 : null;
+};
+
+// V2 Mortgage annual debt service
+const mortgageV2 = (principal, annualRate, termYears) => {
+  if (principal <= 0) return 0;
+  if (annualRate === 0) return principal / termYears;
+  const mr = annualRate / 12, n = termYears * 12;
+  return principal * (mr * Math.pow(1 + mr, n)) / (Math.pow(1 + mr, n) - 1) * 12;
+};
+
+// V2 Financial Engine — faithful port of TSX runModel with configurable waterfall
+const runModelV2 = (p, tenants, events, capItems, wf) => {
+  const lpPct = (wf.lpPercent || 90) / 100;
+  const gpPct = (wf.gpPercent || 10) / 100;
+  const pref = (wf.prefReturn || 8) / 100;
+
+  const pp = p.purchasePrice > 0 ? p.purchasePrice : 0;
+  const acqCost = pp * ((p.acqCostPct || 0) / 100);
+  const close = p.closingCosts || 0;
+  const loan = pp * ((p.ltv || 65) / 100);
+  const origFee = loan * ((p.origFee || 1) / 100);
+  const totalCost = pp + acqCost + close;
+  const equity = totalCost - loan + origFee;
+  const dsAmort = mortgageV2(loan, (p.rate || 6.25) / 100, p.amort || 30);
+  const dsIO = loan * ((p.rate || 6.25) / 100);
+
+  // Rent-roll-driven NOI arrays
+  const hold = p.holdPeriod || 5;
+  const rrNOI = new Array(hold + 2).fill(0);
+  const rrTILC = new Array(hold + 2).fill(0);
+  if (p.useRentRoll && tenants.length > 0) {
+    const today = new Date();
+    tenants.forEach(t => {
+      if (!t.sf || !t.rentPSF) return;
+      const ls = new Date(t.start), le = new Date(t.end);
+      for (let yr = 1; yr <= hold; yr++) {
+        const yrStart = new Date(today.getFullYear() + yr - 1, 0, 1);
+        if (yrStart > le || yrStart < ls) continue;
+        const elapsed = (yrStart - ls) / (365.25 * 86400 * 1000);
+        const rent = t.sf * t.rentPSF * Math.pow(1 + (t.escalPct || 0) / 100, elapsed);
+        const recov = t.type === "NNN" ? t.sf * ((t.recoveryRatio || 100) / 100) * 4 : 0;
+        rrNOI[yr] += rent + recov;
+      }
+      const tiAmt = t.sf * (t.tiPSF || 0);
+      const lcAmt = t.sf * t.rentPSF * ((t.lcPct || 5) / 100);
+      const sYr = Math.round((new Date(t.start) - new Date()) / (365.25 * 86400 * 1000));
+      const capYr = Math.max(1, Math.min(hold, sYr || 1));
+      rrTILC[capYr] += tiAmt + lcAmt;
+    });
+  }
+
+  const years = [];
+  let loanBal = loan;
+  for (let yr = 1; yr <= hold; yr++) {
+    let noi;
+    if (p.useRentRoll && tenants.length > 0) {
+      noi = rrNOI[yr] * (1 - (p.vacancy || 7) / 100);
+    } else {
+      noi = (p.year1NOI || 0) * Math.pow(1 + (p.rentGrowth || 0) / 100, yr - 1) * (1 - (p.vacancy || 0) / 100);
+    }
+    const useIO = p.isIO && yr <= (p.ioPeriod || 2);
+    const annDS = useIO ? dsIO : dsAmort;
+    const intPaid = loanBal * ((p.rate || 6.25) / 100);
+    const prinPaid = useIO ? 0 : Math.max(0, annDS - intPaid);
+    loanBal = Math.max(0, loanBal - prinPaid);
+    const capexRes = p.useCapexPct ? noi * ((p.capexReservePct || 2) / 100) : (p.capexReserveFlat || 0);
+    const specCapex = capItems.filter(c => c.year === yr).reduce((s, c) => s + (c.amount || 0), 0);
+    const tiLC = p.useRentRoll ? rrTILC[yr] : ((p.tiReserve || 0) + noi * ((p.lcReservePct || 0) / 100));
+    const vaInc = events.filter(e => e.year === yr && e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
+    const vaCost = events.filter(e => e.year === yr && e.type === "cost").reduce((s, e) => s + (e.amount || 0), 0);
+    const levCF = noi - annDS - capexRes - specCapex - tiLC + vaInc - vaCost;
+    years.push({ yr, noi, annDS, levCF, loanBal, useIO, capexRes, specCapex, tiLC, vaInc, vaCost, intPaid, prinPaid });
+  }
+
+  const lastNOI = years[years.length - 1]?.noi || 0;
+  const exitNOI = lastNOI * (1 + (p.rentGrowth || 0) / 100);
+  const exitVal = exitNOI / ((p.exitCap || 6) / 100);
+  const exitBal = years[years.length - 1]?.loanBal || 0;
+  const prepayAmt = exitBal * ((p.prepayPct || 1) / 100);
+  const saleNet = exitVal - exitBal - prepayAmt;
+  const goingCap = pp > 0 ? (p.year1NOI || 0) / pp * 100 : 0;
+  const yoc = totalCost > 0 ? (p.year1NOI || 0) / totalCost * 100 : 0;
+
+  // IRR cash flows
+  const opCFs = years.map(y => y.levCF);
+  const levCFsForIRR = [-equity, ...opCFs.slice(0, -1), (opCFs[opCFs.length - 1] || 0) + saleNet];
+  const unlevCFsForIRR = [-totalCost, ...years.slice(0, -1).map(y => y.noi), (years[years.length - 1]?.noi || 0) + exitVal];
+
+  const levIRR = calcIRRv2(levCFsForIRR);
+  const unlevIRR = calcIRRv2(unlevCFsForIRR);
+  const totalReturn = levCFsForIRR.slice(1).reduce((s, v) => s + v, 0);
+  const em = equity > 0 ? totalReturn / equity : 0;
+  const dscr = years[0] ? years[0].noi / Math.max(years[0].annDS, 1) : 0;
+  const avgCoC = equity > 0 ? opCFs.reduce((s, v) => s + v, 0) / years.length / equity * 100 : 0;
+
+  // Waterfall with configurable LP/GP split
+  const lpEq = equity * lpPct, gpEq = equity * gpPct;
+  let pool = totalReturn;
+  let lpOut = 0, gpOut = 0;
+  const lpROC = Math.min(pool * lpPct, lpEq); pool -= lpROC;
+  const gpROC = Math.min(pool * (gpPct / (lpPct + gpPct) || gpPct), gpEq); pool -= gpROC;
+  lpOut += lpROC; gpOut += gpROC;
+  const lpPrefTotal = lpEq * pref * hold;
+  const gpPrefTotal = gpEq * pref * hold;
+  const lpPrefPaid = Math.min(pool * lpPct, lpPrefTotal); pool -= lpPrefPaid;
+  const gpPrefPaid = Math.min(pool, gpPrefTotal); pool = Math.max(0, pool - gpPrefPaid);
+  lpOut += lpPrefPaid; gpOut += gpPrefPaid;
+  if (wf.catchUp && pool > 0) { const cu = Math.min(pool, gpPrefTotal * 0.5); gpOut += cu; pool -= cu; }
+  if (pool > 0) { const t1 = Math.min(pool, equity * ((wf.tier1Thresh || 15) / 100) * hold * 0.25); lpOut += t1 * ((wf.tier1Split || 80) / 100); gpOut += t1 * (1 - (wf.tier1Split || 80) / 100); pool -= t1; }
+  if (pool > 0) { const t2 = Math.min(pool, equity * ((wf.tier2Thresh || 20) / 100) * hold * 0.15); lpOut += t2 * ((wf.tier2Split || 70) / 100); gpOut += t2 * (1 - (wf.tier2Split || 70) / 100); pool -= t2; }
+  if (pool > 0) { lpOut += pool * ((wf.tier3Split || 60) / 100); gpOut += pool * (1 - (wf.tier3Split || 60) / 100); }
+
+  const lpOpShare = opCFs.map(cf => cf * lpPct);
+  const gpOpShare = opCFs.map(cf => cf * gpPct);
+  const lpTerminal = lpOut - lpOpShare.reduce((s, v) => s + v, 0);
+  const gpTerminal = gpOut - gpOpShare.reduce((s, v) => s + v, 0);
+  const lpCFs = [-lpEq, ...lpOpShare.slice(0, -1), (lpOpShare[lpOpShare.length - 1] || 0) + Math.max(0, lpTerminal)];
+  const gpCFs = [-gpEq, ...gpOpShare.slice(0, -1), (gpOpShare[gpOpShare.length - 1] || 0) + Math.max(0, gpTerminal)];
+  const lpIRR = calcIRRv2(lpCFs);
+  const gpIRR = calcIRRv2(gpCFs);
+  const lpEM = lpEq > 0 ? lpOut / lpEq : 0;
+  const gpPromote = Math.max(0, gpOut - gpEq);
+  const goGreen = (levIRR || 0) >= (p.hurdleIRR || 15) && em >= (p.hurdleEM || 1.75);
+
+  return {
+    pp, totalCost, loan, equity, origFee, acqCost,
+    years, exitNOI, exitVal, exitBal, saleNet, prepayAmt,
+    goingCap, yoc, levIRR, unlevIRR, em, dscr, avgCoC,
+    levCFsForIRR, totalReturn,
+    lpEq, gpEq, lpOut, gpOut, lpIRR, gpIRR, lpEM, gpPromote,
+    goGreen
+  };
+};
+
+// V2 Defaults
+const V2_DEFAULTS = {
+  name: "New Deal",
+  assetType: "Office",
+  address: "",
+  sf: 150000,
+  purchasePrice: 30000000,
+  acqCostPct: 1.5,
+  closingCosts: 250000,
+  ltv: 65,
+  rate: 6.25,
+  amort: 30,
+  ioPeriod: 2,
+  isIO: true,
+  origFee: 1.0,
+  prepayPct: 1.0,
+  recourse: false,
+  year1NOI: 2100000,
+  rentGrowth: 3,
+  vacancy: 7,
+  opexGrowth: 2.5,
+  useRentRoll: false,
+  exitCap: 6.5,
+  holdPeriod: 5,
+  hurdleIRR: 15,
+  hurdleEM: 1.75,
+  capexReservePct: 2,
+  capexReserveFlat: 0,
+  useCapexPct: true,
+  tiReserve: 0,
+  lcReservePct: 3,
+};
+
+const V2_WF_DEFAULTS = {
+  lpPercent: 90,
+  gpPercent: 10,
+  prefReturn: 8,
+  tier1Split: 80,
+  tier1Thresh: 15,
+  tier2Split: 70,
+  tier2Thresh: 20,
+  tier3Split: 60,
+  catchUp: true,
+};
+
+// V2 UI Atoms
+const V2Sect = ({ title, children }) => (
+  <div style={{
+    backgroundColor: 'var(--card)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    padding: '16px',
+    marginBottom: '16px',
+  }}>
+    {title && <div style={{
+      fontSize: '11px',
+      fontWeight: '700',
+      color: 'var(--teal)',
+      textTransform: 'uppercase',
+      letterSpacing: '1px',
+      marginBottom: '12px',
+    }}>{title}</div>}
+    {children}
+  </div>
+);
+
+const V2Card = ({ label, value, sub, good }) => (
+  <div style={{
+    backgroundColor: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '12px',
+    marginBottom: '8px',
+  }}>
+    <div style={{
+      fontSize: '11px',
+      color: 'var(--text-secondary)',
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+      marginBottom: '4px',
+      textTransform: 'uppercase',
+    }}>{label}</div>
+    <div style={{
+      fontSize: '16px',
+      fontWeight: '600',
+      color: good === true ? 'var(--green)' : good === false ? 'var(--red)' : 'var(--text-primary)',
+      fontFamily: "'JetBrains Mono', monospace",
+    }}>{value}</div>
+    {sub && <div style={{
+      fontSize: '10px',
+      color: 'var(--text-secondary)',
+      marginTop: '4px',
+    }}>{sub}</div>}
+  </div>
+);
+
+const V2Inp = ({ label, value, onChange, prefix, suffix, type = 'text', hl }) => (
+  <div style={{ marginBottom: '12px' }}>
+    {label && <label style={{
+      display: 'block',
+      fontSize: '11px',
+      fontWeight: '600',
+      color: 'var(--text-secondary)',
+      textTransform: 'uppercase',
+      marginBottom: '6px',
+    }}>{label}</label>}
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      {prefix && <span style={{
+        marginRight: '6px',
+        color: 'var(--text-secondary)',
+        fontFamily: "'JetBrains Mono', monospace",
+      }}>{prefix}</span>}
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          flex: 1,
+          backgroundColor: 'var(--surface)',
+          border: hl ? '1px solid var(--green)' : '1px solid var(--border)',
+          borderRadius: '6px',
+          padding: '8px 10px',
+          color: 'var(--text-primary)',
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: '13px',
+          outline: 'none',
+        }}
+      />
+      {suffix && <span style={{
+        marginLeft: '6px',
+        color: 'var(--text-secondary)',
+        fontFamily: "'JetBrains Mono', monospace",
+      }}>{suffix}</span>}
+    </div>
+  </div>
+);
+
+const V2Sld = ({ label, value, min, max, step, onChange, display }) => (
+  <div style={{ marginBottom: '12px' }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '8px',
+    }}>
+      <label style={{
+        fontSize: '11px',
+        fontWeight: '600',
+        color: 'var(--text-secondary)',
+        textTransform: 'uppercase',
+      }}>{label}</label>
+      <span style={{
+        fontSize: '13px',
+        color: 'var(--blue)',
+        fontFamily: "'JetBrains Mono', monospace",
+        fontWeight: '600',
+      }}>{display || value}</span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step || 0.1}
+      value={value}
+      onChange={(e) => onChange(parseFloat(e.target.value))}
+      style={{
+        width: '100%',
+        height: '6px',
+        borderRadius: '3px',
+        background: 'var(--border)',
+        outline: 'none',
+        WebkitAppearance: 'none',
+      }}
+    />
+  </div>
+);
+
+const V2TabBtn = ({ label, active, onClick, badge }) => (
+  <button
+    onClick={onClick}
+    style={{
+      backgroundColor: active ? 'var(--card)' : 'transparent',
+      border: 'none',
+      borderBottom: active ? '2px solid var(--blue)' : '2px solid transparent',
+      color: active ? 'var(--blue)' : 'var(--slate)',
+      padding: '12px 16px',
+      fontSize: '13px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+      position: 'relative',
+      transition: 'all 0.2s',
+    }}
+  >
+    {label}
+    {badge && <span style={{
+      position: 'absolute',
+      top: '8px',
+      right: '8px',
+      backgroundColor: 'var(--teal)',
+      color: 'var(--bg)',
+      fontSize: '10px',
+      padding: '2px 6px',
+      borderRadius: '10px',
+      fontWeight: '700',
+    }}>{badge}</span>}
+  </button>
+);
+
+const V2Tog = ({ value, onChange, label }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+    {label && <label style={{
+      fontSize: '11px',
+      fontWeight: '600',
+      color: 'var(--text-secondary)',
+      textTransform: 'uppercase',
+    }}>{label}</label>}
+    <button
+      onClick={() => onChange(!value)}
+      style={{
+        width: '40px',
+        height: '20px',
+        borderRadius: '20px',
+        border: 'none',
+        backgroundColor: value ? 'var(--teal)' : 'var(--surface)',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        padding: '0',
+      }}
+    >
+      <div style={{
+        width: '16px',
+        height: '16px',
+        borderRadius: '50%',
+        backgroundColor: '#fff',
+        position: 'absolute',
+        top: '2px',
+        left: value ? '22px' : '2px',
+        transition: 'left 0.2s',
+      }} />
+    </button>
+  </div>
+);
+
+// Print & Export
+const printMemoV2 = (deal, calc) => {
+  const w = window.open('', '_blank');
+  const html = `
+    <html>
+    <head>
+      <title>CRElytic Deal Memo</title>
+      <style>
+        body { font-family: Georgia, serif; margin: 40px; color: #333; }
+        h1 { font-size: 28px; margin-bottom: 8px; }
+        h2 { font-size: 18px; margin-top: 20px; margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .badge { display: inline-block; padding: 6px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .go { background: #34D399; color: white; }
+        .nogo { background: #F87171; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+        th { background: #f5f5f5; }
+        .metric-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .footer { margin-top: 40px; font-size: 10px; color: #999; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="font-size: 12px; color: #666; margin-bottom: 20px;">CRElytic Investment Analyzer</div>
+        <h1>${deal.name || 'Deal Analysis'}</h1>
+        <div style="font-size: 14px; color: #999;">${deal.address || 'Property Address'}</div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <span class="badge ${calc.goGreen ? 'go' : 'nogo'}">${calc.goGreen ? 'GO' : 'NO-GO'}</span>
+      </div>
+
+      <h2>Capital Structure</h2>
+      <div class="grid">
+        <div>
+          <div class="metric-row">
+            <span>Purchase Price:</span>
+            <strong>${fmtM(calc.pp)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Total Cost:</span>
+            <strong>${fmtM(calc.totalCost)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Loan Amount:</span>
+            <strong>${fmtM(calc.loan)}</strong>
+          </div>
+        </div>
+        <div>
+          <div class="metric-row">
+            <span>Equity Required:</span>
+            <strong>${fmtM(calc.equity)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>LTV:</span>
+            <strong>${fmtP(calc.pp > 0 ? calc.loan / calc.pp * 100 : 0)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>DSCR:</span>
+            <strong>${fmtX(calc.dscr)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <h2>Returns Summary</h2>
+      <div class="grid">
+        <div>
+          <div class="metric-row">
+            <span>Levered IRR:</span>
+            <strong>${fmtP(calc.levIRR)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Unlevered IRR:</span>
+            <strong>${fmtP(calc.unlevIRR)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Equity Multiple:</span>
+            <strong>${fmtX(calc.em)}</strong>
+          </div>
+        </div>
+        <div>
+          <div class="metric-row">
+            <span>Going-in Cap Rate:</span>
+            <strong>${fmtP(calc.goingCap)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Yield on Cost:</span>
+            <strong>${fmtP(calc.yoc)}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Avg Cash-on-Cash:</span>
+            <strong>${fmtP(calc.avgCoC)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <h2>Cash Flows (Years 1-${calc.years.length})</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th>NOI</th>
+            <th>Debt Service</th>
+            <th>Net CF</th>
+            <th>Loan Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${calc.years.map(y => `
+            <tr>
+              <td>${y.yr}</td>
+              <td>${fmtM(y.noi)}</td>
+              <td>${fmtM(y.annDS)}</td>
+              <td>${fmtM(y.levCF)}</td>
+              <td>${fmtM(y.loanBal)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <div class="footer">
+        Confidential. This memo contains forward-looking statements and assumptions subject to risks and uncertainties.
+      </div>
+    </body>
+    </html>
+  `;
+  w.document.write(html);
+  w.document.close();
+};
+
+const exportV2Excel = async (deal, calc, p, wf, tenants, events, capItems) => {
+  try {
+    const payload = {
+      v2_state: {
+        assumptions: p,
+        waterfall: wf,
+        tenants,
+        valueAddEvents: events,
+        capexItems: capItems,
+      },
+      calc,
+    };
+    const res = await fetch(`${API_URL}/api/v1/export/v2`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${deal.name || 'deal'}_analysis.xlsx`;
+      a.click();
+    }
+  } catch (e) {
+    console.error('Export failed:', e);
+  }
+};
+
+// Main DashboardV2View Component
+const DashboardV2View = ({ deal: initialDeal, onBack }) => {
+  const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+  // State
+  const [p, setP] = useState(V2_DEFAULTS);
+  const [tab, setTab] = useState('deal');
+  const [tenants, setTenants] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [capItems, setCapItems] = useState([]);
+  const [wf, setWf] = useState(V2_WF_DEFAULTS);
+  const [compared, setCompared] = useState([]);
+  const [hlF, setHlF] = useState([]);
+  const [omSt, setOmSt] = useState('idle');
+  const [omMsg, setOmMsg] = useState('');
+  const [dbtSt, setDbtSt] = useState('idle');
+  const [dbtMsg, setDbtMsg] = useState('');
+  const [sensM, setSensM] = useState('irr');
+  const [cfPeriod, setCfPeriod] = useState('annual');
+  const [saveStatus, setSaveStatus] = useState('saved');
+
+  // Hydrate on mount
+  useEffect(() => {
+    if (initialDeal.v2_state) {
+      setP(initialDeal.v2_state.assumptions || V2_DEFAULTS);
+      setWf(initialDeal.v2_state.waterfall || V2_WF_DEFAULTS);
+      setTenants(initialDeal.v2_state.tenants || []);
+      setEvents(initialDeal.v2_state.valueAddEvents || []);
+      setCapItems(initialDeal.v2_state.capexItems || []);
+    }
+    if (initialDeal.parsed_data?.property) {
+      const { name, address, sf } = initialDeal.parsed_data.property;
+      setP(prev => ({
+        ...prev,
+        name: name || prev.name,
+        address: address || prev.address,
+        sf: sf || prev.sf,
+      }));
+    }
+  }, []);
+
+  // Auto-save
+  useEffect(() => {
+    setSaveStatus('saving');
+    const timer = setTimeout(async () => {
+      try {
+        await fetch(`${API_URL}/api/v1/deals/${initialDeal.id}/v2-state`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assumptions: p, waterfall: wf, tenants, valueAddEvents: events, capexItems: capItems }),
+        });
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [p, wf, tenants, events, capItems]);
+
+  // Compute model
+  const calc = useMemo(() => runModelV2(p, tenants, events, capItems, wf), [p, tenants, events, capItems, wf]);
+
+  // OM extraction
+  const handleOM = async (file) => {
+    setOmSt('loading');
+    setOmMsg('Extracting deal data...');
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/deals/extract-om`, { method: 'POST', body: fd });
+      if (res.ok) {
+        const obj = await res.json();
+        const hl = [];
+        if (obj.purchasePrice) { setP(prev => ({ ...prev, purchasePrice: obj.purchasePrice })); hl.push('purchasePrice'); }
+        if (obj.propertyName) { setP(prev => ({ ...prev, name: obj.propertyName })); hl.push('name'); }
+        if (obj.address) { setP(prev => ({ ...prev, address: obj.address })); hl.push('address'); }
+        if (obj.squareFeet) { setP(prev => ({ ...prev, sf: obj.squareFeet })); hl.push('sf'); }
+        if (obj.year1NOI) { setP(prev => ({ ...prev, year1NOI: obj.year1NOI })); hl.push('year1NOI'); }
+        setHlF(hl);
+        setOmMsg('Extraction complete! Fields highlighted.');
+        setOmSt('success');
+      }
+    } catch (e) {
+      setOmMsg('Extraction failed: ' + e.message);
+      setOmSt('error');
+    }
+  };
+
+  // Charts refs
+  const cfChartRef = useRef(null), eqChartRef = useRef(null), loanChartRef = useRef(null), hurChartRef = useRef(null);
+  const chartInstances = useRef({});
+
+  // Initialize charts on calc change (cashflow tab)
+  useEffect(() => {
+    if (tab === 'charts' && calc.years.length > 0 && window.Chart) {
+      // NOI vs CF vs DS
+      if (cfChartRef.current) {
+        if (chartInstances.current.cf) chartInstances.current.cf.destroy();
+        const ctx = cfChartRef.current.getContext('2d');
+        chartInstances.current.cf = new window.Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: calc.years.map(y => `Y${y.yr}`),
+            datasets: [
+              {
+                label: 'NOI',
+                data: calc.years.map(y => y.noi / 1e6),
+                backgroundColor: '#00BFA5',
+              },
+              {
+                label: 'Debt Service',
+                data: calc.years.map(y => -y.annDS / 1e6),
+                backgroundColor: '#F87171',
+              },
+              {
+                label: 'Net CF',
+                data: calc.years.map(y => y.levCF / 1e6),
+                backgroundColor: '#34D399',
+              },
+            ],
+          },
+          options: { responsive: true, scales: { y: { beginAtZero: true } } },
+        });
+      }
+      // Loan balance
+      if (loanChartRef.current) {
+        if (chartInstances.current.loan) chartInstances.current.loan.destroy();
+        const ctx = loanChartRef.current.getContext('2d');
+        chartInstances.current.loan = new window.Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: calc.years.map(y => `Y${y.yr}`),
+            datasets: [{
+              label: 'Loan Balance',
+              data: calc.years.map(y => y.loanBal / 1e6),
+              borderColor: '#4A8FD4',
+              backgroundColor: 'rgba(74, 143, 212, 0.1)',
+              tension: 0.3,
+              fill: true,
+            }],
+          },
+          options: { responsive: true, scales: { y: { beginAtZero: true } } },
+        });
+      }
+    }
+  }, [tab, calc.years]);
+
+  return (
+    <div style={{
+      backgroundColor: 'var(--bg)',
+      color: 'var(--text-primary)',
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+      minHeight: '100vh',
+      paddingBottom: '40px',
+    }}>
+      {/* Header */}
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        backgroundColor: 'rgba(15, 34, 54, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderBottom: '1px solid var(--border)',
+        padding: '16px 24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        zIndex: 100,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button onClick={onBack} style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--slate)',
+            cursor: 'pointer',
+            fontSize: '20px',
+          }}>←</button>
+          <div>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: '700',
+              fontFamily: "'DM Serif Display', serif",
+              color: 'var(--text-primary)',
+            }}>CRElytic Deal Analyzer</div>
+            <div style={{
+              fontSize: '12px',
+              color: 'var(--slate)',
+              marginTop: '2px',
+            }}>{p.name}</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            fontSize: '11px',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            backgroundColor: saveStatus === 'saved' ? 'rgba(52, 211, 153, 0.2)' : saveStatus === 'saving' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(248, 113, 113, 0.2)',
+            color: saveStatus === 'saved' ? 'var(--green)' : saveStatus === 'saving' ? 'var(--amber)' : 'var(--red)',
+          }}>
+            {saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'saving' ? 'Saving...' : 'Error'}
+          </div>
+          <div style={{
+            padding: '6px 12px',
+            borderRadius: '4px',
+            backgroundColor: calc.goGreen ? 'rgba(52, 211, 153, 0.2)' : 'rgba(248, 113, 113, 0.2)',
+            color: calc.goGreen ? 'var(--green)' : 'var(--red)',
+            fontSize: '12px',
+            fontWeight: '600',
+          }}>
+            {calc.goGreen ? 'GO' : 'NO-GO'}
+          </div>
+          <button onClick={() => printMemoV2(initialDeal, calc)} style={{
+            backgroundColor: 'var(--blue)',
+            border: 'none',
+            color: '#fff',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '600',
+          }}>
+            Print Memo
+          </button>
+          <button onClick={() => exportV2Excel(initialDeal, calc, p, wf, tenants, events, capItems)} style={{
+            backgroundColor: 'var(--teal)',
+            border: 'none',
+            color: '#fff',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '600',
+          }}>
+            Export
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Bar */}
+      <div style={{
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        overflowX: 'auto',
+        paddingLeft: '24px',
+        gap: '8px',
+        backgroundColor: 'var(--bg)',
+      }}>
+        <V2TabBtn label="Upload" active={tab === 'upload'} onClick={() => setTab('upload')} />
+        <V2TabBtn label="Deal" active={tab === 'deal'} onClick={() => setTab('deal')} />
+        <V2TabBtn label="Debt" active={tab === 'debt'} onClick={() => setTab('debt')} />
+        <V2TabBtn label="Rent Roll" active={tab === 'rentroll'} onClick={() => setTab('rentroll')} badge={tenants.length} />
+        <V2TabBtn label="Value-Add" active={tab === 'valueadd'} onClick={() => setTab('valueadd')} badge={events.length + capItems.length} />
+        <V2TabBtn label="Cash Flows" active={tab === 'cashflows'} onClick={() => setTab('cashflows')} />
+        <V2TabBtn label="Sensitivity" active={tab === 'sensitivity'} onClick={() => setTab('sensitivity')} />
+        <V2TabBtn label="Charts" active={tab === 'charts'} onClick={() => setTab('charts')} />
+        <V2TabBtn label="Waterfall" active={tab === 'waterfall'} onClick={() => setTab('waterfall')} />
+        <V2TabBtn label="Compare" active={tab === 'compare'} onClick={() => setTab('compare')} />
+      </div>
+
+      {/* Tab Content */}
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
+
+        {/* UPLOAD TAB */}
+        {tab === 'upload' && (
+          <div>
+            <V2Sect title="Operating Memorandum">
+              <div style={{
+                border: '2px dashed var(--border)',
+                borderRadius: '8px',
+                padding: '32px',
+                textAlign: 'center',
+                backgroundColor: 'var(--surface)',
+                cursor: 'pointer',
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files[0]) handleOM(e.dataTransfer.files[0]);
+              }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📄</div>
+                <div style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  Drop OM PDF or image here
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Supported: PDF, PNG, JPG
+                </div>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={(e) => e.target.files[0] && handleOM(e.target.files[0])}
+                  style={{ marginTop: '16px', display: 'none' }}
+                />
+              </div>
+              {omSt === 'loading' && <div style={{ marginTop: '16px', color: 'var(--blue)' }}>🔄 {omMsg}</div>}
+              {omSt === 'success' && (
+                <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: '4px', color: 'var(--green)' }}>
+                  ✓ {omMsg}
+                </div>
+              )}
+              {omSt === 'error' && <div style={{ marginTop: '16px', color: 'var(--red)' }}>✕ {omMsg}</div>}
+            </V2Sect>
+            <button onClick={() => setTab('deal')} style={{
+              backgroundColor: 'var(--blue)',
+              border: 'none',
+              color: '#fff',
+              padding: '12px 24px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+            }}>
+              Review Deal →
+            </button>
+          </div>
+        )}
+
+        {/* DEAL TAB */}
+        {tab === 'deal' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
+            {/* Col 1: Property & Income */}
+            <div>
+              <V2Sect title="Property">
+                <V2Inp
+                  label="Name"
+                  value={p.name}
+                  onChange={(v) => setP(prev => ({ ...prev, name: v }))}
+                  hl={hlF.includes('name')}
+                />
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    textTransform: 'uppercase',
+                    marginBottom: '6px',
+                  }}>Asset Type</label>
+                  <select value={p.assetType} onChange={(e) => setP(prev => ({ ...prev, assetType: e.target.value }))} style={{
+                    width: '100%',
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    padding: '8px 10px',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                  }}>
+                    <option>Office</option>
+                    <option>Retail</option>
+                    <option>Industrial</option>
+                    <option>Multifamily</option>
+                    <option>Mixed-Use</option>
+                  </select>
+                </div>
+                <V2Inp
+                  label="Address"
+                  value={p.address}
+                  onChange={(v) => setP(prev => ({ ...prev, address: v }))}
+                  hl={hlF.includes('address')}
+                />
+                <V2Inp
+                  label="Square Footage"
+                  type="number"
+                  value={p.sf}
+                  onChange={(v) => setP(prev => ({ ...prev, sf: parseFloat(v) || 0 }))}
+                  suffix="SF"
+                  hl={hlF.includes('sf')}
+                />
+              </V2Sect>
+
+              <V2Sect title="Acquisition">
+                <V2Inp
+                  label="Purchase Price"
+                  type="number"
+                  value={p.purchasePrice}
+                  onChange={(v) => setP(prev => ({ ...prev, purchasePrice: parseFloat(v) || 0 }))}
+                  prefix="$"
+                  hl={hlF.includes('purchasePrice')}
+                />
+                <V2Inp
+                  label="Acq Cost %"
+                  type="number"
+                  value={p.acqCostPct}
+                  onChange={(v) => setP(prev => ({ ...prev, acqCostPct: parseFloat(v) || 0 }))}
+                  suffix="%"
+                />
+                <V2Inp
+                  label="Closing Costs"
+                  type="number"
+                  value={p.closingCosts}
+                  onChange={(v) => setP(prev => ({ ...prev, closingCosts: parseFloat(v) || 0 }))}
+                  prefix="$"
+                />
+              </V2Sect>
+
+              <V2Sect title="Income">
+                <V2Tog
+                  label="Use Rent Roll"
+                  value={p.useRentRoll}
+                  onChange={(v) => setP(prev => ({ ...prev, useRentRoll: v }))}
+                />
+                {!p.useRentRoll && (
+                  <>
+                    <V2Inp
+                      label="Year 1 NOI"
+                      type="number"
+                      value={p.year1NOI}
+                      onChange={(v) => setP(prev => ({ ...prev, year1NOI: parseFloat(v) || 0 }))}
+                      prefix="$"
+                      hl={hlF.includes('year1NOI')}
+                    />
+                    <V2Inp
+                      label="Rent Growth %"
+                      type="number"
+                      value={p.rentGrowth}
+                      onChange={(v) => setP(prev => ({ ...prev, rentGrowth: parseFloat(v) || 0 }))}
+                      suffix="%"
+                    />
+                    <V2Inp
+                      label="Vacancy %"
+                      type="number"
+                      value={p.vacancy}
+                      onChange={(v) => setP(prev => ({ ...prev, vacancy: parseFloat(v) || 0 }))}
+                      suffix="%"
+                    />
+                  </>
+                )}
+              </V2Sect>
+
+              <V2Sect title="Exit">
+                <V2Inp
+                  label="Exit Cap %"
+                  type="number"
+                  value={p.exitCap}
+                  onChange={(v) => setP(prev => ({ ...prev, exitCap: parseFloat(v) || 0 }))}
+                  suffix="%"
+                />
+                <V2Inp
+                  label="Hold Period"
+                  type="number"
+                  value={p.holdPeriod}
+                  onChange={(v) => setP(prev => ({ ...prev, holdPeriod: parseInt(v) || 5 }))}
+                  suffix="yrs"
+                />
+              </V2Sect>
+
+              <V2Sect title="Fund Hurdles">
+                <V2Inp
+                  label="Target IRR"
+                  type="number"
+                  value={p.hurdleIRR}
+                  onChange={(v) => setP(prev => ({ ...prev, hurdleIRR: parseFloat(v) || 15 }))}
+                  suffix="%"
+                />
+                <V2Inp
+                  label="Target EM"
+                  type="number"
+                  value={p.hurdleEM}
+                  onChange={(v) => setP(prev => ({ ...prev, hurdleEM: parseFloat(v) || 1.75 }))}
+                  suffix="x"
+                />
+              </V2Sect>
+            </div>
+
+            {/* Col 2: Sliders & Cost Breakdown */}
+            <div>
+              <V2Sect title="Quick Adjust">
+                <V2Sld
+                  label="Purchase Price"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={p.purchasePrice / 1e6}
+                  onChange={(v) => setP(prev => ({ ...prev, purchasePrice: v * 1e6 }))}
+                  display={fmtM(p.purchasePrice)}
+                />
+                <V2Sld
+                  label="LTV %"
+                  min={40}
+                  max={80}
+                  step={1}
+                  value={p.ltv}
+                  onChange={(v) => setP(prev => ({ ...prev, ltv: v }))}
+                  display={fmtP(p.ltv)}
+                />
+                <V2Sld
+                  label="Interest Rate"
+                  min={2}
+                  max={10}
+                  step={0.1}
+                  value={p.rate}
+                  onChange={(v) => setP(prev => ({ ...prev, rate: v }))}
+                  display={fmtP(p.rate)}
+                />
+                <V2Sld
+                  label="Amortization"
+                  min={15}
+                  max={30}
+                  step={1}
+                  value={p.amort}
+                  onChange={(v) => setP(prev => ({ ...prev, amort: v }))}
+                  display={`${p.amort}yr`}
+                />
+                {p.isIO && (
+                  <V2Sld
+                    label="I/O Period"
+                    min={0}
+                    max={5}
+                    step={1}
+                    value={p.ioPeriod}
+                    onChange={(v) => setP(prev => ({ ...prev, ioPeriod: v }))}
+                    display={`${p.ioPeriod}yr`}
+                  />
+                )}
+                <V2Sld
+                  label="Exit Cap %"
+                  min={4}
+                  max={9}
+                  step={0.1}
+                  value={p.exitCap}
+                  onChange={(v) => setP(prev => ({ ...prev, exitCap: v }))}
+                  display={fmtP(p.exitCap)}
+                />
+                <V2Sld
+                  label="Rent Growth %"
+                  min={0}
+                  max={6}
+                  step={0.1}
+                  value={p.rentGrowth}
+                  onChange={(v) => setP(prev => ({ ...prev, rentGrowth: v }))}
+                  display={fmtP(p.rentGrowth)}
+                />
+              </V2Sect>
+
+              <V2Sect title="Cost Breakdown">
+                <V2Card label="Purchase Price" value={fmtM(p.purchasePrice)} />
+                <V2Card label="Acq Cost" value={fmtM(p.purchasePrice * (p.acqCostPct / 100))} />
+                <V2Card label="Closing Costs" value={fmtM(p.closingCosts)} />
+                <V2Card label="Orig Fee" value={fmtM(calc.origFee)} />
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '8px' }}>
+                  <V2Card label="Total Cost" value={fmtM(calc.totalCost)} />
+                  <V2Card label="Less: Loan" value={fmtM(-calc.loan)} />
+                  <V2Card label="Equity Required" value={fmtM(calc.equity)} good={true} />
+                </div>
+              </V2Sect>
+            </div>
+
+            {/* Col 3: Returns */}
+            <div>
+              <V2Sect title="Returns">
+                <V2Card
+                  label="Levered IRR"
+                  value={fmtP(calc.levIRR)}
+                  sub={`vs ${p.hurdleIRR}% hurdle`}
+                  good={calc.levIRR >= (p.hurdleIRR / 100)}
+                />
+                <V2Card
+                  label="Unlevered IRR"
+                  value={fmtP(calc.unlevIRR)}
+                  sub="Unlevered return"
+                />
+                <V2Card
+                  label="Equity Multiple"
+                  value={fmtX(calc.em)}
+                  sub={`vs ${p.hurdleEM}x hurdle`}
+                  good={calc.em >= p.hurdleEM}
+                />
+                <V2Card
+                  label="Avg Cash-on-Cash"
+                  value={fmtP(calc.avgCoC)}
+                  sub="Annual average"
+                />
+                <V2Card
+                  label="Going-in Cap"
+                  value={fmtP(calc.goingCap)}
+                  sub="Y1 NOI / PP"
+                />
+                <V2Card
+                  label="Yield on Cost"
+                  value={fmtP(calc.yoc)}
+                  sub="Levered Y1 CF / Equity"
+                />
+                <V2Card
+                  label="DSCR (Y1)"
+                  value={fmtX(calc.dscr)}
+                  sub="NOI / Debt Service"
+                />
+              </V2Sect>
+
+              <V2Sect title="IRR Waterfall">
+                <V2Card label="Equity In" value={fmtM(calc.equity)} />
+                <V2Card label="Total Distributions" value={fmtM(calc.totalReturn)} />
+                <V2Card label="Net Gain" value={fmtM(calc.totalReturn - calc.equity)} />
+                <V2Card label="Equity Multiple" value={fmtX(calc.em)} />
+              </V2Sect>
+            </div>
+          </div>
+        )}
+
+        {/* DEBT TAB */}
+        {tab === 'debt' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            <div>
+              <V2Sect title="Debt Terms">
+                <V2Inp
+                  label="LTV %"
+                  type="number"
+                  value={p.ltv}
+                  onChange={(v) => setP(prev => ({ ...prev, ltv: parseFloat(v) || 65 }))}
+                  suffix="%"
+                />
+                <V2Inp
+                  label="Interest Rate"
+                  type="number"
+                  value={p.rate}
+                  onChange={(v) => setP(prev => ({ ...prev, rate: parseFloat(v) || 6.25 }))}
+                  suffix="%"
+                />
+                <V2Inp
+                  label="Amortization"
+                  type="number"
+                  value={p.amort}
+                  onChange={(v) => setP(prev => ({ ...prev, amort: parseInt(v) || 30 }))}
+                  suffix="years"
+                />
+                <V2Tog
+                  label="Interest Only"
+                  value={p.isIO}
+                  onChange={(v) => setP(prev => ({ ...prev, isIO: v }))}
+                />
+                {p.isIO && (
+                  <V2Inp
+                    label="I/O Period"
+                    type="number"
+                    value={p.ioPeriod}
+                    onChange={(v) => setP(prev => ({ ...prev, ioPeriod: parseInt(v) || 2 }))}
+                    suffix="years"
+                  />
+                )}
+                <V2Inp
+                  label="Orig Fee %"
+                  type="number"
+                  value={p.origFee}
+                  onChange={(v) => setP(prev => ({ ...prev, origFee: parseFloat(v) || 1.0 }))}
+                  suffix="%"
+                />
+                <V2Inp
+                  label="Prepay Penalty %"
+                  type="number"
+                  value={p.prepayPct}
+                  onChange={(v) => setP(prev => ({ ...prev, prepayPct: parseFloat(v) || 1.0 }))}
+                  suffix="%"
+                />
+                <V2Tog
+                  label="Recourse"
+                  value={p.recourse}
+                  onChange={(v) => setP(prev => ({ ...prev, recourse: v }))}
+                />
+              </V2Sect>
+
+              <V2Sect title="Debt Documents">
+                <div style={{
+                  border: '2px dashed var(--border)',
+                  borderRadius: '8px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  backgroundColor: 'var(--surface)',
+                }}>
+                  <div style={{ fontSize: '18px', marginBottom: '8px' }}>📋</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Drag & drop debt term sheet
+                  </div>
+                </div>
+              </V2Sect>
+            </div>
+
+            <div>
+              <V2Sect title="Debt Summary">
+                <V2Card label="Loan Amount" value={fmtM(calc.loan)} />
+                <V2Card label="Equity Required" value={fmtM(calc.equity)} />
+                <V2Card label="Orig Fee" value={fmtM(calc.origFee)} />
+                <V2Card label="Prepay Penalty (Exit)" value={fmtM(calc.prepayAmt)} />
+                <V2Card label="DSCR (Y1)" value={fmtX(calc.dscr)} good={calc.dscr >= 1.25} />
+              </V2Sect>
+
+              <V2Sect title="Amortization Schedule">
+                <div style={{
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  fontSize: '11px',
+                }}>
+                  <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                  }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '6px', color: 'var(--text-secondary)' }}>Year</th>
+                        <th style={{ textAlign: 'right', padding: '6px', color: 'var(--text-secondary)' }}>DS</th>
+                        <th style={{ textAlign: 'right', padding: '6px', color: 'var(--text-secondary)' }}>Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {calc.years.map(y => (
+                        <tr key={y.yr} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '6px' }}>Y{y.yr}</td>
+                          <td style={{ textAlign: 'right', padding: '6px', color: 'var(--slate)' }}>{fmtM(y.annDS)}</td>
+                          <td style={{ textAlign: 'right', padding: '6px', color: 'var(--text-primary)' }}>{fmtM(y.loanBal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </V2Sect>
+            </div>
+          </div>
+        )}
+
+        {/* RENT ROLL TAB */}
+        {tab === 'rentroll' && (
+          <div>
+            <V2Sect title="Tenants">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    {tenants.length} Tenants • {tenants.reduce((s, t) => s + (t.sf || 0), 0).toLocaleString()} SF
+                  </div>
+                </div>
+                <V2Tog
+                  label="Use Rent Roll"
+                  value={p.useRentRoll}
+                  onChange={(v) => setP(prev => ({ ...prev, useRentRoll: v }))}
+                />
+              </div>
+
+              <button
+                onClick={() => setTenants(prev => [...prev, {
+                  name: '',
+                  suite: '',
+                  sf: 0,
+                  leaseType: 'NNN',
+                  baseSF: 0,
+                  escalation: 0,
+                  leaseStart: '',
+                  leaseEnd: '',
+                  nnnRecov: 0,
+                  tiPSF: 0,
+                  lcPct: 0,
+                }])}
+                style={{
+                  backgroundColor: 'var(--teal)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  marginBottom: '16px',
+                }}
+              >
+                + Add Tenant
+              </button>
+
+              {tenants.map((t, i) => (
+                <div key={i} style={{
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  marginBottom: '12px',
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <V2Inp
+                      label="Tenant Name"
+                      value={t.name || ''}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i].name = v;
+                        setTenants(nt);
+                      }}
+                    />
+                    <V2Inp
+                      label="Suite"
+                      value={t.suite || ''}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i].suite = v;
+                        setTenants(nt);
+                      }}
+                    />
+                    <V2Inp
+                      label="Square Feet"
+                      type="number"
+                      value={t.sf || 0}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i].sf = parseFloat(v) || 0;
+                        setTenants(nt);
+                      }}
+                    />
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{
+                        display: 'block',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        color: 'var(--text-secondary)',
+                        textTransform: 'uppercase',
+                        marginBottom: '6px',
+                      }}>Lease Type</label>
+                      <select value={t.leaseType || 'NNN'} onChange={(e) => {
+                        const nt = [...tenants];
+                        nt[i].leaseType = e.target.value;
+                        setTenants(nt);
+                      }} style={{
+                        width: '100%',
+                        backgroundColor: 'var(--bg)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        padding: '6px',
+                        color: 'var(--text-primary)',
+                        fontSize: '12px',
+                      }}>
+                        <option>NNN</option>
+                        <option>Gross</option>
+                        <option>Modified Gross</option>
+                      </select>
+                    </div>
+                    <V2Inp
+                      label="Base Rent /SF"
+                      type="number"
+                      value={t.baseSF || 0}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i].baseSF = parseFloat(v) || 0;
+                        setTenants(nt);
+                      }}
+                      prefix="$"
+                    />
+                    <V2Inp
+                      label="Escalation %"
+                      type="number"
+                      value={t.escalation || 0}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i].escalation = parseFloat(v) || 0;
+                        setTenants(nt);
+                      }}
+                      suffix="%"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setTenants(tenants.filter((_, j) => j !== i))}
+                    style={{
+                      backgroundColor: 'rgba(248, 113, 113, 0.2)',
+                      border: '1px solid var(--red)',
+                      color: 'var(--red)',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </V2Sect>
+          </div>
+        )}
+
+        {/* VALUE-ADD TAB */}
+        {tab === 'valueadd' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            <div>
+              <V2Sect title="Value-Add Events">
+                <button
+                  onClick={() => setEvents(prev => [...prev, { description: '', type: 'income', year: 1, amount: 0 }])}
+                  style={{
+                    backgroundColor: 'var(--teal)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  + Add Event
+                </button>
+
+                {events.map((e, i) => (
+                  <div key={i} style={{
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '12px',
+                  }}>
+                    <V2Inp
+                      label="Description"
+                      value={e.description}
+                      onChange={(v) => {
+                        const ne = [...events];
+                        ne[i].description = v;
+                        setEvents(ne);
+                      }}
+                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <label style={{
+                          display: 'block',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: 'var(--text-secondary)',
+                          textTransform: 'uppercase',
+                          marginBottom: '6px',
+                        }}>Type</label>
+                        <select value={e.type} onChange={(e) => {
+                          const ne = [...events];
+                          ne[i].type = e.target.value;
+                          setEvents(ne);
+                        }} style={{
+                          width: '100%',
+                          backgroundColor: 'var(--bg)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '4px',
+                          padding: '6px',
+                          color: 'var(--text-primary)',
+                          fontSize: '12px',
+                        }}>
+                          <option value="income">Income</option>
+                          <option value="cost">Cost</option>
+                        </select>
+                      </div>
+                      <V2Inp
+                        label="Year"
+                        type="number"
+                        value={e.year}
+                        onChange={(v) => {
+                          const ne = [...events];
+                          ne[i].year = parseInt(v) || 1;
+                          setEvents(ne);
+                        }}
+                      />
+                    </div>
+                    <V2Inp
+                      label="Amount"
+                      type="number"
+                      value={e.amount}
+                      onChange={(v) => {
+                        const ne = [...events];
+                        ne[i].amount = parseFloat(v) || 0;
+                        setEvents(ne);
+                      }}
+                      prefix="$"
+                    />
+                    <button
+                      onClick={() => setEvents(events.filter((_, j) => j !== i))}
+                      style={{
+                        backgroundColor: 'rgba(248, 113, 113, 0.2)',
+                        border: '1px solid var(--red)',
+                        color: 'var(--red)',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </V2Sect>
+            </div>
+
+            <div>
+              <V2Sect title="Capital Expenditures">
+                <button
+                  onClick={() => setCapItems(prev => [...prev, { description: '', year: 1, amount: 0 }])}
+                  style={{
+                    backgroundColor: 'var(--teal)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  + Add CapEx
+                </button>
+
+                {capItems.map((c, i) => (
+                  <div key={i} style={{
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '12px',
+                  }}>
+                    <V2Inp
+                      label="Description"
+                      value={c.description}
+                      onChange={(v) => {
+                        const nc = [...capItems];
+                        nc[i].description = v;
+                        setCapItems(nc);
+                      }}
+                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <V2Inp
+                        label="Year"
+                        type="number"
+                        value={c.year}
+                        onChange={(v) => {
+                          const nc = [...capItems];
+                          nc[i].year = parseInt(v) || 1;
+                          setCapItems(nc);
+                        }}
+                      />
+                      <V2Inp
+                        label="Amount"
+                        type="number"
+                        value={c.amount}
+                        onChange={(v) => {
+                          const nc = [...capItems];
+                          nc[i].amount = parseFloat(v) || 0;
+                          setCapItems(nc);
+                        }}
+                        prefix="$"
+                      />
+                    </div>
+                    <button
+                      onClick={() => setCapItems(capItems.filter((_, j) => j !== i))}
+                      style={{
+                        backgroundColor: 'rgba(248, 113, 113, 0.2)',
+                        border: '1px solid var(--red)',
+                        color: 'var(--red)',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </V2Sect>
+
+              <V2Sect title="CapEx Reserve">
+                <V2Tog
+                  label="Use % of NOI"
+                  value={p.useCapexPct}
+                  onChange={(v) => setP(prev => ({ ...prev, useCapexPct: v }))}
+                />
+                {p.useCapexPct ? (
+                  <V2Inp
+                    label="Reserve %"
+                    type="number"
+                    value={p.capexReservePct}
+                    onChange={(v) => setP(prev => ({ ...prev, capexReservePct: parseFloat(v) || 2 }))}
+                    suffix="%"
+                  />
+                ) : (
+                  <V2Inp
+                    label="Annual Reserve"
+                    type="number"
+                    value={p.capexReserveFlat}
+                    onChange={(v) => setP(prev => ({ ...prev, capexReserveFlat: parseFloat(v) || 0 }))}
+                    prefix="$"
+                  />
+                )}
+              </V2Sect>
+            </div>
+          </div>
+        )}
+
+        {/* CASH FLOWS TAB */}
+        {tab === 'cashflows' && (
+          <div>
+            <V2Sect title="Cash Flow Period">
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                {['annual', 'quarterly', 'monthly'].map(p => (
+                  <V2TabBtn
+                    key={p}
+                    label={p.charAt(0).toUpperCase() + p.slice(1)}
+                    active={cfPeriod === p}
+                    onClick={() => setCfPeriod(p)}
+                  />
+                ))}
+              </div>
+            </V2Sect>
+
+            <V2Sect title="Cash Flow Summary">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <V2Card label="Total NOI" value={fmtM(calc.years.reduce((s, y) => s + y.noi, 0))} />
+                <V2Card label="Total Debt Service" value={fmtM(calc.years.reduce((s, y) => s + y.annDS, 0))} />
+                <V2Card label="Total CapEx" value={fmtM(calc.years.reduce((s, y) => s + (y.capexRes + y.specCapex), 0))} />
+                <V2Card label="Total TI/LC" value={fmtM(calc.years.reduce((s, y) => s + y.tiLC, 0))} />
+                <V2Card label="Total Net CF" value={fmtM(calc.years.reduce((s, y) => s + y.levCF, 0))} />
+              </div>
+            </V2Sect>
+
+            <V2Sect title="P&L Table">
+              <div style={{
+                overflowX: 'auto',
+                fontSize: '11px',
+              }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', padding: '8px', color: 'var(--text-secondary)' }}>Item</th>
+                      {calc.years.map(y => (
+                        <th key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)' }}>Y{y.yr}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style={{ borderBottom: '2px solid var(--border)', backgroundColor: 'rgba(52, 211, 153, 0.1)' }}>
+                      <td style={{ padding: '8px', fontWeight: '600', color: 'var(--green)' }}>Net Operating Income</td>
+                      {calc.years.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--green)', fontWeight: '600' }}>{fmtM(y.noi)}</td>
+                      ))}
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--red)' }}>Debt Service</td>
+                      {calc.years.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>({fmtM(y.annDS)})</td>
+                      ))}
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--slate)' }}>CapEx & Reserves</td>
+                      {calc.years.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--slate)' }}>({fmtM((y.capexRes + y.specCapex))})</td>
+                      ))}
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--slate)' }}>TI / LC</td>
+                      {calc.years.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--slate)' }}>({fmtM(y.tiLC)})</td>
+                      ))}
+                    </tr>
+                    {calc.years.some(y => y.vaInc > 0) && (
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--teal)' }}>Value-Add Income</td>
+                      {calc.years.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--teal)' }}>{fmtM(y.vaInc)}</td>
+                      ))}
+                    </tr>
+                    )}
+                    {calc.years.some(y => y.vaCost > 0) && (
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--red)' }}>Value-Add Cost</td>
+                      {calc.years.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>({fmtM(y.vaCost)})</td>
+                      ))}
+                    </tr>
+                    )}
+                    <tr style={{ borderBottom: '2px solid var(--border)', backgroundColor: 'rgba(52, 211, 153, 0.15)' }}>
+                      <td style={{ padding: '8px', fontWeight: '600', color: 'var(--green)' }}>Net Cash Flow</td>
+                      {calc.years.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: y.levCF >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: '600' }}>{fmtM(y.levCF)}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </V2Sect>
+
+            <V2Sect title="Exit Reversion">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <V2Card label="Projected NOI (Y5)" value={fmtM(calc.exitNOI)} />
+                <V2Card label="Exit Cap Rate" value={fmtP(p.exitCap)} />
+                <V2Card label="Gross Sale Price" value={fmtM(calc.exitVal)} />
+                <V2Card label="Less: Loan Payoff" value={fmtM(-calc.exitBal)} />
+                <V2Card label="Less: Prepay Penalty" value={fmtM(-calc.prepayAmt)} />
+                <V2Card label="Net Proceeds to Equity" value={fmtM(calc.saleNet)} good={true} />
+                <V2Card label="Equity Multiple" value={fmtX(calc.em)} />
+                <V2Card label="Exit IRR" value={fmtP(calc.levIRR)} />
+              </div>
+            </V2Sect>
+          </div>
+        )}
+
+        {/* SENSITIVITY TAB */}
+        {tab === 'sensitivity' && (
+          <div>
+            <V2Sect title="Sensitivity Metric">
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {['irr', 'em', 'coc'].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setSensM(m)}
+                    style={{
+                      backgroundColor: sensM === m ? 'var(--blue)' : 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      color: sensM === m ? '#fff' : 'var(--text-primary)',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                    }}
+                  >
+                    {m === 'irr' ? 'IRR' : m === 'em' ? 'Equity Multiple' : 'Cash-on-Cash'}
+                  </button>
+                ))}
+              </div>
+            </V2Sect>
+
+            <V2Sect title="Purchase Price × Exit Cap">
+              <div style={{
+                overflowX: 'auto',
+                fontSize: '10px',
+              }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '6px' }}>PP × Cap</th>
+                      {[-20, -10, 0, 10, 20].map(pct => (
+                        <th key={pct} style={{ textAlign: 'center', padding: '6px', color: 'var(--text-secondary)' }}>
+                          {pct > 0 ? '+' : ''}{pct}%
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[-1, -0.5, 0, 0.5, 1].map((capAdj, ri) => (
+                      <tr key={ri} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '6px', color: 'var(--text-secondary)' }}>
+                          {capAdj > 0 ? '+' : ''}{capAdj}%
+                        </td>
+                        {[-20, -10, 0, 10, 20].map((ppPct, ci) => {
+                          const pp2 = p.purchasePrice * (1 + ppPct / 100);
+                          const cap2 = (p.exitCap + capAdj) / 100;
+                          const tmpP = { ...p, purchasePrice: pp2, exitCap: p.exitCap + capAdj };
+                          const tmpCalc = runModelV2(tmpP, tenants, events, capItems, wf);
+                          const val = sensM === 'irr' ? tmpCalc.levIRR : sensM === 'em' ? tmpCalc.em : tmpCalc.avgCoC;
+                          let bgColor = 'var(--bg)';
+                          if (val >= (sensM === 'irr' ? 20 : sensM === 'em' ? 2.0 : 15)) bgColor = 'rgba(52, 211, 153, 0.2)';
+                          else if (val >= (sensM === 'irr' ? 15 : sensM === 'em' ? 1.75 : 10)) bgColor = 'rgba(251, 191, 36, 0.2)';
+                          else bgColor = 'rgba(248, 113, 113, 0.2)';
+                          return (
+                            <td key={ci} style={{
+                              textAlign: 'center',
+                              padding: '6px',
+                              backgroundColor: bgColor,
+                              color: 'var(--text-primary)',
+                              fontWeight: '600',
+                              fontSize: '11px',
+                            }}>
+                              {sensM === 'irr' || sensM === 'coc' ? val.toFixed(1) : val.toFixed(2)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </V2Sect>
+
+            <V2Sect title="LTV × Interest Rate">
+              <div style={{
+                overflowX: 'auto',
+                fontSize: '10px',
+              }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '6px' }}>LTV × Rate</th>
+                      {[-0.5, -0.25, 0, 0.25, 0.5].map(rAdj => (
+                        <th key={rAdj} style={{ textAlign: 'center', padding: '6px', color: 'var(--text-secondary)' }}>
+                          {rAdj > 0 ? '+' : ''}{rAdj}%
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[50, 55, 60, 65, 70, 75].map((ltv, ri) => (
+                      <tr key={ri} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '6px', color: 'var(--text-secondary)' }}>{ltv}%</td>
+                        {[-0.5, -0.25, 0, 0.25, 0.5].map((rAdj, ci) => {
+                          const tmpP = { ...p, ltv, rate: p.rate + rAdj };
+                          const tmpCalc = runModelV2(tmpP, tenants, events, capItems, wf);
+                          const val = sensM === 'irr' ? tmpCalc.levIRR : sensM === 'em' ? tmpCalc.em : tmpCalc.avgCoC;
+                          let bgColor = 'var(--bg)';
+                          if (val >= (sensM === 'irr' ? 20 : sensM === 'em' ? 2.0 : 15)) bgColor = 'rgba(52, 211, 153, 0.2)';
+                          else if (val >= (sensM === 'irr' ? 15 : sensM === 'em' ? 1.75 : 10)) bgColor = 'rgba(251, 191, 36, 0.2)';
+                          else bgColor = 'rgba(248, 113, 113, 0.2)';
+                          return (
+                            <td key={ci} style={{
+                              textAlign: 'center',
+                              padding: '6px',
+                              backgroundColor: bgColor,
+                              color: 'var(--text-primary)',
+                              fontWeight: '600',
+                              fontSize: '11px',
+                            }}>
+                              {sensM === 'irr' || sensM === 'coc' ? val.toFixed(1) : val.toFixed(2)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </V2Sect>
+          </div>
+        )}
+
+        {/* CHARTS TAB */}
+        {tab === 'charts' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            <V2Sect title="NOI vs Debt Service vs Net CF">
+              <canvas ref={cfChartRef} height="200" />
+            </V2Sect>
+            <V2Sect title="Loan Balance Paydown">
+              <canvas ref={loanChartRef} height="200" />
+            </V2Sect>
+          </div>
+        )}
+
+        {/* WATERFALL TAB */}
+        {tab === 'waterfall' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            <div>
+              <V2Sect title="Distribution Waterfall Config">
+                <V2Sld
+                  label="LP %"
+                  min={50}
+                  max={99}
+                  step={1}
+                  value={wf.lpPercent}
+                  onChange={(v) => setWf(prev => ({ ...prev, lpPercent: v, gpPercent: 100 - v }))}
+                  display={`${wf.lpPercent}%`}
+                />
+                <V2Sld
+                  label="Preferred Return"
+                  min={0}
+                  max={15}
+                  step={0.5}
+                  value={wf.prefReturn}
+                  onChange={(v) => setWf(prev => ({ ...prev, prefReturn: v }))}
+                  display={`${wf.prefReturn}%`}
+                />
+                <V2Tog
+                  label="Catch-up"
+                  value={wf.catchUp}
+                  onChange={(v) => setWf(prev => ({ ...prev, catchUp: v }))}
+                />
+                <V2Sld
+                  label="Tier 1 Split (< 15% IRR)"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={wf.tier1Split}
+                  onChange={(v) => setWf(prev => ({ ...prev, tier1Split: v }))}
+                  display={`${wf.tier1Split}%`}
+                />
+                <V2Sld
+                  label="Tier 2 Split (15-20% IRR)"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={wf.tier2Split}
+                  onChange={(v) => setWf(prev => ({ ...prev, tier2Split: v }))}
+                  display={`${wf.tier2Split}%`}
+                />
+                <V2Sld
+                  label="Tier 3 Split (> 20% IRR)"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={wf.tier3Split}
+                  onChange={(v) => setWf(prev => ({ ...prev, tier3Split: v }))}
+                  display={`${wf.tier3Split}%`}
+                />
+              </V2Sect>
+            </div>
+
+            <div>
+              <V2Sect title="Waterfall Results">
+                <V2Card label="LP Equity In" value={fmtM(calc.lpEq)} />
+                <V2Card label="GP Equity In" value={fmtM(calc.gpEq)} />
+                <V2Card label="LP Total Distribution" value={fmtM(calc.lpOut)} />
+                <V2Card label="GP Total Distribution" value={fmtM(calc.gpTotalDist)} />
+                <V2Card label="LP IRR" value={fmtP(calc.lpIRR)} />
+                <V2Card label="LP EM" value={fmtX(calc.lpEM)} />
+                <V2Card label="GP IRR" value={fmtP(calc.gpIRR)} />
+                <V2Card label="GP Promote" value={fmtM(calc.gpPromote)} />
+              </V2Sect>
+            </div>
+          </div>
+        )}
+
+        {/* COMPARE TAB */}
+        {tab === 'compare' && (
+          <div>
+            <V2Sect title="Deal Comparison">
+              {compared.length === 0 ? (
+                <div style={{
+                  padding: '32px',
+                  textAlign: 'center',
+                  backgroundColor: 'var(--surface)',
+                  borderRadius: '8px',
+                }}>
+                  <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                    No deals added to comparison yet
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--slate)' }}>
+                    Go to Deal tab and use the "Add to Compare" button to add deals
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  overflowX: 'auto',
+                  fontSize: '11px',
+                }}>
+                  <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                  }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '8px', color: 'var(--text-secondary)' }}>Metric</th>
+                        {compared.map((d, i) => (
+                          <th key={i} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)' }}>
+                            {d.name}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: 'Purchase Price', field: 'pp', fmt: fmtM },
+                        { label: 'Total Cost', field: 'totalCost', fmt: fmtM },
+                        { label: 'Equity Required', field: 'equity', fmt: fmtM },
+                        { label: 'Going-in Cap', field: 'goingCap', fmt: fmtP },
+                        { label: 'Yield on Cost', field: 'yoc', fmt: fmtP },
+                        { label: 'Levered IRR', field: 'levIRR', fmt: fmtP },
+                        { label: 'Unlevered IRR', field: 'unlevIRR', fmt: fmtP },
+                        { label: 'Equity Multiple', field: 'em', fmt: fmtX },
+                        { label: 'Avg CoC', field: 'avgCoC', fmt: fmtP },
+                        { label: 'DSCR', field: 'dscr', fmt: fmtX },
+                        { label: 'Exit Value', field: 'exitVal', fmt: fmtM },
+                      ].map((m, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{m.label}</td>
+                          {compared.map((d, j) => (
+                            <td key={j} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-primary)' }}>
+                              {m.fmt(d.calc[m.field])}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {compared.length > 0 && (
+                <button
+                  onClick={() => setCompared([])}
+                  style={{
+                    marginTop: '16px',
+                    backgroundColor: 'rgba(248, 113, 113, 0.2)',
+                    border: '1px solid var(--red)',
+                    color: 'var(--red)',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  Clear All
+                </button>
+              )}
+            </V2Sect>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
         const DashboardView = ({ deal: initialDeal, onBack }) => {
             const [deal, setDeal] = useState(initialDeal);
             const [activeTab, setActiveTab] = useState('overview');
@@ -2692,7 +4767,11 @@
 
                     {currentView === 'dashboard' && deal && (
                         <ErrorBoundary onBack={handleBack}>
-                            <DashboardView deal={deal} onBack={handleBack} />
+                            {(deal.version === '2' || deal.v2_state) ? (
+                                <DashboardV2View deal={deal} onBack={handleBack} />
+                            ) : (
+                                <DashboardView deal={deal} onBack={handleBack} />
+                            )}
                         </ErrorBoundary>
                     )}
 

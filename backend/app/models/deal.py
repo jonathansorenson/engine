@@ -14,6 +14,10 @@ class Deal(BaseModel):
     original_filename = Column(String(512), nullable=True)
     error_message = Column(Text, nullable=True)
 
+    # V2 fields
+    version = Column(String(10), nullable=True, default="1")  # '1' = legacy, '2' = V2 DCF engine
+    v2_state = Column(JSON, nullable=True)  # Full V2 modeling state (assumptions, waterfall, tenants, events, capex)
+
     # Index for common queries
     __table_args__ = (
         Index("ix_deal_fund_id", "fund_id"),

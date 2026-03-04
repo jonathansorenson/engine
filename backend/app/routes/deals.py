@@ -3,20 +3,45 @@ import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.database import get_db
 from app.models import Deal
-from app.schemas.deal import DealResponse, DealListItem, DealAssumptionsUpdate
+from app.schemas.deal import (
+    DealResponse,
+    DealListItem,
+    DealAssumptionsUpdate,
+    V2StateUpdate,
+    DealCountResponse,
+)
 from app.services.pipeline import parse_offering_memorandum
 from app.services.argus_parser import is_argus_file, parse_argus_file
 from app.config import settings
 
 router = APIRouter(prefix="/api/v1/deals", tags=["deals"])
 
+DEAL_LIMIT = 10
+
 
 def get_upload_dir():
     """Ensure upload directory exists."""
     os.makedirs(settings.upload_dir, exist_ok=True)
     return settings.upload_dir
+
+
+def _get_deal_count(db: Session, fund_id: str) -> int:
+    """Get number of deals for a fund."""
+    return db.query(func.count(Deal.id)).filter(Deal.fund_id == fund_id).scalar() or 0
+
+
+@router.get("/count", response_model=DealCountResponse)
+async def get_deal_count(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Get the current deal count and limit for the user's fund."""
+    fund_id = request.state.fund_id
+    count = _get_deal_count(db, fund_id)
+    return DealCountResponse(count=count, limit=DEAL_LIMIT, can_upload=count < DEAL_LIMIT)
 
 
 @router.post("", response_model=DealResponse)
@@ -30,17 +55,27 @@ async def upload_and_parse_deal(
     Upload offering memorandum (PDF and/or Excel) and parse it.
 
     At least one file (PDF or Excel) is required.
+    Enforces a per-fund deal limit.
     """
     if not pdf_file and not excel_file:
         raise HTTPException(status_code=400, detail="At least one file (PDF or Excel) is required")
 
     fund_id = request.state.fund_id
 
+    # Enforce deal limit
+    count = _get_deal_count(db, fund_id)
+    if count >= DEAL_LIMIT:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Deal limit reached ({DEAL_LIMIT} deals max). Delete an existing deal to upload a new one.",
+        )
+
     # Create deal record with initial status
     deal = Deal(
         id=str(uuid.uuid4()),
         fund_id=fund_id,
         status="uploading",
+        version="2",
     )
     db.add(deal)
     db.commit()
@@ -135,6 +170,7 @@ async def list_deals(
             id=str(deal.id),
             name=deal.name,
             status=deal.status,
+            version=deal.version or "1",
             created_at=deal.created_at,
         )
 
@@ -170,6 +206,82 @@ async def get_deal(
         raise HTTPException(status_code=404, detail="Deal not found")
 
     return DealResponse.model_validate(deal)
+
+
+@router.put("/{deal_id}/v2-state", response_model=DealResponse)
+async def save_v2_state(
+    deal_id: str,
+    state: V2StateUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Save the full V2 modeling state (assumptions, waterfall, tenants, events, capex)."""
+    fund_id = request.state.fund_id
+
+    deal = (
+        db.query(Deal)
+        .filter(Deal.id == deal_id, Deal.fund_id == fund_id)
+        .first()
+    )
+
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    # Save entire V2 state as JSON
+    deal.v2_state = state.model_dump(exclude_none=False)
+    if not deal.version or deal.version == "1":
+        deal.version = "2"
+
+    db.commit()
+    db.refresh(deal)
+
+    return DealResponse.model_validate(deal)
+
+
+@router.post("/extract-om")
+async def extract_om_from_file(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """
+    Extract offering memorandum fields from a PDF or image using Claude.
+    Returns extracted deal data (not saved to a deal — frontend merges into state).
+    """
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=500, detail="Anthropic API key not configured")
+
+    content = await file.read()
+    media_type = file.content_type or "application/pdf"
+
+    from app.services.claude_ai import extract_om_fields
+    try:
+        result = extract_om_fields(content, media_type)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OM extraction failed: {str(e)}")
+
+
+@router.post("/extract-debt")
+async def extract_debt_from_file(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """
+    Extract debt/loan term sheet fields from a PDF or image using Claude.
+    Returns extracted loan terms (not saved — frontend merges into state).
+    """
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=500, detail="Anthropic API key not configured")
+
+    content = await file.read()
+    media_type = file.content_type or "application/pdf"
+
+    from app.services.claude_ai import extract_debt_terms
+    try:
+        result = extract_debt_terms(content, media_type)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debt term extraction failed: {str(e)}")
 
 
 @router.post("/{deal_id}/rent-roll", response_model=DealResponse)

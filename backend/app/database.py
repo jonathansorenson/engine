@@ -26,5 +26,19 @@ def get_db() -> Session:
 
 
 def init_db():
-    """Initialize database tables."""
+    """Initialize database tables and run lightweight migrations."""
     Base.metadata.create_all(bind=engine)
+
+    # Auto-migrate: add V2 columns if missing (SQLAlchemy create_all won't alter existing tables)
+    if "sqlite" in settings.database_url:
+        from sqlalchemy import text, inspect
+        insp = inspect(engine)
+        if "deals" in insp.get_table_names():
+            existing_cols = {c["name"] for c in insp.get_columns("deals")}
+            with engine.begin() as conn:
+                if "version" not in existing_cols:
+                    conn.execute(text("ALTER TABLE deals ADD COLUMN version VARCHAR(10) DEFAULT '1'"))
+                    print("Migrated: added 'version' column to deals")
+                if "v2_state" not in existing_cols:
+                    conn.execute(text("ALTER TABLE deals ADD COLUMN v2_state JSON"))
+                    print("Migrated: added 'v2_state' column to deals")

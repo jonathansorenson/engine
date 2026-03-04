@@ -1,4 +1,5 @@
 import json
+import base64
 from typing import AsyncGenerator, List, Tuple, Optional
 from anthropic import Anthropic, APIError
 from app.config import settings
@@ -80,3 +81,104 @@ def stream_chat_response(
         yield f"API Error: {str(e)}"
     except Exception as e:
         yield f"Error: {str(e)}"
+
+
+def extract_om_fields(file_bytes: bytes, media_type: str) -> dict:
+    """
+    Extract offering memorandum deal fields from a PDF or image using Claude.
+    Returns a dict of extracted CRE deal fields.
+    """
+    client = Anthropic(api_key=settings.anthropic_api_key)
+
+    b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
+
+    # Build the content block based on file type
+    if media_type.startswith("image/"):
+        file_block = {
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": b64},
+        }
+    else:
+        file_block = {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+        }
+
+    system_prompt = (
+        "Extract CRE deal data from this offering memorandum. "
+        "Return ONLY valid JSON with these fields (use null for unknown):\n"
+        '{"name":string,"address":string,"assetType":"Office"|"Retail"|"Industrial"|"Multifamily"|"Mixed-Use",'
+        '"sf":number,"purchasePrice":number,"closingCosts":number,"year1NOI":number,'
+        '"vacancy":number,"rentGrowth":number,"exitCap":number,"holdPeriod":number,"notes":string}'
+    )
+
+    response = client.messages.create(
+        model=settings.anthropic_model,
+        max_tokens=1500,
+        system=system_prompt,
+        messages=[
+            {
+                "role": "user",
+                "content": [file_block, {"type": "text", "text": "Extract deal data as JSON."}],
+            }
+        ],
+    )
+
+    text = ""
+    for block in response.content:
+        if block.type == "text":
+            text = block.text
+            break
+
+    # Parse the JSON from Claude's response
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+    return json.loads(cleaned)
+
+
+def extract_debt_terms(file_bytes: bytes, media_type: str) -> dict:
+    """
+    Extract loan/debt term sheet fields from a PDF or image using Claude.
+    Returns a dict of extracted loan terms.
+    """
+    client = Anthropic(api_key=settings.anthropic_api_key)
+
+    b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
+
+    if media_type.startswith("image/"):
+        file_block = {
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": b64},
+        }
+    else:
+        file_block = {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+        }
+
+    system_prompt = (
+        "Extract loan terms from this debt term sheet. "
+        "Return ONLY valid JSON with these fields (use null for unknown):\n"
+        '{"ltv":number,"rate":number,"amort":number,"ioPeriod":number,'
+        '"isIO":boolean,"origFee":number,"prepayPct":number,"recourse":boolean}'
+    )
+
+    response = client.messages.create(
+        model=settings.anthropic_model,
+        max_tokens=800,
+        system=system_prompt,
+        messages=[
+            {
+                "role": "user",
+                "content": [file_block, {"type": "text", "text": "Extract loan terms as JSON."}],
+            }
+        ],
+    )
+
+    text = ""
+    for block in response.content:
+        if block.type == "text":
+            text = block.text
+            break
+
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+    return json.loads(cleaned)
