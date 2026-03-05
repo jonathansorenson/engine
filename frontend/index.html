@@ -3344,6 +3344,38 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
               </V2Sect>
 
               <V2Sect title="Investor Hurdles">
+                {/* Preset selector */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Structure</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {[
+                      { label: 'Core', pref: 7, t2: 10, t3: 14, t2LP: 85, t3LP: 75, em: 1.4, desc: '7 / 10 / 14' },
+                      { label: 'Core-Plus', pref: 8, t2: 12, t3: 18, t2LP: 80, t3LP: 70, em: 1.6, desc: '8 / 12 / 18' },
+                      { label: 'Value-Add', pref: 9, t2: 15, t3: 25, t2LP: 80, t3LP: 70, em: 1.75, desc: '9 / 15 / 25' },
+                      { label: 'Opportunistic', pref: 12, t2: 18, t3: 30, t2LP: 75, t3LP: 65, em: 2.0, desc: '12 / 18 / 30' },
+                    ].map(preset => {
+                      const isActive = (p.hurdleTier1 || 9) === preset.pref && (p.hurdleTier2 || 15) === preset.t2 && (p.hurdleTier3 || 25) === preset.t3;
+                      return (
+                        <button key={preset.label} onClick={() => setP(prev => ({
+                          ...prev,
+                          hurdleTier1: preset.pref, hurdleTier2: preset.t2, hurdleTier3: preset.t3,
+                          hurdleTier2LP: preset.t2LP, hurdleTier3LP: preset.t3LP, hurdleEM: preset.em,
+                        }))}
+                          style={{
+                            padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 500,
+                            border: isActive ? '1.5px solid #00BFA5' : '1px solid var(--border)',
+                            backgroundColor: isActive ? 'rgba(0, 191, 165, 0.12)' : 'var(--surface)',
+                            color: isActive ? '#00BFA5' : 'var(--text-primary)',
+                          }}
+                        >
+                          <div>{preset.label}</div>
+                          <div style={{ fontSize: '9px', color: isActive ? 'rgba(0,191,165,0.7)' : 'var(--slate)', marginTop: '1px' }}>{preset.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Editable tier table */}
                 <div style={{ fontSize: '11px', marginBottom: '8px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -3358,7 +3390,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '4px 6px', color: 'var(--text-primary)' }}>Preferred</td>
                         <td style={{ textAlign: 'right', padding: '2px' }}>
-                          <input type="number" value={p.hurdleTier1 ?? 9} onChange={(e) => setP(prev => ({ ...prev, hurdleTier1: parseFloat(e.target.value) || 0 }))}
+                          <input type="number" step="0.5" value={p.hurdleTier1 ?? 9} onChange={(e) => setP(prev => ({ ...prev, hurdleTier1: parseFloat(e.target.value) || 0 }))}
                             style={{ width: '50px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
                         </td>
                         <td style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--green)' }}>100%</td>
@@ -3367,11 +3399,11 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '4px 6px', color: 'var(--text-primary)' }}>Tier 2</td>
                         <td style={{ textAlign: 'right', padding: '2px' }}>
-                          <input type="number" value={p.hurdleTier2 ?? 15} onChange={(e) => setP(prev => ({ ...prev, hurdleTier2: parseFloat(e.target.value) || 0 }))}
+                          <input type="number" step="0.5" value={p.hurdleTier2 ?? 15} onChange={(e) => setP(prev => ({ ...prev, hurdleTier2: parseFloat(e.target.value) || 0 }))}
                             style={{ width: '50px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
                         </td>
                         <td style={{ textAlign: 'right', padding: '2px' }}>
-                          <input type="number" value={p.hurdleTier2LP ?? 80} onChange={(e) => setP(prev => ({ ...prev, hurdleTier2LP: parseFloat(e.target.value) || 0 }))}
+                          <input type="number" step="5" value={p.hurdleTier2LP ?? 80} onChange={(e) => setP(prev => ({ ...prev, hurdleTier2LP: parseFloat(e.target.value) || 0 }))}
                             style={{ width: '40px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
                         </td>
                         <td style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--slate)' }}>{100 - (p.hurdleTier2LP ?? 80)}%</td>
@@ -3379,11 +3411,11 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '4px 6px', color: 'var(--text-primary)' }}>Tier 3</td>
                         <td style={{ textAlign: 'right', padding: '2px' }}>
-                          <input type="number" value={p.hurdleTier3 ?? 25} onChange={(e) => setP(prev => ({ ...prev, hurdleTier3: parseFloat(e.target.value) || 0 }))}
+                          <input type="number" step="0.5" value={p.hurdleTier3 ?? 25} onChange={(e) => setP(prev => ({ ...prev, hurdleTier3: parseFloat(e.target.value) || 0 }))}
                             style={{ width: '50px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
                         </td>
                         <td style={{ textAlign: 'right', padding: '2px' }}>
-                          <input type="number" value={p.hurdleTier3LP ?? 70} onChange={(e) => setP(prev => ({ ...prev, hurdleTier3LP: parseFloat(e.target.value) || 0 }))}
+                          <input type="number" step="5" value={p.hurdleTier3LP ?? 70} onChange={(e) => setP(prev => ({ ...prev, hurdleTier3LP: parseFloat(e.target.value) || 0 }))}
                             style={{ width: '40px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
                         </td>
                         <td style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--slate)' }}>{100 - (p.hurdleTier3LP ?? 70)}%</td>
@@ -3394,6 +3426,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Inp
                   label="Min Equity Multiple"
                   type="number"
+                  step="0.05"
                   value={p.hurdleEM}
                   onChange={(v) => setP(prev => ({ ...prev, hurdleEM: parseFloat(v) || 1.75 }))}
                   suffix="x"
@@ -4170,21 +4203,68 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
               </div>
             </V2Sect>
 
-            <V2Sect title="P&L Table">
+            <V2Sect title={`P&L Table — ${cfPeriod.charAt(0).toUpperCase() + cfPeriod.slice(1)}`}>
               <div style={{
                 overflowX: 'auto',
                 fontSize: '11px',
               }}>
                 {(() => {
-                  const displayYears = calc.years || [];
-                  const hasRR = displayYears.some(y => y.baseRent > 0 || y.cam > 0);
+                  const annualYears = calc.years || [];
+                  const hasRR = annualYears.some(y => y.baseRent > 0 || y.cam > 0);
                   const hold = p.holdPeriod || 5;
+
+                  // Transform annual data into sub-periods
+                  const divisor = cfPeriod === 'quarterly' ? 4 : cfPeriod === 'monthly' ? 12 : 1;
+                  const periodLabel = cfPeriod === 'quarterly' ? 'Q' : cfPeriod === 'monthly' ? 'M' : 'Y';
+
+                  let periods = [];
+                  if (divisor === 1) {
+                    // Annual — use raw data
+                    periods = annualYears.map(y => ({ ...y, label: y.yr <= hold ? `Y${y.yr}` : 'Exit Yr', isExit: y.yr > hold }));
+                  } else {
+                    // Quarterly or Monthly — split each year
+                    const holdYears = annualYears.filter(y => y.yr <= hold);
+                    holdYears.forEach(y => {
+                      for (let sub = 1; sub <= divisor; sub++) {
+                        const frac = 1 / divisor;
+                        periods.push({
+                          ...y,
+                          // Divide flow items proportionally
+                          baseRent: y.baseRent * frac,
+                          cam: y.cam * frac,
+                          noi: y.noi * frac,
+                          annDS: y.annDS * frac,
+                          vacancyLoss: (y.vacancyLoss || 0) * frac,
+                          freeRentLoss: (y.freeRentLoss || 0) * frac,
+                          capexRes: y.capexRes * frac,
+                          specCapex: y.specCapex * frac,
+                          tiLC: (y.tiLC || 0) * frac,
+                          vaInc: (y.vaInc || 0) * frac,
+                          vaCost: (y.vaCost || 0) * frac,
+                          levCF: y.levCF * frac,
+                          loanBal: y.loanBal, // balance stays the same within a year
+                          label: `Y${y.yr} ${periodLabel}${sub}`,
+                          isExit: false,
+                          _key: `${y.yr}-${sub}`,
+                        });
+                      }
+                    });
+                  }
+
+                  const fmtCell = (v) => {
+                    if (!isN(v)) return '—';
+                    const abs = Math.abs(v);
+                    if (abs >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+                    if (abs >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
+                    return '$' + v.toFixed(0);
+                  };
+
                   const plRow = (label, getter, opts = {}) => (
                     <tr style={{ borderBottom: opts.bold ? '2px solid var(--border)' : '1px solid var(--border)', backgroundColor: opts.bg || 'transparent' }}>
-                      <td style={{ padding: '8px', paddingLeft: opts.indent ? '24px' : '8px', fontWeight: opts.bold ? '600' : '400', color: opts.color || 'var(--text-primary)' }}>{label}</td>
-                      {displayYears.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', fontWeight: opts.bold ? '600' : '400', color: opts.color || 'var(--text-primary)' }}>
-                          {opts.neg ? `(${fmtM(Math.abs(getter(y)))})` : fmtM(getter(y))}
+                      <td style={{ padding: '6px 8px', paddingLeft: opts.indent ? '24px' : '8px', fontWeight: opts.bold ? '600' : '400', color: opts.color || 'var(--text-primary)', position: 'sticky', left: 0, backgroundColor: opts.bg || 'var(--surface)', zIndex: 1 }}>{label}</td>
+                      {periods.map((pd, idx) => (
+                        <td key={pd._key || pd.yr || idx} style={{ textAlign: 'right', padding: '6px 8px', fontWeight: opts.bold ? '600' : '400', color: opts.color || 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                          {opts.neg ? `(${fmtCell(Math.abs(getter(pd)))})` : fmtCell(getter(pd))}
                         </td>
                       ))}
                     </tr>
@@ -4193,10 +4273,10 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                      <th style={{ textAlign: 'left', padding: '8px', color: 'var(--text-secondary)', minWidth: '160px' }}>Item</th>
-                      {displayYears.map(y => (
-                        <th key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)' }}>
-                          {y.yr <= hold ? `Y${y.yr}` : 'Exit Yr'}
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-secondary)', minWidth: '160px', position: 'sticky', left: 0, backgroundColor: 'var(--surface)', zIndex: 2 }}>Item</th>
+                      {periods.map((pd, idx) => (
+                        <th key={pd._key || pd.yr || idx} style={{ textAlign: 'right', padding: '6px 8px', color: pd.isExit ? '#00BFA5' : 'var(--text-secondary)', whiteSpace: 'nowrap', fontSize: divisor > 1 ? '10px' : '11px' }}>
+                          {pd.label}
                         </th>
                       ))}
                     </tr>
@@ -4206,8 +4286,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     {hasRR && plRow('Potential Base Rent', y => y.baseRent, { color: 'var(--green)', indent: true })}
                     {hasRR && plRow('CAM / Expense Recovery', y => y.cam, { color: 'var(--green)', indent: true })}
                     {hasRR && plRow('Potential Gross Revenue', y => y.baseRent + y.cam, { bold: true, color: 'var(--green)', bg: 'rgba(52, 211, 153, 0.05)' })}
-                    {hasRR && displayYears.some(y => y.vacancyLoss > 0) && plRow('Vacancy Loss', y => y.vacancyLoss, { color: 'var(--red)', indent: true, neg: true })}
-                    {hasRR && displayYears.some(y => (y.freeRentLoss || 0) > 0) && plRow('Free Rent', y => y.freeRentLoss || 0, { color: 'var(--red)', indent: true, neg: true })}
+                    {hasRR && periods.some(y => y.vacancyLoss > 0) && plRow('Vacancy Loss', y => y.vacancyLoss, { color: 'var(--red)', indent: true, neg: true })}
+                    {hasRR && periods.some(y => (y.freeRentLoss || 0) > 0) && plRow('Free Rent', y => y.freeRentLoss || 0, { color: 'var(--red)', indent: true, neg: true })}
                     {hasRR && plRow('Effective Gross Revenue', y => y.baseRent + y.cam - (y.vacancyLoss || 0) - (y.freeRentLoss || 0), { bold: true, bg: 'rgba(52, 211, 153, 0.08)' })}
 
                     {/* NOI */}
@@ -4217,14 +4297,14 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     {plRow('Debt Service', y => y.annDS, { color: 'var(--red)', indent: true, neg: true })}
                     {plRow('CapEx & Reserves', y => y.capexRes + y.specCapex, { indent: true, neg: true, color: 'var(--slate)' })}
                     {plRow('TI / LC', y => y.tiLC, { indent: true, neg: true, color: 'var(--slate)' })}
-                    {displayYears.some(y => y.vaInc > 0) && plRow('Value-Add Income', y => y.vaInc, { indent: true, color: 'var(--teal)' })}
-                    {displayYears.some(y => y.vaCost > 0) && plRow('Value-Add Cost', y => y.vaCost, { indent: true, neg: true, color: 'var(--red)' })}
+                    {periods.some(y => y.vaInc > 0) && plRow('Value-Add Income', y => y.vaInc, { indent: true, color: 'var(--teal)' })}
+                    {periods.some(y => y.vaCost > 0) && plRow('Value-Add Cost', y => y.vaCost, { indent: true, neg: true, color: 'var(--red)' })}
 
                     {/* Cash Flow */}
                     <tr style={{ borderBottom: '2px solid var(--border)', backgroundColor: 'rgba(52, 211, 153, 0.15)' }}>
-                      <td style={{ padding: '8px', fontWeight: '600', color: 'var(--green)' }}>Cash Flow Before DS</td>
-                      {displayYears.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: y.levCF >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: '600' }}>{fmtM(y.levCF)}</td>
+                      <td style={{ padding: '6px 8px', fontWeight: '600', color: 'var(--green)', position: 'sticky', left: 0, backgroundColor: 'rgba(52, 211, 153, 0.15)', zIndex: 1 }}>Levered Cash Flow</td>
+                      {periods.map((pd, idx) => (
+                        <td key={pd._key || pd.yr || idx} style={{ textAlign: 'right', padding: '6px 8px', color: pd.levCF >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: '600', whiteSpace: 'nowrap' }}>{fmtCell(pd.levCF)}</td>
                       ))}
                     </tr>
                   </tbody>
