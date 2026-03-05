@@ -725,6 +725,7 @@
 
         // Utility Functions
         const formatCurrency = (value) => {
+            if (value == null || isNaN(value)) return '—';
             if (value >= 1000000) {
                 return `$${(value / 1000000).toFixed(1)}M`;
             } else if (value >= 1000) {
@@ -733,9 +734,9 @@
             return `$${value.toFixed(0)}`;
         };
 
-        const formatPercent = (value) => `${(value * 100).toFixed(2)}%`;
+        const formatPercent = (value) => value != null && isFinite(value) ? `${(value * 100).toFixed(2)}%` : '—';
 
-        const formatPSF = (value) => `$${value.toFixed(2)}/SF`;
+        const formatPSF = (value) => value != null && isFinite(value) ? `$${value.toFixed(2)}/SF` : '—';
 
         const formatSF = (value) => `${(value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} SF`;
 
@@ -4219,7 +4220,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                               fontWeight: '600',
                               fontSize: '11px',
                             }}>
-                              {sensM === 'irr' || sensM === 'coc' ? val.toFixed(1) : val.toFixed(2)}
+                              {val != null && isFinite(val) ? (sensM === 'irr' || sensM === 'coc' ? val.toFixed(1) : val.toFixed(2)) : '—'}
                             </td>
                           );
                         })}
@@ -4270,7 +4271,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                               fontWeight: '600',
                               fontSize: '11px',
                             }}>
-                              {sensM === 'irr' || sensM === 'coc' ? val.toFixed(1) : val.toFixed(2)}
+                              {val != null && isFinite(val) ? (sensM === 'irr' || sensM === 'coc' ? val.toFixed(1) : val.toFixed(2)) : '—'}
                             </td>
                           );
                         })}
