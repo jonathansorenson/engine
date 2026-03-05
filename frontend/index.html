@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         * {
@@ -2659,6 +2659,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const [capItems, setCapItems] = useState([]);
   const [wf, setWf] = useState(V2_WF_DEFAULTS);
   const [compared, setCompared] = useState([]);
+  const [compLoading, setCompLoading] = useState(false);
   const [hlF, setHlF] = useState([]);
   const [omSt, setOmSt] = useState('idle');
   const [omMsg, setOmMsg] = useState('');
@@ -2796,6 +2797,81 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   // Compute model
   const calc = useMemo(() => runModelV2(p, tenants, events, capItems, wf), [p, tenants, events, capItems, wf]);
 
+  // Load saved deals for Compare tab
+  useEffect(() => {
+    if (tab !== 'compare' || compared.length > 0 || compLoading) return;
+    let cancelled = false;
+    const load = async () => {
+      setCompLoading(true);
+      try {
+        const listRes = await fetch(`${API_URL}/api/v1/deals`);
+        if (!listRes.ok) { setCompLoading(false); return; }
+        const allDeals = await listRes.json();
+        // Fetch up to 10 deals (excluding current), most recent first
+        const others = allDeals.filter(d => String(d.id) !== String(initialDeal.id)).slice(0, 10);
+        const results = [];
+        for (const stub of others) {
+          if (cancelled) return;
+          try {
+            const detRes = await fetch(`${API_URL}/api/v1/deals/${stub.id}`);
+            if (!detRes.ok) continue;
+            const apiDeal = await detRes.json();
+            // Build assumptions + tenants from v2_state or parsed_data, then run model
+            let dP = { ...V2_DEFAULTS };
+            let dTenants = [];
+            let dEvents = [];
+            let dCapItems = [];
+            let dWf = { ...V2_WF_DEFAULTS };
+            if (apiDeal.v2_state) {
+              dP = { ...V2_DEFAULTS, ...(apiDeal.v2_state.assumptions || {}) };
+              dTenants = apiDeal.v2_state.tenants || [];
+              dEvents = apiDeal.v2_state.valueAddEvents || [];
+              dCapItems = apiDeal.v2_state.capexItems || [];
+              dWf = { ...V2_WF_DEFAULTS, ...(apiDeal.v2_state.waterfall || {}) };
+            } else if (apiDeal.parsed_data) {
+              const pd = apiDeal.parsed_data;
+              const prop = pd.property || {};
+              const fin = pd.financials || {};
+              const rawPrice = prop.asking_price || fin.asking_price || 0;
+              const noi = fin.noi || 0;
+              const sf = prop.total_sf || fin.total_sf || 0;
+              dP = {
+                ...V2_DEFAULTS,
+                name: prop.name || apiDeal.name || 'Untitled',
+                purchasePrice: rawPrice > 0 ? rawPrice : (noi > 0 ? Math.round(noi / 0.07) : 0),
+                year1NOI: noi,
+                sf: sf || V2_DEFAULTS.sf,
+              };
+              if (pd.rent_roll && pd.rent_roll.length > 0) {
+                dP.useRentRoll = true;
+                dTenants = pd.rent_roll.map((r, i) => ({
+                  id: i + 1, name: r.tenant || '', suite: r.unit || '', sf: r.sf || 0,
+                  rentPSF: r.rent_psf || 0, camPSF: r.cam_psf || 0, type: 'NNN',
+                  escalPct: 3, start: r.lease_start || '', end: r.lease_end || '',
+                  tiPSF: 0, lcPct: 5, recoveryRatio: 100,
+                }));
+              }
+            }
+            const dCalc = runModelV2(dP, dTenants, dEvents, dCapItems, dWf);
+            results.push({
+              name: dP.name || apiDeal.name || stub.name || 'Untitled',
+              id: stub.id,
+              calc: dCalc,
+            });
+          } catch (e) { console.warn('Compare fetch failed for', stub.id, e); }
+        }
+        if (!cancelled) {
+          // Also include current deal
+          results.unshift({ name: p.name || initialDeal.property_name || 'Current Deal', id: initialDeal.id, calc, isCurrent: true });
+          setCompared(results);
+        }
+      } catch (e) { console.error('Compare load error:', e); }
+      if (!cancelled) setCompLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [tab]);
+
   // OM extraction
   const handleOM = async (file) => {
     setOmSt('loading');
@@ -2826,60 +2902,78 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const cfChartRef = useRef(null), eqChartRef = useRef(null), loanChartRef = useRef(null), hurChartRef = useRef(null);
   const chartInstances = useRef({});
 
-  // Initialize charts on calc change (cashflow tab)
+  // Initialize charts on calc change (charts tab)
   useEffect(() => {
-    if (tab === 'charts' && calc.years.length > 0 && window.Chart) {
-      // NOI vs CF vs DS
-      if (cfChartRef.current) {
-        if (chartInstances.current.cf) chartInstances.current.cf.destroy();
-        const ctx = cfChartRef.current.getContext('2d');
-        chartInstances.current.cf = new window.Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: calc.years.map(y => `Y${y.yr}`),
-            datasets: [
-              {
-                label: 'NOI',
-                data: calc.years.map(y => y.noi / 1e6),
-                backgroundColor: '#00BFA5',
-              },
-              {
-                label: 'Debt Service',
-                data: calc.years.map(y => -y.annDS / 1e6),
-                backgroundColor: '#F87171',
-              },
-              {
-                label: 'Net CF',
-                data: calc.years.map(y => y.levCF / 1e6),
-                backgroundColor: '#34D399',
-              },
-            ],
-          },
-          options: { responsive: true, scales: { y: { beginAtZero: true } } },
-        });
-      }
-      // Loan balance
-      if (loanChartRef.current) {
-        if (chartInstances.current.loan) chartInstances.current.loan.destroy();
-        const ctx = loanChartRef.current.getContext('2d');
-        chartInstances.current.loan = new window.Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: calc.years.map(y => `Y${y.yr}`),
-            datasets: [{
-              label: 'Loan Balance',
-              data: calc.years.map(y => y.loanBal / 1e6),
-              borderColor: '#4A8FD4',
-              backgroundColor: 'rgba(74, 143, 212, 0.1)',
-              tension: 0.3,
-              fill: true,
-            }],
-          },
-          options: { responsive: true, scales: { y: { beginAtZero: true } } },
-        });
-      }
-    }
-  }, [tab, calc.years]);
+    if (tab !== 'charts' || calc.years.length === 0 || !window.Chart) return;
+    // Use rAF to guarantee canvas is laid out before Chart.js reads dimensions
+    const raf = requestAnimationFrame(() => {
+      const hold = calc.holdYears || calc.years;
+      const labels = hold.map(y => `Y${y.yr}`);
+      const mkChart = (ref, key, cfg) => {
+        if (!ref.current) return;
+        if (chartInstances.current[key]) chartInstances.current[key].destroy();
+        chartInstances.current[key] = new window.Chart(ref.current.getContext('2d'), cfg);
+      };
+      // 1) NOI vs Debt Service vs Net CF (bar)
+      mkChart(cfChartRef, 'cf', {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'NOI ($M)', data: hold.map(y => y.noi / 1e6), backgroundColor: '#00BFA5' },
+            { label: 'Debt Service ($M)', data: hold.map(y => -y.annDS / 1e6), backgroundColor: '#F87171' },
+            { label: 'Net CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: '#34D399' },
+          ],
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: 'var(--text-secondary)' } } },
+          scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(1) + 'M' } }, x: { ticks: { color: '#94A3B8' } } } },
+      });
+      // 2) Loan Balance Paydown (line)
+      mkChart(loanChartRef, 'loan', {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Loan Balance ($M)',
+            data: hold.map(y => y.loanBal / 1e6),
+            borderColor: '#4A8FD4', backgroundColor: 'rgba(74,143,212,0.1)', tension: 0.3, fill: true,
+          }],
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: 'var(--text-secondary)' } } },
+          scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(1) + 'M' } }, x: { ticks: { color: '#94A3B8' } } } },
+      });
+      // 3) Equity Build / Cumulative CF (line + bar)
+      mkChart(eqChartRef, 'eq', {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Annual CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: 'rgba(52,211,153,0.6)', order: 2 },
+            { label: 'Cumulative ($M)', data: hold.reduce((acc, y) => { const prev = acc.length ? acc[acc.length - 1] : 0; acc.push(prev + y.levCF / 1e6); return acc; }, []),
+              type: 'line', borderColor: '#A78BFA', backgroundColor: 'transparent', tension: 0.3, order: 1 },
+          ],
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: 'var(--text-secondary)' } } },
+          scales: { y: { ticks: { callback: v => '$' + v.toFixed(1) + 'M' } }, x: { ticks: { color: '#94A3B8' } } } },
+      });
+      // 4) Returns Snapshot (horizontal bar)
+      mkChart(hurChartRef, 'hur', {
+        type: 'bar',
+        data: {
+          labels: ['Levered IRR', 'Unlev IRR', 'Going-in Cap', 'YoC', 'Avg CoC'],
+          datasets: [{
+            label: 'Return (%)',
+            data: [calc.levIRR || 0, calc.unlevIRR || 0, (calc.goingCap || 0) * 100, (calc.yoc || 0) * 100, (calc.avgCoC || 0) * 100],
+            backgroundColor: ['#00BFA5', '#34D399', '#4A8FD4', '#A78BFA', '#F59E0B'],
+          }],
+        },
+        options: { indexAxis: 'y', responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { callback: v => v.toFixed(1) + '%' } }, y: { ticks: { color: '#94A3B8' } } } },
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [tab, calc]);
 
   return (
     <div style={{
@@ -4293,10 +4387,16 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         {tab === 'charts' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
             <V2Sect title="NOI vs Debt Service vs Net CF">
-              <canvas ref={cfChartRef} height="200" />
+              <canvas ref={cfChartRef} height="220" />
             </V2Sect>
             <V2Sect title="Loan Balance Paydown">
-              <canvas ref={loanChartRef} height="200" />
+              <canvas ref={loanChartRef} height="220" />
+            </V2Sect>
+            <V2Sect title="Cash Flow Build-Up">
+              <canvas ref={eqChartRef} height="220" />
+            </V2Sect>
+            <V2Sect title="Returns Snapshot">
+              <canvas ref={hurChartRef} height="220" />
             </V2Sect>
           </div>
         )}
@@ -4377,83 +4477,105 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         {/* COMPARE TAB */}
         {tab === 'compare' && (
           <div>
-            <V2Sect title="Deal Comparison">
-              {compared.length === 0 ? (
-                <div style={{
-                  padding: '32px',
-                  textAlign: 'center',
-                  backgroundColor: 'var(--surface)',
-                  borderRadius: '8px',
-                }}>
+            <V2Sect title={`Deal Comparison${compared.length > 0 ? ` (${compared.length} deals)` : ''}`}>
+              {compLoading ? (
+                <div style={{ padding: '48px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Loading saved deals...</div>
+                  <div style={{ fontSize: '12px', color: 'var(--slate)' }}>Running model on each deal for comparison</div>
+                </div>
+              ) : compared.length === 0 ? (
+                <div style={{ padding: '32px', textAlign: 'center', backgroundColor: 'var(--surface)', borderRadius: '8px' }}>
                   <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                    No deals added to comparison yet
+                    No other saved deals found
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--slate)' }}>
-                    Go to Deal tab and use the "Add to Compare" button to add deals
+                    Upload more deals to compare metrics side-by-side
                   </div>
                 </div>
               ) : (
-                <div style={{
-                  overflowX: 'auto',
-                  fontSize: '11px',
-                }}>
-                  <table style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                  }}>
+                <div style={{ overflowX: 'auto', fontSize: '11px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: `${compared.length * 140 + 160}px` }}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ textAlign: 'left', padding: '8px', color: 'var(--text-secondary)' }}>Metric</th>
+                      <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '10px 8px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, position: 'sticky', left: 0, backgroundColor: 'var(--surface)', zIndex: 1 }}>Metric</th>
                         {compared.map((d, i) => (
-                          <th key={i} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)' }}>
+                          <th key={i} style={{
+                            textAlign: 'right', padding: '10px 8px', fontSize: '11px', fontWeight: 600,
+                            color: d.isCurrent ? '#00BFA5' : 'var(--text-secondary)',
+                            borderBottom: d.isCurrent ? '2px solid #00BFA5' : undefined,
+                          }}>
                             {d.name}
+                            {d.isCurrent && <span style={{ display: 'block', fontSize: '9px', color: '#00BFA5', opacity: 0.8 }}>CURRENT</span>}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {[
-                        { label: 'Purchase Price', field: 'pp', fmt: fmtM },
+                        { label: 'Purchase Price', field: 'pp', fmt: fmtM, section: 'Capital' },
                         { label: 'Total Cost', field: 'totalCost', fmt: fmtM },
+                        { label: 'Loan Amount', field: 'loan', fmt: fmtM },
                         { label: 'Equity Required', field: 'equity', fmt: fmtM },
-                        { label: 'Going-in Cap', field: 'goingCap', fmt: fmtP },
-                        { label: 'Yield on Cost', field: 'yoc', fmt: fmtP },
-                        { label: 'Levered IRR', field: 'levIRR', fmt: fmtP },
+                        { label: 'Going-in Cap', field: 'goingCap', fmt: v => fmtP(isN(v) ? v * 100 : v), section: 'Returns' },
+                        { label: 'Yield on Cost', field: 'yoc', fmt: v => fmtP(isN(v) ? v * 100 : v) },
+                        { label: 'Levered IRR', field: 'levIRR', fmt: fmtP, highlight: true },
                         { label: 'Unlevered IRR', field: 'unlevIRR', fmt: fmtP },
-                        { label: 'Equity Multiple', field: 'em', fmt: fmtX },
-                        { label: 'Avg CoC', field: 'avgCoC', fmt: fmtP },
-                        { label: 'DSCR', field: 'dscr', fmt: fmtX },
-                        { label: 'Exit Value', field: 'exitVal', fmt: fmtM },
+                        { label: 'Equity Multiple', field: 'em', fmt: fmtX, highlight: true },
+                        { label: 'Avg Cash-on-Cash', field: 'avgCoC', fmt: v => fmtP(isN(v) ? v * 100 : v) },
+                        { label: 'DSCR', field: 'dscr', fmt: fmtX, section: 'Risk' },
+                        { label: 'Exit Value', field: 'exitVal', fmt: fmtM, section: 'Exit' },
+                        { label: 'Exit NOI', field: 'exitNOI', fmt: fmtM },
                       ].map((m, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{m.label}</td>
-                          {compared.map((d, j) => (
-                            <td key={j} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-primary)' }}>
-                              {m.fmt(d.calc[m.field])}
-                            </td>
-                          ))}
-                        </tr>
+                        <React.Fragment key={i}>
+                          {m.section && (
+                            <tr><td colSpan={compared.length + 1} style={{ padding: '12px 8px 4px', fontSize: '10px', fontWeight: 700, color: '#00BFA5', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{m.section}</td></tr>
+                          )}
+                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '8px', color: 'var(--text-secondary)', position: 'sticky', left: 0, backgroundColor: 'var(--surface)', zIndex: 1, fontWeight: m.highlight ? 600 : 400 }}>{m.label}</td>
+                            {compared.map((d, j) => {
+                              const val = d.calc[m.field];
+                              // Find best value among deals for highlighting
+                              const allVals = compared.map(c => c.calc[m.field]).filter(v => isN(v));
+                              const best = m.field === 'dscr' ? undefined : (allVals.length > 0 ? Math.max(...allVals) : undefined);
+                              const isBest = m.highlight && isN(val) && val === best && allVals.length > 1;
+                              return (
+                                <td key={j} style={{
+                                  textAlign: 'right', padding: '8px',
+                                  color: isBest ? '#00BFA5' : (d.isCurrent ? 'var(--text-primary)' : 'var(--text-primary)'),
+                                  fontWeight: (m.highlight || isBest) ? 600 : 400,
+                                }}>
+                                  {m.fmt(val)}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
               {compared.length > 0 && (
-                <button
-                  onClick={() => setCompared([])}
-                  style={{
-                    marginTop: '16px',
-                    backgroundColor: 'rgba(248, 113, 113, 0.2)',
-                    border: '1px solid var(--red)',
-                    color: 'var(--red)',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                  }}
-                >
-                  Clear All
-                </button>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                  <button
+                    onClick={() => { setCompared([]); setCompLoading(false); }}
+                    style={{
+                      backgroundColor: 'rgba(248, 113, 113, 0.15)', border: '1px solid var(--red)',
+                      color: 'var(--red)', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px',
+                    }}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => { setCompared([]); }}
+                    style={{
+                      backgroundColor: 'rgba(0, 191, 165, 0.15)', border: '1px solid #00BFA5',
+                      color: '#00BFA5', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px',
+                    }}
+                  >
+                    Refresh
+                  </button>
+                </div>
               )}
             </V2Sect>
           </div>
