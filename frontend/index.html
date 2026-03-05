@@ -2031,75 +2031,155 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
   const dsAmort = mortgageV2(loan, (p.rate || 6.25) / 100, p.amort || 30);
   const dsIO = loan * ((p.rate || 6.25) / 100);
 
-  // Rent-roll-driven NOI arrays
+  // Rent-roll-driven revenue arrays (Base Rent + CAM separated) with per-tenant lease expiry
   const hold = p.holdPeriod || 5;
-  const rrNOI = new Array(hold + 2).fill(0);
-  const rrTILC = new Array(hold + 2).fill(0);
+  const rrBaseRent = new Array(hold + 3).fill(0);
+  const rrCAM = new Array(hold + 3).fill(0);
+  const rrVacancyLoss = new Array(hold + 3).fill(0);
+  const rrFreeRent = new Array(hold + 3).fill(0);
+  const rrTI = new Array(hold + 3).fill(0);
+  const rrLC = new Array(hold + 3).fill(0);
+
   if (p.useRentRoll && tenants.length > 0) {
     const today = new Date();
+    const useML = p.useMarketLeasing !== false;
+    const renewProb = (p.marketRenewalProb || 75) / 100;
+    const vacMonths = p.marketVacantMonths || 6;
+    const freeMonths = p.marketFreeRentMonths || 2;
+    const tiNewPSF = p.marketTINewPSF || 15;
+    const tiRenewPSF = p.marketTIRenewalPSF || 10;
+    const lcNewPct = (p.marketLCNewPct || 6) / 100;
+    const lcRenewPct = (p.marketLCRenewalPct || 4) / 100;
+
     tenants.forEach(t => {
       if (!t.sf || !t.rentPSF) return;
       const ls = new Date(t.start), le = new Date(t.end);
-      for (let yr = 1; yr <= hold; yr++) {
+      const sf = t.sf;
+      const esc = (t.escalPct || 0) / 100;
+
+      // Determine which model year the lease expires in
+      let expiryYr = null;
+      for (let yr = 1; yr <= hold + 1; yr++) {
+        const yrEnd = new Date(today.getFullYear() + yr, 0, 1);
         const yrStart = new Date(today.getFullYear() + yr - 1, 0, 1);
-        if (yrStart > le || yrStart < ls) continue;
-        const elapsed = (yrStart - ls) / (365.25 * 86400 * 1000);
-        const rent = t.sf * t.rentPSF * Math.pow(1 + (t.escalPct || 0) / 100, elapsed);
-        const recov = t.type === "NNN" ? t.sf * ((t.recoveryRatio || 100) / 100) * 4 : 0;
-        rrNOI[yr] += rent + recov;
+        if (le >= yrStart && le < yrEnd) { expiryYr = yr; break; }
       }
-      const tiAmt = t.sf * (t.tiPSF || 0);
-      const lcAmt = t.sf * t.rentPSF * ((t.lcPct || 5) / 100);
-      const sYr = Math.round((new Date(t.start) - new Date()) / (365.25 * 86400 * 1000));
-      const capYr = Math.max(1, Math.min(hold, sYr || 1));
-      rrTILC[capYr] += tiAmt + lcAmt;
+
+      for (let yr = 1; yr <= hold + 1; yr++) {
+        const yrStart = new Date(today.getFullYear() + yr - 1, 0, 1);
+        const elapsed = Math.max(0, (yrStart - ls) / (365.25 * 86400 * 1000));
+        const escFactor = Math.pow(1 + esc, elapsed);
+
+        if (!expiryYr || yr < expiryYr) {
+          // Pre-expiry: full rent collection
+          if (yrStart >= ls) {
+            rrBaseRent[yr] += sf * t.rentPSF * escFactor;
+            rrCAM[yr] += sf * (t.camPSF || 0) * escFactor;
+          }
+        } else if (yr === expiryYr && useML) {
+          // Expiry year: apply weighted-blend turnover costs
+          const monthlyRent = (sf * t.rentPSF * escFactor) / 12;
+          const monthlyCam = (sf * (t.camPSF || 0) * escFactor) / 12;
+
+          // Months occupied before expiry in this year
+          const yrStartMonth = yrStart.getMonth();
+          const leMonth = le.getMonth();
+          const occupiedMonths = Math.max(0, Math.min(12, le.getMonth() - yrStart.getMonth() + (le.getFullYear() === yrStart.getFullYear() ? 1 : 12)));
+
+          // Full year of rent (potential)
+          const fullBaseRent = sf * t.rentPSF * escFactor;
+          const fullCam = sf * (t.camPSF || 0) * escFactor;
+          rrBaseRent[yr] += fullBaseRent;
+          rrCAM[yr] += fullCam;
+
+          // Weighted vacancy cost: probability-blended
+          // If renews: no vacancy, renewal TI/LC only
+          // If vacates: vacancy months lost rent, free rent on re-lease, new TI/LC
+          const vacCostNew = vacMonths * (monthlyRent + monthlyCam);
+          const freeRentCost = freeMonths * monthlyRent;
+
+          // Weighted blend
+          const blendedVacancy = (1 - renewProb) * vacCostNew;
+          const blendedFreeRent = (1 - renewProb) * freeRentCost;
+          const blendedTI = renewProb * (sf * tiRenewPSF) + (1 - renewProb) * (sf * tiNewPSF);
+          const blendedLC = renewProb * (fullBaseRent * lcRenewPct) + (1 - renewProb) * (fullBaseRent * lcNewPct);
+
+          rrVacancyLoss[yr] += blendedVacancy;
+          rrFreeRent[yr] += blendedFreeRent;
+          rrTI[yr] += blendedTI;
+          rrLC[yr] += blendedLC;
+        } else if (yr === expiryYr && !useML) {
+          // No market leasing — just collect rent through expiry
+          if (yrStart >= ls) {
+            rrBaseRent[yr] += sf * t.rentPSF * escFactor;
+            rrCAM[yr] += sf * (t.camPSF || 0) * escFactor;
+          }
+        } else {
+          // Post-expiry: tenant re-leased (or renewed) — continue at market with escalation
+          const postExpiryYrs = yr - expiryYr;
+          const postEscFactor = Math.pow(1 + esc, elapsed);
+          rrBaseRent[yr] += sf * t.rentPSF * postEscFactor;
+          rrCAM[yr] += sf * (t.camPSF || 0) * postEscFactor;
+        }
+      }
     });
   }
 
   const years = [];
   let loanBal = loan;
-  for (let yr = 1; yr <= hold; yr++) {
-    let noi;
+  for (let yr = 1; yr <= hold + 1; yr++) {
+    let noi, baseRent = 0, cam = 0, vacancyLoss = 0, freeRentLoss = 0, tiCost = 0, lcCost = 0;
     if (p.useRentRoll && tenants.length > 0) {
-      noi = rrNOI[yr] * (1 - (p.vacancy || 7) / 100);
+      baseRent = rrBaseRent[yr];
+      cam = rrCAM[yr];
+      const grossRev = baseRent + cam;
+      // Per-tenant lease expiry vacancy + flat vacancy adj
+      vacancyLoss = rrVacancyLoss[yr] + grossRev * ((p.vacancy || 0) / 100);
+      freeRentLoss = rrFreeRent[yr];
+      const egr = grossRev - vacancyLoss - freeRentLoss;
+      noi = egr; // operating expenses are embedded (NNN structure)
+      tiCost = rrTI[yr] + rrLC[yr]; // TI + LC as capital costs below NOI
+      lcCost = 0; // already combined into tiCost for simplicity
     } else {
       noi = (p.year1NOI || 0) * Math.pow(1 + (p.rentGrowth || 0) / 100, yr - 1) * (1 - (p.vacancy || 0) / 100);
     }
     const useIO = p.isIO && yr <= (p.ioPeriod || 2);
-    const annDS = useIO ? dsIO : dsAmort;
+    const annDS = yr <= hold ? (useIO ? dsIO : dsAmort) : 0;
     const intPaid = loanBal * ((p.rate || 6.25) / 100);
-    const prinPaid = useIO ? 0 : Math.max(0, annDS - intPaid);
-    loanBal = Math.max(0, loanBal - prinPaid);
-    const capexRes = p.useCapexPct ? noi * ((p.capexReservePct || 2) / 100) : (p.capexReserveFlat || 0);
-    const specCapex = capItems.filter(c => c.year === yr).reduce((s, c) => s + (c.amount || 0), 0);
-    const tiLC = p.useRentRoll ? rrTILC[yr] : ((p.tiReserve || 0) + noi * ((p.lcReservePct || 0) / 100));
-    const vaInc = events.filter(e => e.year === yr && e.type === "income").reduce((s, e) => s + (e.amount || 0), 0);
-    const vaCost = events.filter(e => e.year === yr && e.type === "cost").reduce((s, e) => s + (e.amount || 0), 0);
+    const prinPaid = useIO ? 0 : Math.max(0, (yr <= hold ? annDS : 0) - intPaid);
+    if (yr <= hold) loanBal = Math.max(0, loanBal - prinPaid);
+    const capexRes = yr <= hold ? (p.useCapexPct ? noi * ((p.capexReservePct || 2) / 100) : (p.capexReserveFlat || 0)) : 0;
+    const specCapex = yr <= hold ? capItems.filter(c => c.year === yr).reduce((s, c) => s + (c.amount || 0), 0) : 0;
+    const tiLC = yr <= hold ? (p.useRentRoll ? tiCost : ((p.tiReserve || 0) + noi * ((p.lcReservePct || 0) / 100))) : 0;
+    const vaInc = yr <= hold ? events.filter(e => e.year === yr && e.type === "income").reduce((s, e) => s + (e.amount || 0), 0) : 0;
+    const vaCost = yr <= hold ? events.filter(e => e.year === yr && e.type === "cost").reduce((s, e) => s + (e.amount || 0), 0) : 0;
     const levCF = noi - annDS - capexRes - specCapex - tiLC + vaInc - vaCost;
-    years.push({ yr, noi, annDS, levCF, loanBal, useIO, capexRes, specCapex, tiLC, vaInc, vaCost, intPaid, prinPaid });
+    years.push({ yr, noi, baseRent, cam, vacancyLoss, freeRentLoss, annDS, levCF, loanBal, useIO, capexRes, specCapex, tiLC, vaInc, vaCost, intPaid, prinPaid });
   }
 
-  const lastNOI = years[years.length - 1]?.noi || 0;
-  const exitNOI = lastNOI * (1 + (p.rentGrowth || 0) / 100);
+  // Exit Year NOI comes from the hold+1 year (already computed in loop)
+  const holdYears = years.filter(y => y.yr <= hold);
+  const exitYr = years.find(y => y.yr === hold + 1);
+  const exitNOI = exitYr ? exitYr.noi : (holdYears[holdYears.length - 1]?.noi || 0) * (1 + (p.rentGrowth || 0) / 100);
   const exitVal = exitNOI / ((p.exitCap || 6) / 100);
-  const exitBal = years[years.length - 1]?.loanBal || 0;
+  const exitBal = holdYears[holdYears.length - 1]?.loanBal || 0;
   const prepayAmt = exitBal * ((p.prepayPct || 1) / 100);
   const saleNet = exitVal - exitBal - prepayAmt;
   const yr1ModelNOI = years[0]?.noi || 0;
   const goingCap = pp > 0 ? yr1ModelNOI / pp * 100 : 0;
   const yoc = totalCost > 0 ? yr1ModelNOI / totalCost * 100 : 0;
 
-  // IRR cash flows
-  const opCFs = years.map(y => y.levCF);
+  // IRR cash flows — use hold period years only
+  const opCFs = holdYears.map(y => y.levCF);
   const levCFsForIRR = [-equity, ...opCFs.slice(0, -1), (opCFs[opCFs.length - 1] || 0) + saleNet];
-  const unlevCFsForIRR = [-totalCost, ...years.slice(0, -1).map(y => y.noi), (years[years.length - 1]?.noi || 0) + exitVal];
+  const unlevCFsForIRR = [-totalCost, ...holdYears.slice(0, -1).map(y => y.noi), (holdYears[holdYears.length - 1]?.noi || 0) + exitVal];
 
   const levIRR = calcIRRv2(levCFsForIRR);
   const unlevIRR = calcIRRv2(unlevCFsForIRR);
   const totalReturn = levCFsForIRR.slice(1).reduce((s, v) => s + v, 0);
   const em = equity > 0 ? totalReturn / equity : 0;
-  const dscr = years[0] ? years[0].noi / Math.max(years[0].annDS, 1) : 0;
-  const avgCoC = equity > 0 ? opCFs.reduce((s, v) => s + v, 0) / years.length / equity * 100 : 0;
+  const dscr = holdYears[0] ? holdYears[0].noi / Math.max(holdYears[0].annDS, 1) : 0;
+  const avgCoC = equity > 0 ? opCFs.reduce((s, v) => s + v, 0) / holdYears.length / equity * 100 : 0;
 
   // Waterfall with configurable LP/GP split
   const lpEq = equity * lpPct, gpEq = equity * gpPct;
@@ -2113,10 +2193,13 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
   const lpPrefPaid = Math.min(pool * lpPct, lpPrefTotal); pool -= lpPrefPaid;
   const gpPrefPaid = Math.min(pool, gpPrefTotal); pool = Math.max(0, pool - gpPrefPaid);
   lpOut += lpPrefPaid; gpOut += gpPrefPaid;
+  // Tiered promote using deal-tab hurdle settings (synced from p)
+  const t2LP = (p.hurdleTier2LP ?? wf.tier1Split ?? 80) / 100;
+  const t3LP = (p.hurdleTier3LP ?? wf.tier2Split ?? 70) / 100;
   if (wf.catchUp && pool > 0) { const cu = Math.min(pool, gpPrefTotal * 0.5); gpOut += cu; pool -= cu; }
-  if (pool > 0) { const t1 = Math.min(pool, equity * ((wf.tier1Thresh || 15) / 100) * hold * 0.25); lpOut += t1 * ((wf.tier1Split || 80) / 100); gpOut += t1 * (1 - (wf.tier1Split || 80) / 100); pool -= t1; }
-  if (pool > 0) { const t2 = Math.min(pool, equity * ((wf.tier2Thresh || 20) / 100) * hold * 0.15); lpOut += t2 * ((wf.tier2Split || 70) / 100); gpOut += t2 * (1 - (wf.tier2Split || 70) / 100); pool -= t2; }
-  if (pool > 0) { lpOut += pool * ((wf.tier3Split || 60) / 100); gpOut += pool * (1 - (wf.tier3Split || 60) / 100); }
+  if (pool > 0) { const t1Amt = Math.min(pool, equity * ((p.hurdleTier2 ?? wf.tier1Thresh ?? 15) / 100) * hold * 0.25); lpOut += t1Amt * t2LP; gpOut += t1Amt * (1 - t2LP); pool -= t1Amt; }
+  if (pool > 0) { const t2Amt = Math.min(pool, equity * ((p.hurdleTier3 ?? wf.tier2Thresh ?? 25) / 100) * hold * 0.15); lpOut += t2Amt * t3LP; gpOut += t2Amt * (1 - t3LP); pool -= t2Amt; }
+  if (pool > 0) { lpOut += pool * t3LP; gpOut += pool * (1 - t3LP); }
 
   const lpOpShare = opCFs.map(cf => cf * lpPct);
   const gpOpShare = opCFs.map(cf => cf * gpPct);
@@ -2128,11 +2211,11 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
   const gpIRR = calcIRRv2(gpCFs);
   const lpEM = lpEq > 0 ? lpOut / lpEq : 0;
   const gpPromote = Math.max(0, gpOut - gpEq);
-  const goGreen = (levIRR || 0) >= (p.hurdleIRR || 15) && em >= (p.hurdleEM || 1.75);
+  const goGreen = (levIRR || 0) >= (p.hurdleTier1 || p.hurdleIRR || 9) && em >= (p.hurdleEM || 1.5);
 
   return {
     pp, totalCost, loan, equity, origFee, acqCost,
-    years, exitNOI, exitVal, exitBal, saleNet, prepayAmt,
+    years, holdYears, exitNOI, exitVal, exitBal, saleNet, prepayAmt,
     goingCap, yoc, levIRR, unlevIRR, em, dscr, avgCoC,
     levCFsForIRR, totalReturn,
     lpEq, gpEq, lpOut, gpOut, lpIRR, gpIRR, lpEM, gpPromote,
@@ -2164,13 +2247,27 @@ const V2_DEFAULTS = {
   useRentRoll: false,
   exitCap: 6.5,
   holdPeriod: 5,
-  hurdleIRR: 15,
-  hurdleEM: 1.75,
+  hurdleIRR: 9,
+  hurdleTier1: 9,
+  hurdleTier2: 15,
+  hurdleTier3: 25,
+  hurdleTier2LP: 80,
+  hurdleTier3LP: 70,
+  hurdleEM: 1.5,
   capexReservePct: 2,
   capexReserveFlat: 0,
   useCapexPct: true,
   tiReserve: 0,
   lcReservePct: 3,
+  // Market Leasing Assumptions
+  useMarketLeasing: true,
+  marketRenewalProb: 75,
+  marketVacantMonths: 6,
+  marketFreeRentMonths: 2,
+  marketTINewPSF: 15,
+  marketTIRenewalPSF: 10,
+  marketLCNewPct: 6,
+  marketLCRenewalPct: 4,
 };
 
 const V2_WF_DEFAULTS = {
@@ -2335,7 +2432,7 @@ const V2TabBtn = ({ label, active, onClick, badge }) => (
     }}
   >
     {label}
-    {badge && <span style={{
+    {badge > 0 && <span style={{
       position: 'absolute',
       top: '8px',
       right: '8px',
@@ -3059,6 +3156,76 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 )}
               </V2Sect>
 
+              {p.useRentRoll && (
+              <V2Sect title="Market Leasing Assumptions">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <V2Inp
+                    label="Renewal Probability"
+                    type="number"
+                    value={p.marketRenewalProb ?? 75}
+                    onChange={(v) => setP(prev => ({ ...prev, marketRenewalProb: parseFloat(v) || 0 }))}
+                    suffix="%"
+                  />
+                  <V2Inp
+                    label="Months Vacant"
+                    type="number"
+                    value={p.marketVacantMonths ?? 6}
+                    onChange={(v) => setP(prev => ({ ...prev, marketVacantMonths: parseInt(v) || 0 }))}
+                    suffix="mo"
+                  />
+                  <V2Inp
+                    label="Free Rent (New)"
+                    type="number"
+                    value={p.marketFreeRentMonths ?? 2}
+                    onChange={(v) => setP(prev => ({ ...prev, marketFreeRentMonths: parseInt(v) || 0 }))}
+                    suffix="mo"
+                  />
+                  <V2Inp
+                    label="Vacancy Adj %"
+                    type="number"
+                    value={p.vacancy ?? 0}
+                    onChange={(v) => setP(prev => ({ ...prev, vacancy: parseFloat(v) || 0 }))}
+                    suffix="%"
+                    placeholder="Additional flat adj"
+                  />
+                </div>
+                <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Tenant Improvements</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <V2Inp
+                    label="TI New /SF"
+                    type="number"
+                    value={p.marketTINewPSF ?? 15}
+                    onChange={(v) => setP(prev => ({ ...prev, marketTINewPSF: parseFloat(v) || 0 }))}
+                    prefix="$"
+                  />
+                  <V2Inp
+                    label="TI Renewal /SF"
+                    type="number"
+                    value={p.marketTIRenewalPSF ?? 10}
+                    onChange={(v) => setP(prev => ({ ...prev, marketTIRenewalPSF: parseFloat(v) || 0 }))}
+                    prefix="$"
+                  />
+                </div>
+                <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Leasing Commissions</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <V2Inp
+                    label="LC New %"
+                    type="number"
+                    value={p.marketLCNewPct ?? 6}
+                    onChange={(v) => setP(prev => ({ ...prev, marketLCNewPct: parseFloat(v) || 0 }))}
+                    suffix="%"
+                  />
+                  <V2Inp
+                    label="LC Renewal %"
+                    type="number"
+                    value={p.marketLCRenewalPct ?? 4}
+                    onChange={(v) => setP(prev => ({ ...prev, marketLCRenewalPct: parseFloat(v) || 0 }))}
+                    suffix="%"
+                  />
+                </div>
+              </V2Sect>
+              )}
+
               <V2Sect title="Exit">
                 <V2Inp
                   label="Exit Cap %"
@@ -3076,16 +3243,56 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 />
               </V2Sect>
 
-              <V2Sect title="Fund Hurdles">
+              <V2Sect title="Investor Hurdles">
+                <div style={{ fontSize: '11px', marginBottom: '8px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '4px 6px', color: 'var(--text-secondary)', fontWeight: '600' }}>Tier</th>
+                        <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--text-secondary)', fontWeight: '600' }}>IRR</th>
+                        <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--text-secondary)', fontWeight: '600' }}>LP %</th>
+                        <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--text-secondary)', fontWeight: '600' }}>GP %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '4px 6px', color: 'var(--text-primary)' }}>Preferred</td>
+                        <td style={{ textAlign: 'right', padding: '2px' }}>
+                          <input type="number" value={p.hurdleTier1 ?? 9} onChange={(e) => setP(prev => ({ ...prev, hurdleTier1: parseFloat(e.target.value) || 0 }))}
+                            style={{ width: '50px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--green)' }}>100%</td>
+                        <td style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--slate)' }}>0%</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '4px 6px', color: 'var(--text-primary)' }}>Tier 2</td>
+                        <td style={{ textAlign: 'right', padding: '2px' }}>
+                          <input type="number" value={p.hurdleTier2 ?? 15} onChange={(e) => setP(prev => ({ ...prev, hurdleTier2: parseFloat(e.target.value) || 0 }))}
+                            style={{ width: '50px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '2px' }}>
+                          <input type="number" value={p.hurdleTier2LP ?? 80} onChange={(e) => setP(prev => ({ ...prev, hurdleTier2LP: parseFloat(e.target.value) || 0 }))}
+                            style={{ width: '40px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--slate)' }}>{100 - (p.hurdleTier2LP ?? 80)}%</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '4px 6px', color: 'var(--text-primary)' }}>Tier 3</td>
+                        <td style={{ textAlign: 'right', padding: '2px' }}>
+                          <input type="number" value={p.hurdleTier3 ?? 25} onChange={(e) => setP(prev => ({ ...prev, hurdleTier3: parseFloat(e.target.value) || 0 }))}
+                            style={{ width: '50px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '2px' }}>
+                          <input type="number" value={p.hurdleTier3LP ?? 70} onChange={(e) => setP(prev => ({ ...prev, hurdleTier3LP: parseFloat(e.target.value) || 0 }))}
+                            style={{ width: '40px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 4px', color: 'var(--text-primary)', textAlign: 'right', fontSize: '11px' }} />%
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--slate)' }}>{100 - (p.hurdleTier3LP ?? 70)}%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
                 <V2Inp
-                  label="Target IRR"
-                  type="number"
-                  value={p.hurdleIRR}
-                  onChange={(v) => setP(prev => ({ ...prev, hurdleIRR: parseFloat(v) || 15 }))}
-                  suffix="%"
-                />
-                <V2Inp
-                  label="Target EM"
+                  label="Min Equity Multiple"
                   type="number"
                   value={p.hurdleEM}
                   onChange={(v) => setP(prev => ({ ...prev, hurdleEM: parseFloat(v) || 1.75 }))}
@@ -3183,8 +3390,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card
                   label="Levered IRR"
                   value={fmtP(calc.levIRR)}
-                  sub={`vs ${p.hurdleIRR}% hurdle`}
-                  good={calc.levIRR >= p.hurdleIRR}
+                  sub={`vs ${p.hurdleTier1 || p.hurdleIRR}% pref return`}
+                  good={calc.levIRR >= (p.hurdleTier1 || p.hurdleIRR)}
                 />
                 <V2Card
                   label="Unlevered IRR"
@@ -3373,6 +3580,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     suite: '',
                     sf: 0,
                     rentPSF: 0,
+                    camPSF: 0,
                     type: 'NNN',
                     escalPct: 3,
                     start: '',
@@ -3501,14 +3709,25 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                       }}
                     />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                     <V2Inp
-                      label="Rent /SF"
+                      label="Annual Rent /SF"
                       type="number"
                       value={t.rentPSF || 0}
                       onChange={(v) => {
                         const nt = [...tenants];
                         nt[i] = { ...nt[i], rentPSF: parseFloat(v) || 0 };
+                        setTenants(nt);
+                      }}
+                      prefix="$"
+                    />
+                    <V2Inp
+                      label="CAM /SF"
+                      type="number"
+                      value={t.camPSF || 0}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i] = { ...nt[i], camPSF: parseFloat(v) || 0 };
                         setTenants(nt);
                       }}
                       prefix="$"
@@ -3843,11 +4062,11 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
             <V2Sect title="Cash Flow Summary">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                <V2Card label="Total NOI" value={fmtM(calc.years.reduce((s, y) => s + y.noi, 0))} />
-                <V2Card label="Total Debt Service" value={fmtM(calc.years.reduce((s, y) => s + y.annDS, 0))} />
-                <V2Card label="Total CapEx" value={fmtM(calc.years.reduce((s, y) => s + (y.capexRes + y.specCapex), 0))} />
-                <V2Card label="Total TI/LC" value={fmtM(calc.years.reduce((s, y) => s + y.tiLC, 0))} />
-                <V2Card label="Total Net CF" value={fmtM(calc.years.reduce((s, y) => s + y.levCF, 0))} />
+                <V2Card label="Total NOI" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.noi, 0))} />
+                <V2Card label="Total Debt Service" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.annDS, 0))} />
+                <V2Card label="Total CapEx" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + (y.capexRes + y.specCapex), 0))} />
+                <V2Card label="Total TI/LC" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.tiLC, 0))} />
+                <V2Card label="Total Net CF" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.levCF, 0))} />
               </div>
             </V2Sect>
 
@@ -3856,73 +4075,68 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 overflowX: 'auto',
                 fontSize: '11px',
               }}>
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                }}>
+                {(() => {
+                  const displayYears = calc.years || [];
+                  const hasRR = displayYears.some(y => y.baseRent > 0 || y.cam > 0);
+                  const hold = p.holdPeriod || 5;
+                  const plRow = (label, getter, opts = {}) => (
+                    <tr style={{ borderBottom: opts.bold ? '2px solid var(--border)' : '1px solid var(--border)', backgroundColor: opts.bg || 'transparent' }}>
+                      <td style={{ padding: '8px', paddingLeft: opts.indent ? '24px' : '8px', fontWeight: opts.bold ? '600' : '400', color: opts.color || 'var(--text-primary)' }}>{label}</td>
+                      {displayYears.map(y => (
+                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', fontWeight: opts.bold ? '600' : '400', color: opts.color || 'var(--text-primary)' }}>
+                          {opts.neg ? `(${fmtM(Math.abs(getter(y)))})` : fmtM(getter(y))}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                  return (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                      <th style={{ textAlign: 'left', padding: '8px', color: 'var(--text-secondary)' }}>Item</th>
-                      {calc.years.map(y => (
-                        <th key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)' }}>Y{y.yr}</th>
+                      <th style={{ textAlign: 'left', padding: '8px', color: 'var(--text-secondary)', minWidth: '160px' }}>Item</th>
+                      {displayYears.map(y => (
+                        <th key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)' }}>
+                          {y.yr <= hold ? `Y${y.yr}` : 'Exit Yr'}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    <tr style={{ borderBottom: '2px solid var(--border)', backgroundColor: 'rgba(52, 211, 153, 0.1)' }}>
-                      <td style={{ padding: '8px', fontWeight: '600', color: 'var(--green)' }}>Net Operating Income</td>
-                      {calc.years.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--green)', fontWeight: '600' }}>{fmtM(y.noi)}</td>
-                      ))}
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--red)' }}>Debt Service</td>
-                      {calc.years.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>({fmtM(y.annDS)})</td>
-                      ))}
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--slate)' }}>CapEx & Reserves</td>
-                      {calc.years.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--slate)' }}>({fmtM((y.capexRes + y.specCapex))})</td>
-                      ))}
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--slate)' }}>TI / LC</td>
-                      {calc.years.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--slate)' }}>({fmtM(y.tiLC)})</td>
-                      ))}
-                    </tr>
-                    {calc.years.some(y => y.vaInc > 0) && (
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--teal)' }}>Value-Add Income</td>
-                      {calc.years.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--teal)' }}>{fmtM(y.vaInc)}</td>
-                      ))}
-                    </tr>
-                    )}
-                    {calc.years.some(y => y.vaCost > 0) && (
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px', paddingLeft: '24px', color: 'var(--red)' }}>Value-Add Cost</td>
-                      {calc.years.map(y => (
-                        <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>({fmtM(y.vaCost)})</td>
-                      ))}
-                    </tr>
-                    )}
+                    {/* Revenue section */}
+                    {hasRR && plRow('Potential Base Rent', y => y.baseRent, { color: 'var(--green)', indent: true })}
+                    {hasRR && plRow('CAM / Expense Recovery', y => y.cam, { color: 'var(--green)', indent: true })}
+                    {hasRR && plRow('Potential Gross Revenue', y => y.baseRent + y.cam, { bold: true, color: 'var(--green)', bg: 'rgba(52, 211, 153, 0.05)' })}
+                    {hasRR && displayYears.some(y => y.vacancyLoss > 0) && plRow('Vacancy Loss', y => y.vacancyLoss, { color: 'var(--red)', indent: true, neg: true })}
+                    {hasRR && displayYears.some(y => (y.freeRentLoss || 0) > 0) && plRow('Free Rent', y => y.freeRentLoss || 0, { color: 'var(--red)', indent: true, neg: true })}
+                    {hasRR && plRow('Effective Gross Revenue', y => y.baseRent + y.cam - (y.vacancyLoss || 0) - (y.freeRentLoss || 0), { bold: true, bg: 'rgba(52, 211, 153, 0.08)' })}
+
+                    {/* NOI */}
+                    {plRow('Net Operating Income', y => y.noi, { bold: true, color: 'var(--green)', bg: 'rgba(52, 211, 153, 0.1)' })}
+
+                    {/* Below NOI */}
+                    {plRow('Debt Service', y => y.annDS, { color: 'var(--red)', indent: true, neg: true })}
+                    {plRow('CapEx & Reserves', y => y.capexRes + y.specCapex, { indent: true, neg: true, color: 'var(--slate)' })}
+                    {plRow('TI / LC', y => y.tiLC, { indent: true, neg: true, color: 'var(--slate)' })}
+                    {displayYears.some(y => y.vaInc > 0) && plRow('Value-Add Income', y => y.vaInc, { indent: true, color: 'var(--teal)' })}
+                    {displayYears.some(y => y.vaCost > 0) && plRow('Value-Add Cost', y => y.vaCost, { indent: true, neg: true, color: 'var(--red)' })}
+
+                    {/* Cash Flow */}
                     <tr style={{ borderBottom: '2px solid var(--border)', backgroundColor: 'rgba(52, 211, 153, 0.15)' }}>
-                      <td style={{ padding: '8px', fontWeight: '600', color: 'var(--green)' }}>Net Cash Flow</td>
-                      {calc.years.map(y => (
+                      <td style={{ padding: '8px', fontWeight: '600', color: 'var(--green)' }}>Cash Flow Before DS</td>
+                      {displayYears.map(y => (
                         <td key={y.yr} style={{ textAlign: 'right', padding: '8px', color: y.levCF >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: '600' }}>{fmtM(y.levCF)}</td>
                       ))}
                     </tr>
                   </tbody>
                 </table>
+                  );
+                })()}
               </div>
             </V2Sect>
 
             <V2Sect title="Exit Reversion">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <V2Card label="Projected NOI (Y5)" value={fmtM(calc.exitNOI)} />
+                <V2Card label={`Exit Year NOI (Y${(p.holdPeriod || 5) + 1})`} value={fmtM(calc.exitNOI)} />
                 <V2Card label="Exit Cap Rate" value={fmtP(p.exitCap)} />
                 <V2Card label="Gross Sale Price" value={fmtM(calc.exitVal)} />
                 <V2Card label="Less: Loan Payoff" value={fmtM(-calc.exitBal)} />

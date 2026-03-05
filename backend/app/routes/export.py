@@ -653,7 +653,10 @@ class V2ExportRequest(PydanticBaseModel):
 
 @router.post("/v2")
 async def export_v2_deal_to_excel(data: V2ExportRequest):
-    """Generate V2 Excel workbook with waterfall, value-add, and enhanced cash flows."""
+    """Generate institutional-grade V2 Excel workbook with formulas and named ranges."""
+    from openpyxl.utils import get_column_letter
+    from openpyxl.workbook.defined_name import DefinedName
+
     wb = Workbook()
 
     state = data.v2_state or {}
@@ -669,134 +672,414 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     hold = p.get("holdPeriod", 5)
 
     # ══════════════════════════════════════════
-    # Sheet 1: Executive Summary
+    # Sheet 1: Assumptions (with named ranges)
     # ══════════════════════════════════════════
     ws = wb.active
-    ws.title = "Executive Summary"
-    ws.column_dimensions["A"].width = 30
-    ws.column_dimensions["B"].width = 22
+    ws.title = "Assumptions"
+    ws.column_dimensions["A"].width = 32
+    ws.column_dimensions["B"].width = 20
 
     ws.merge_cells("A1:B1")
     ws.cell(row=1, column=1, value=prop_name).font = TITLE_FONT
 
     row = 3
-    row = _section_header(ws, row, "Property Details")
-    if p.get("address"):
-        row = _add_kv_row(ws, row, "Address", p["address"])
-    if p.get("assetType"):
-        row = _add_kv_row(ws, row, "Asset Type", p["assetType"])
-    if p.get("sf"):
-        row = _add_kv_row(ws, row, "Rentable SF", p["sf"], NUMBER_FMT)
+
+    # Property Section
+    row = _section_header(ws, row, "Property", 2)
+    row = _add_kv_row(ws, row, "Name", p.get("name", ""))
+    row = _add_kv_row(ws, row, "Type", p.get("assetType", ""))
+    row = _add_kv_row(ws, row, "Address", p.get("address", ""))
+    sf_row = row
+    row = _add_kv_row(ws, row, "Rentable SF", p.get("sf", 0), NUMBER_FMT)
+    # Create named range for SF
+    sf_cell = f"B{sf_row}"
+    try:
+        wb.defined_names.add(DefinedName("SF", attr_text=f"Assumptions!{sf_cell}"))
+    except:
+        pass
 
     row += 1
-    row = _section_header(ws, row, "Capital Structure")
-    row = _add_kv_row(ws, row, "Purchase Price", calc.get("pp", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws, row, "Total Cost", calc.get("totalCost", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws, row, "Loan Amount", calc.get("loan", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws, row, "Equity Required", calc.get("equity", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws, row, "LTV", p.get("ltv", 65) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws, row, "Origination Fee", calc.get("origFee", 0), CURRENCY_FMT)
+
+    # Acquisition Section
+    row = _section_header(ws, row, "Acquisition", 2)
+    pp_row = row
+    row = _add_kv_row(ws, row, "Purchase Price", p.get("purchasePrice", calc.get("pp", 0)), CURRENCY_FMT)
+    try:
+        wb.defined_names.add(DefinedName("PurchasePrice", attr_text=f"Assumptions!$B${pp_row}"))
+    except:
+        pass
+
+    row = _add_kv_row(ws, row, "Acq Cost %", (p.get("acqCostPct", 0) or 0) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "Closing Costs", (p.get("closingCosts", 0) or 0), CURRENCY_FMT)
 
     row += 1
-    row = _section_header(ws, row, "Returns")
-    lev_irr = calc.get("levIRR")
-    row = _add_kv_row(ws, row, "Levered IRR", lev_irr / 100 if lev_irr else 0, PERCENT_FMT)
-    unlev_irr = calc.get("unlevIRR")
-    row = _add_kv_row(ws, row, "Unlevered IRR", unlev_irr / 100 if unlev_irr else 0, PERCENT_FMT)
-    row = _add_kv_row(ws, row, "Equity Multiple", calc.get("em", 0), RATIO_FMT)
-    row = _add_kv_row(ws, row, "Going-in Cap", calc.get("goingCap", 0) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws, row, "Yield on Cost", calc.get("yoc", 0) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws, row, "Avg Cash-on-Cash", calc.get("avgCoC", 0) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws, row, "DSCR (Year 1)", calc.get("dscr", 0), RATIO_FMT)
+
+    # Financing Section
+    row = _section_header(ws, row, "Financing", 2)
+    ltv_row = row
+    row = _add_kv_row(ws, row, "LTV", (p.get("ltv", 65) or 65) / 100, PERCENT_FMT)
+    try:
+        wb.defined_names.add(DefinedName("LTV", attr_text=f"Assumptions!$B${ltv_row}"))
+    except:
+        pass
+
+    rate_row = row
+    row = _add_kv_row(ws, row, "Interest Rate", (p.get("rate", 6) or 6) / 100, PERCENT_FMT)
+    try:
+        wb.defined_names.add(DefinedName("Rate", attr_text=f"Assumptions!$B${rate_row}"))
+    except:
+        pass
+
+    amort_row = row
+    row = _add_kv_row(ws, row, "Amortization (yrs)", p.get("amortYears", 25), NUMBER_FMT)
+    try:
+        wb.defined_names.add(DefinedName("AmortYears", attr_text=f"Assumptions!$B${amort_row}"))
+    except:
+        pass
+
+    row = _add_kv_row(ws, row, "Interest Only Period", p.get("ioPeriod", 0), NUMBER_FMT)
+    row = _add_kv_row(ws, row, "Origination Fee %", (p.get("origFee", 0) or 0) / 100, PERCENT_FMT)
 
     row += 1
-    row = _section_header(ws, row, "Exit Analysis")
-    row = _add_kv_row(ws, row, "Exit NOI", calc.get("exitNOI", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws, row, "Exit Value", calc.get("exitVal", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws, row, "Loan Payoff", calc.get("exitBal", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws, row, "Net Sale Proceeds", calc.get("saleNet", 0), CURRENCY_FMT)
 
-    go_cell = ws.cell(row=row, column=1, value="GO / NO-GO")
-    go_cell.font = Font(name="Calibri", bold=True, size=12)
-    verdict = "GO" if calc.get("goGreen") else "NO-GO"
-    v_cell = ws.cell(row=row, column=2, value=verdict)
-    v_cell.font = Font(name="Calibri", bold=True, size=12, color="166534" if calc.get("goGreen") else "991B1B")
-    v_cell.fill = GREEN_FILL if calc.get("goGreen") else RED_FILL
+    # Operations Section
+    row = _section_header(ws, row, "Operations", 2)
+    noi_row = row
+    row = _add_kv_row(ws, row, "Year 1 NOI", p.get("y1NOI", calc.get("y1NOI", 0)), CURRENCY_FMT)
+    try:
+        wb.defined_names.add(DefinedName("Y1NOI", attr_text=f"Assumptions!$B${noi_row}"))
+    except:
+        pass
+
+    growth_row = row
+    row = _add_kv_row(ws, row, "Rent Growth %", (p.get("rentGrowth", 2) or 2) / 100, PERCENT_FMT)
+    try:
+        wb.defined_names.add(DefinedName("RentGrowth", attr_text=f"Assumptions!$B${growth_row}"))
+    except:
+        pass
+
+    row = _add_kv_row(ws, row, "Vacancy %", (p.get("vacancy", 5) or 5) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "CapEx Reserve %", (p.get("capexResPct", 1) or 1) / 100, PERCENT_FMT)
+
+    row += 1
+
+    # Exit Section
+    row = _section_header(ws, row, "Exit", 2)
+    hold_row = row
+    row = _add_kv_row(ws, row, "Hold Period (yrs)", p.get("holdPeriod", 5), NUMBER_FMT)
+    try:
+        wb.defined_names.add(DefinedName("HoldPeriod", attr_text=f"Assumptions!$B${hold_row}"))
+    except:
+        pass
+
+    exit_cap_row = row
+    row = _add_kv_row(ws, row, "Exit Cap Rate", (p.get("exitCap", 6.5) or 6.5) / 100, PERCENT_FMT)
+    try:
+        wb.defined_names.add(DefinedName("ExitCap", attr_text=f"Assumptions!$B${exit_cap_row}"))
+    except:
+        pass
+
+    row = _add_kv_row(ws, row, "Prepay Penalty %", (p.get("prepayPct", 1) or 1) / 100, PERCENT_FMT)
+
+    row += 1
+
+    # Market Leasing Section
+    row = _section_header(ws, row, "Market Leasing", 2)
+    row = _add_kv_row(ws, row, "Renewal Probability %", (p.get("marketRenewalProb", 75) or 75) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "Months Vacant", p.get("marketVacantMonths", 6), NUMBER_FMT)
+    row = _add_kv_row(ws, row, "Free Rent Months (New)", p.get("marketFreeRentMonths", 2), NUMBER_FMT)
+    row = _add_kv_row(ws, row, "TI New Lease /SF", p.get("marketTINewPSF", 15), CURRENCY_CENTS_FMT)
+    row = _add_kv_row(ws, row, "TI Renewal /SF", p.get("marketTIRenewalPSF", 10), CURRENCY_CENTS_FMT)
+    row = _add_kv_row(ws, row, "LC New Lease %", (p.get("marketLCNewPct", 6) or 6) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "LC Renewal %", (p.get("marketLCRenewalPct", 4) or 4) / 100, PERCENT_FMT)
+
+    row += 1
+
+    # Hurdles Section
+    row = _section_header(ws, row, "Return Hurdles", 2)
+    row = _add_kv_row(ws, row, "Tier 1 IRR Threshold", (wf.get("tier1Thresh", 15) or 15) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "Tier 2 IRR Threshold", (wf.get("tier2Thresh", 20) or 20) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "Tier 2 LP Split %", (wf.get("tier2Split", 70) or 70) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "Tier 3 LP Split %", (wf.get("tier3Split", 60) or 60) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws, row, "Min EM Threshold", wf.get("minEM", 1.5), RATIO_FMT)
 
     # ══════════════════════════════════════════
-    # Sheet 2: Cash Flow Projections
+    # Sheet 2: Cash Flows (with formulas)
     # ══════════════════════════════════════════
     ws2 = wb.create_sheet("Cash Flows")
-    cf_headers = ["Year", "NOI", "Debt Service", "IO?", "CapEx/Reserves", "TI/LC",
-                  "VA Income", "VA Cost", "Net CF", "Loan Balance"]
-    col_widths2 = [8, 16, 16, 8, 16, 14, 14, 14, 16, 16]
-    for i, w in enumerate(col_widths2):
-        ws2.column_dimensions[chr(65 + i)].width = w
+    ws2.column_dimensions["A"].width = 28
 
-    ws2.merge_cells(f"A1:{chr(64 + len(cf_headers))}1")
-    ws2.cell(row=1, column=1, value="V2 Cash Flow Projections").font = TITLE_FONT
+    # Set year column widths
+    num_years = len(years)
+    for i in range(num_years + 1):
+        ws2.column_dimensions[get_column_letter(i + 2)].width = 14
 
+    ws2.merge_cells(f"A1:{get_column_letter(num_years + 2)}1")
+    ws2.cell(row=1, column=1, value="Cash Flow Projection (Annual P&L)").font = TITLE_FONT
+
+    # Year headers
     row = 3
-    for ci, h in enumerate(cf_headers, 1):
-        cell = ws2.cell(row=row, column=ci, value=h)
+    ws2.cell(row=row, column=1, value="Line Item").font = HEADER_FONT
+    ws2.cell(row=row, column=1).fill = HEADER_FILL
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+
+    for i, y in enumerate(years):
+        yr_num = y.get("yr", i + 1)
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=f"Year {yr_num}")
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         cell.alignment = Alignment(horizontal="center")
         cell.border = THIN_BORDER
+
+    # Totals column
+    col = num_years + 2
+    cell = ws2.cell(row=row, column=col, value="Total")
+    cell.font = HEADER_FONT
+    cell.fill = HEADER_FILL
+    cell.alignment = Alignment(horizontal="center")
+    cell.border = THIN_BORDER
     row += 1
 
-    for y in years:
-        ws2.cell(row=row, column=1, value=y.get("yr", 0)).border = THIN_BORDER
-        ws2.cell(row=row, column=2, value=y.get("noi", 0)).number_format = CURRENCY_FMT
-        ws2.cell(row=row, column=2).border = THIN_BORDER
-        ws2.cell(row=row, column=3, value=y.get("annDS", 0)).number_format = CURRENCY_FMT
-        ws2.cell(row=row, column=3).border = THIN_BORDER
-        ws2.cell(row=row, column=4, value="Yes" if y.get("useIO") else "No").border = THIN_BORDER
-        capex = (y.get("capexRes", 0) or 0) + (y.get("specCapex", 0) or 0)
-        ws2.cell(row=row, column=5, value=capex).number_format = CURRENCY_FMT
-        ws2.cell(row=row, column=5).border = THIN_BORDER
-        ws2.cell(row=row, column=6, value=y.get("tiLC", 0)).number_format = CURRENCY_FMT
-        ws2.cell(row=row, column=6).border = THIN_BORDER
-        ws2.cell(row=row, column=7, value=y.get("vaInc", 0)).number_format = CURRENCY_FMT
-        ws2.cell(row=row, column=7).border = THIN_BORDER
-        ws2.cell(row=row, column=8, value=y.get("vaCost", 0)).number_format = CURRENCY_FMT
-        ws2.cell(row=row, column=8).border = THIN_BORDER
-        cf_cell = ws2.cell(row=row, column=9, value=y.get("levCF", 0))
-        cf_cell.number_format = CURRENCY_FMT
-        cf_cell.border = THIN_BORDER
-        cf_cell.font = Font(name="Calibri", bold=True, color="166534" if (y.get("levCF", 0) or 0) > 0 else "991B1B")
-        ws2.cell(row=row, column=10, value=y.get("loanBal", 0)).number_format = CURRENCY_FMT
-        ws2.cell(row=row, column=10).border = THIN_BORDER
-        row += 1
+    # Revenue section
+    row = _section_header(ws2, row, "REVENUE", num_years + 2)
+
+    # Potential Base Rent
+    br_row = row
+    ws2.cell(row=row, column=1, value="Potential Base Rent").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=y.get("baseRent", 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # CAM / Expense Recovery
+    cam_row = row
+    ws2.cell(row=row, column=1, value="CAM / Expense Recovery").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=y.get("cam", 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # Potential Gross Revenue (formula)
+    pgr_row = row
+    ws2.cell(row=row, column=1, value="Potential Gross Revenue").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i in range(num_years):
+        col = i + 2
+        col_letter = get_column_letter(col)
+        cell = ws2.cell(row=row, column=col, value=f"={col_letter}{br_row}+{col_letter}{cam_row}")
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # Vacancy Loss
+    vac_row = row
+    ws2.cell(row=row, column=1, value="Vacancy Loss").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=-(y.get("vacancyLoss", 0) or 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # Free Rent
+    fr_row = row
+    ws2.cell(row=row, column=1, value="Free Rent").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=-(y.get("freeRentLoss", 0) or y.get("freeRent", 0) or 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # Effective Gross Revenue (formula)
+    egr_row = row
+    ws2.cell(row=row, column=1, value="Effective Gross Revenue").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i in range(num_years):
+        col = i + 2
+        col_letter = get_column_letter(col)
+        cell = ws2.cell(row=row, column=col, value=f"={col_letter}{pgr_row}+{col_letter}{vac_row}+{col_letter}{fr_row}")
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    row += 1
+    row = _section_header(ws2, row, "NET OPERATING INCOME", num_years + 2)
+
+    # NOI
+    noi_row = row
+    ws2.cell(row=row, column=1, value="NOI").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=y.get("noi", 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    row += 1
+    row = _section_header(ws2, row, "DEBT & CASH FLOW", num_years + 2)
+
+    # Debt Service
+    ds_row = row
+    ws2.cell(row=row, column=1, value="Debt Service").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=-(y.get("annDS", 0) or 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # CapEx & Reserves
+    capex_row = row
+    ws2.cell(row=row, column=1, value="CapEx & Reserves").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        capex_val = -((y.get("capexRes", 0) or 0) + (y.get("specCapex", 0) or 0))
+        cell = ws2.cell(row=row, column=col, value=capex_val)
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # TI / LC
+    tilc_row = row
+    ws2.cell(row=row, column=1, value="TI / LC").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=-(y.get("tiLC", 0) or 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # Value-Add Income
+    vai_row = row
+    ws2.cell(row=row, column=1, value="Value-Add Income").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=y.get("vaInc", 0) or 0)
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    # Value-Add Cost
+    vac_row = row
+    ws2.cell(row=row, column=1, value="Value-Add Cost").font = LABEL_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=-(y.get("vaCost", 0) or 0))
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+    row += 1
+
+    row += 1
+    # Net Cash Flow (formula)
+    ncf_row = row
+    ws2.cell(row=row, column=1, value="Net Cash Flow").font = Font(name="Calibri", bold=True, size=11)
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    ws2.cell(row=row, column=1).fill = AMBER_FILL
+    for i in range(num_years):
+        col = i + 2
+        col_letter = get_column_letter(col)
+        cell = ws2.cell(row=row, column=col,
+                       value=f"={col_letter}{noi_row}+{col_letter}{ds_row}+{col_letter}{capex_row}+{col_letter}{tilc_row}+{col_letter}{vai_row}+{col_letter}{vac_row}")
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+        cell.fill = AMBER_FILL
+        cell.font = Font(name="Calibri", bold=True)
+
+    # Totals column
+    col = num_years + 2
+    col_letter = get_column_letter(col)
+    cell = ws2.cell(row=row, column=col, value=f"=SUM({get_column_letter(2)}{ncf_row}:{get_column_letter(num_years+1)}{ncf_row})")
+    cell.number_format = CURRENCY_FMT
+    cell.border = THIN_BORDER
+    cell.fill = AMBER_FILL
+    cell.font = Font(name="Calibri", bold=True)
 
     # ══════════════════════════════════════════
-    # Sheet 3: LP/GP Waterfall
+    # Sheet 3: Returns (with formulas)
     # ══════════════════════════════════════════
-    ws3 = wb.create_sheet("Waterfall")
-    ws3.column_dimensions["A"].width = 28
-    ws3.column_dimensions["B"].width = 20
-    ws3.column_dimensions["C"].width = 20
+    ws3 = wb.create_sheet("Returns")
+    ws3.column_dimensions["A"].width = 30
+    ws3.column_dimensions["B"].width = 22
 
-    ws3.merge_cells("A1:C1")
-    ws3.cell(row=1, column=1, value="LP / GP Waterfall Distribution").font = TITLE_FONT
+    ws3.merge_cells("A1:B1")
+    ws3.cell(row=1, column=1, value="Investment Returns Summary").font = TITLE_FONT
 
     row = 3
-    row = _section_header(ws3, row, "Waterfall Configuration", 3)
-    row = _add_kv_row(ws3, row, "LP Equity %", (wf.get("lpPercent", 90) or 90) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "GP Equity %", (wf.get("gpPercent", 10) or 10) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Preferred Return", (wf.get("prefReturn", 8) or 8) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Catch-Up", "Yes" if wf.get("catchUp") else "No")
-    row = _add_kv_row(ws3, row, "Tier 1 Split (LP)", (wf.get("tier1Split", 80) or 80) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Tier 1 Threshold", (wf.get("tier1Thresh", 15) or 15) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Tier 2 Split (LP)", (wf.get("tier2Split", 70) or 70) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Tier 2 Threshold", (wf.get("tier2Thresh", 20) or 20) / 100, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Tier 3 Split (LP)", (wf.get("tier3Split", 60) or 60) / 100, PERCENT_FMT)
+    row = _section_header(ws3, row, "Core Metrics", 2)
+
+    row = _add_kv_row(ws3, row, "Levered IRR", calc.get("levIRR", 0) / 100 if calc.get("levIRR") else 0, PERCENT_FMT)
+    row = _add_kv_row(ws3, row, "Unlevered IRR", calc.get("unlevIRR", 0) / 100 if calc.get("unlevIRR") else 0, PERCENT_FMT)
+    row = _add_kv_row(ws3, row, "Equity Multiple", calc.get("em", 0), RATIO_FMT)
+    row = _add_kv_row(ws3, row, "Average CoC", calc.get("avgCoC", 0) / 100 if calc.get("avgCoC") else 0, PERCENT_FMT)
+    row = _add_kv_row(ws3, row, "DSCR (Year 1)", calc.get("dscr", 0), RATIO_FMT)
 
     row += 1
-    row = _section_header(ws3, row, "Distribution Summary", 3)
+    row = _section_header(ws3, row, "Capital Efficiency", 2)
+    row = _add_kv_row(ws3, row, "Going-in Cap Rate", calc.get("goingCap", 0) / 100 if calc.get("goingCap") else 0, PERCENT_FMT)
+    row = _add_kv_row(ws3, row, "Yield on Cost", calc.get("yoc", 0) / 100 if calc.get("yoc") else 0, PERCENT_FMT)
+
+    row += 1
+    row = _section_header(ws3, row, "Exit Analysis", 2)
+    row = _add_kv_row(ws3, row, "Exit NOI", calc.get("exitNOI", 0), CURRENCY_FMT)
+    row = _add_kv_row(ws3, row, "Exit Value", calc.get("exitVal", 0), CURRENCY_FMT)
+    row = _add_kv_row(ws3, row, "Loan Payoff", calc.get("exitBal", 0), CURRENCY_FMT)
+    row = _add_kv_row(ws3, row, "Net Sale Proceeds", calc.get("saleNet", 0), CURRENCY_FMT)
+
+    row += 1
+    row = _section_header(ws3, row, "Investment Decision", 2)
+    go_cell = ws3.cell(row=row, column=1, value="GO / NO-GO")
+    go_cell.font = Font(name="Calibri", bold=True, size=12)
+    go_cell.border = THIN_BORDER
+    verdict = "GO" if calc.get("goGreen") else "NO-GO"
+    v_cell = ws3.cell(row=row, column=2, value=verdict)
+    v_cell.font = Font(name="Calibri", bold=True, size=12, color="166534" if calc.get("goGreen") else "991B1B")
+    v_cell.fill = GREEN_FILL if calc.get("goGreen") else RED_FILL
+    v_cell.border = THIN_BORDER
+
+    # ══════════════════════════════════════════
+    # Sheet 4: Waterfall (with tier labels)
+    # ══════════════════════════════════════════
+    ws4 = wb.create_sheet("Waterfall")
+    ws4.column_dimensions["A"].width = 28
+    ws4.column_dimensions["B"].width = 20
+    ws4.column_dimensions["C"].width = 20
+
+    ws4.merge_cells("A1:C1")
+    ws4.cell(row=1, column=1, value="LP / GP Waterfall Distribution").font = TITLE_FONT
+
+    row = 3
+    row = _section_header(ws4, row, "Waterfall Configuration", 3)
+    row = _add_kv_row(ws4, row, "LP Equity %", (wf.get("lpPercent", 90) or 90) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws4, row, "GP Equity %", (wf.get("gpPercent", 10) or 10) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws4, row, "Preferred Return", (wf.get("prefReturn", 8) or 8) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws4, row, "Catch-Up", "Yes" if wf.get("catchUp") else "No")
+    row = _add_kv_row(ws4, row, "Tier 1 IRR Threshold", (wf.get("tier1Thresh", 15) or 15) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws4, row, "Tier 1 LP Split", (wf.get("tier1Split", 80) or 80) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws4, row, "Tier 2 IRR Threshold", (wf.get("tier2Thresh", 20) or 20) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws4, row, "Tier 2 LP Split", (wf.get("tier2Split", 70) or 70) / 100, PERCENT_FMT)
+    row = _add_kv_row(ws4, row, "Tier 3 LP Split", (wf.get("tier3Split", 60) or 60) / 100, PERCENT_FMT)
+
+    row += 1
+    row = _section_header(ws4, row, "Distribution Summary", 3)
     # Header row
     for ci, h in enumerate(["Metric", "LP", "GP"], 1):
-        cell = ws3.cell(row=row, column=ci, value=h)
+        cell = ws4.cell(row=row, column=ci, value=h)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         cell.alignment = Alignment(horizontal="center")
@@ -810,82 +1093,82 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
          (calc.get("gpOut", 0) or 0) - (calc.get("gpEq", 0) or 0)),
     ]
     for label, lp_val, gp_val in dist_rows:
-        ws3.cell(row=row, column=1, value=label).font = LABEL_FONT
-        ws3.cell(row=row, column=1).border = THIN_BORDER
-        ws3.cell(row=row, column=2, value=lp_val).number_format = CURRENCY_FMT
-        ws3.cell(row=row, column=2).border = THIN_BORDER
-        ws3.cell(row=row, column=3, value=gp_val).number_format = CURRENCY_FMT
-        ws3.cell(row=row, column=3).border = THIN_BORDER
+        ws4.cell(row=row, column=1, value=label).font = LABEL_FONT
+        ws4.cell(row=row, column=1).border = THIN_BORDER
+        ws4.cell(row=row, column=2, value=lp_val).number_format = CURRENCY_FMT
+        ws4.cell(row=row, column=2).border = THIN_BORDER
+        ws4.cell(row=row, column=3, value=gp_val).number_format = CURRENCY_FMT
+        ws4.cell(row=row, column=3).border = THIN_BORDER
         row += 1
 
     # IRR and EM
     lp_irr = calc.get("lpIRR")
     gp_irr = calc.get("gpIRR")
-    ws3.cell(row=row, column=1, value="IRR").font = LABEL_FONT
-    ws3.cell(row=row, column=1).border = THIN_BORDER
-    ws3.cell(row=row, column=2, value=lp_irr / 100 if lp_irr else 0).number_format = PERCENT_FMT
-    ws3.cell(row=row, column=2).border = THIN_BORDER
-    ws3.cell(row=row, column=3, value=gp_irr / 100 if gp_irr else 0).number_format = PERCENT_FMT
-    ws3.cell(row=row, column=3).border = THIN_BORDER
+    ws4.cell(row=row, column=1, value="IRR").font = LABEL_FONT
+    ws4.cell(row=row, column=1).border = THIN_BORDER
+    ws4.cell(row=row, column=2, value=lp_irr / 100 if lp_irr else 0).number_format = PERCENT_FMT
+    ws4.cell(row=row, column=2).border = THIN_BORDER
+    ws4.cell(row=row, column=3, value=gp_irr / 100 if gp_irr else 0).number_format = PERCENT_FMT
+    ws4.cell(row=row, column=3).border = THIN_BORDER
     row += 1
 
-    ws3.cell(row=row, column=1, value="Equity Multiple").font = LABEL_FONT
-    ws3.cell(row=row, column=1).border = THIN_BORDER
-    ws3.cell(row=row, column=2, value=calc.get("lpEM", 0)).number_format = RATIO_FMT
-    ws3.cell(row=row, column=2).border = THIN_BORDER
+    ws4.cell(row=row, column=1, value="Equity Multiple").font = LABEL_FONT
+    ws4.cell(row=row, column=1).border = THIN_BORDER
+    ws4.cell(row=row, column=2, value=calc.get("lpEM", 0)).number_format = RATIO_FMT
+    ws4.cell(row=row, column=2).border = THIN_BORDER
     gp_eq = calc.get("gpEq", 0) or 1
-    ws3.cell(row=row, column=3, value=(calc.get("gpOut", 0) or 0) / gp_eq).number_format = RATIO_FMT
-    ws3.cell(row=row, column=3).border = THIN_BORDER
+    ws4.cell(row=row, column=3, value=(calc.get("gpOut", 0) or 0) / gp_eq).number_format = RATIO_FMT
+    ws4.cell(row=row, column=3).border = THIN_BORDER
     row += 1
 
-    ws3.cell(row=row, column=1, value="GP Promote").font = Font(name="Calibri", bold=True, size=11, color="166534")
-    ws3.cell(row=row, column=1).border = THIN_BORDER
-    ws3.cell(row=row, column=2).border = THIN_BORDER
-    promote_cell = ws3.cell(row=row, column=3, value=calc.get("gpPromote", 0))
+    ws4.cell(row=row, column=1, value="GP Promote").font = Font(name="Calibri", bold=True, size=11, color="166534")
+    ws4.cell(row=row, column=1).border = THIN_BORDER
+    ws4.cell(row=row, column=2).border = THIN_BORDER
+    promote_cell = ws4.cell(row=row, column=3, value=calc.get("gpPromote", 0))
     promote_cell.number_format = CURRENCY_FMT
     promote_cell.font = Font(name="Calibri", bold=True, size=11, color="166534")
     promote_cell.fill = GREEN_FILL
     promote_cell.border = THIN_BORDER
 
     # ══════════════════════════════════════════
-    # Sheet 4: Value-Add & CapEx
+    # Sheet 5: Value-Add & CapEx (keep existing)
     # ══════════════════════════════════════════
     if events or cap_items:
-        ws4 = wb.create_sheet("Value-Add & CapEx")
-        ws4.column_dimensions["A"].width = 28
-        ws4.column_dimensions["B"].width = 12
-        ws4.column_dimensions["C"].width = 16
-        ws4.column_dimensions["D"].width = 14
+        ws5 = wb.create_sheet("Value-Add & CapEx")
+        ws5.column_dimensions["A"].width = 28
+        ws5.column_dimensions["B"].width = 12
+        ws5.column_dimensions["C"].width = 16
+        ws5.column_dimensions["D"].width = 14
 
-        ws4.merge_cells("A1:D1")
-        ws4.cell(row=1, column=1, value="Value-Add Events & Capital Expenditures").font = TITLE_FONT
+        ws5.merge_cells("A1:D1")
+        ws5.cell(row=1, column=1, value="Value-Add Events & Capital Expenditures").font = TITLE_FONT
 
         row = 3
         if events:
-            row = _section_header(ws4, row, "Value-Add Events", 4)
+            row = _section_header(ws5, row, "Value-Add Events", 4)
             for ci, h in enumerate(["Label", "Year", "Amount", "Type"], 1):
-                cell = ws4.cell(row=row, column=ci, value=h)
+                cell = ws5.cell(row=row, column=ci, value=h)
                 cell.font = HEADER_FONT
                 cell.fill = HEADER_FILL
                 cell.alignment = Alignment(horizontal="center")
                 cell.border = THIN_BORDER
             row += 1
             for ev in events:
-                ws4.cell(row=row, column=1, value=ev.get("label", "")).border = THIN_BORDER
-                ws4.cell(row=row, column=2, value=ev.get("year", 0)).border = THIN_BORDER
-                ws4.cell(row=row, column=3, value=ev.get("amount", 0)).number_format = CURRENCY_FMT
-                ws4.cell(row=row, column=3).border = THIN_BORDER
+                ws5.cell(row=row, column=1, value=ev.get("label", "")).border = THIN_BORDER
+                ws5.cell(row=row, column=2, value=ev.get("year", 0)).border = THIN_BORDER
+                ws5.cell(row=row, column=3, value=ev.get("amount", 0)).number_format = CURRENCY_FMT
+                ws5.cell(row=row, column=3).border = THIN_BORDER
                 etype = ev.get("type", "cost")
-                t_cell = ws4.cell(row=row, column=4, value=etype.title())
+                t_cell = ws5.cell(row=row, column=4, value=etype.title())
                 t_cell.border = THIN_BORDER
                 t_cell.font = GREEN_FONT if etype == "income" else RED_FONT
                 row += 1
             row += 1
 
         if cap_items:
-            row = _section_header(ws4, row, "CapEx Items", 3)
+            row = _section_header(ws5, row, "CapEx Items", 3)
             for ci, h in enumerate(["Label", "Year", "Amount"], 1):
-                cell = ws4.cell(row=row, column=ci, value=h)
+                cell = ws5.cell(row=row, column=ci, value=h)
                 cell.font = HEADER_FONT
                 cell.fill = HEADER_FILL
                 cell.alignment = Alignment(horizontal="center")
@@ -893,52 +1176,54 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
             row += 1
             total_capex = 0
             for ci_item in cap_items:
-                ws4.cell(row=row, column=1, value=ci_item.get("label", "")).border = THIN_BORDER
-                ws4.cell(row=row, column=2, value=ci_item.get("year", 0)).border = THIN_BORDER
+                ws5.cell(row=row, column=1, value=ci_item.get("label", "")).border = THIN_BORDER
+                ws5.cell(row=row, column=2, value=ci_item.get("year", 0)).border = THIN_BORDER
                 amt = ci_item.get("amount", 0)
-                ws4.cell(row=row, column=3, value=amt).number_format = CURRENCY_FMT
-                ws4.cell(row=row, column=3).border = THIN_BORDER
+                ws5.cell(row=row, column=3, value=amt).number_format = CURRENCY_FMT
+                ws5.cell(row=row, column=3).border = THIN_BORDER
                 total_capex += amt
                 row += 1
-            ws4.cell(row=row, column=1, value="TOTAL").font = Font(name="Calibri", bold=True, size=10)
-            ws4.cell(row=row, column=1).border = THIN_BORDER
-            ws4.cell(row=row, column=3, value=total_capex).number_format = CURRENCY_FMT
-            ws4.cell(row=row, column=3).font = Font(name="Calibri", bold=True)
-            ws4.cell(row=row, column=3).border = THIN_BORDER
+            ws5.cell(row=row, column=1, value="TOTAL").font = Font(name="Calibri", bold=True, size=10)
+            ws5.cell(row=row, column=1).border = THIN_BORDER
+            ws5.cell(row=row, column=3, value=total_capex).number_format = CURRENCY_FMT
+            ws5.cell(row=row, column=3).font = Font(name="Calibri", bold=True)
+            ws5.cell(row=row, column=3).border = THIN_BORDER
 
     # ══════════════════════════════════════════
-    # Sheet 5: Rent Roll (if tenants)
+    # Sheet 6: Rent Roll
     # ══════════════════════════════════════════
     if tenants:
-        ws5 = wb.create_sheet("Rent Roll")
-        rr_h = ["Tenant", "Suite", "SF", "Type", "Rent/SF", "Escal %", "Start", "End", "TI/SF", "LC %"]
-        rr_w = [24, 12, 12, 10, 12, 10, 14, 14, 10, 10]
+        ws6 = wb.create_sheet("Rent Roll")
+        rr_h = ["Tenant", "Suite", "SF", "Type", "Rent/SF", "CAM/SF", "Escal %", "Start", "End", "TI/SF", "LC %"]
+        rr_w = [24, 12, 12, 10, 12, 12, 10, 14, 14, 10, 10]
         for i, w in enumerate(rr_w):
-            ws5.column_dimensions[chr(65 + i)].width = w
+            ws6.column_dimensions[chr(65 + i)].width = w
 
         for ci, h in enumerate(rr_h, 1):
-            cell = ws5.cell(row=1, column=ci, value=h)
+            cell = ws6.cell(row=1, column=ci, value=h)
             cell.font = HEADER_FONT
             cell.fill = HEADER_FILL
             cell.alignment = Alignment(horizontal="center")
             cell.border = THIN_BORDER
 
         for ri, t in enumerate(tenants, 2):
-            ws5.cell(row=ri, column=1, value=t.get("name", "")).border = THIN_BORDER
-            ws5.cell(row=ri, column=2, value=t.get("suite", "")).border = THIN_BORDER
-            ws5.cell(row=ri, column=3, value=t.get("sf", 0)).number_format = NUMBER_FMT
-            ws5.cell(row=ri, column=3).border = THIN_BORDER
-            ws5.cell(row=ri, column=4, value=t.get("type", "NNN")).border = THIN_BORDER
-            ws5.cell(row=ri, column=5, value=t.get("rentPSF", 0)).number_format = CURRENCY_CENTS_FMT
-            ws5.cell(row=ri, column=5).border = THIN_BORDER
-            ws5.cell(row=ri, column=6, value=(t.get("escalPct", 0) or 0) / 100).number_format = PERCENT_FMT
-            ws5.cell(row=ri, column=6).border = THIN_BORDER
-            ws5.cell(row=ri, column=7, value=t.get("start", "")).border = THIN_BORDER
-            ws5.cell(row=ri, column=8, value=t.get("end", "")).border = THIN_BORDER
-            ws5.cell(row=ri, column=9, value=t.get("tiPSF", 0)).number_format = CURRENCY_CENTS_FMT
-            ws5.cell(row=ri, column=9).border = THIN_BORDER
-            ws5.cell(row=ri, column=10, value=(t.get("lcPct", 0) or 0) / 100).number_format = PERCENT_FMT
-            ws5.cell(row=ri, column=10).border = THIN_BORDER
+            ws6.cell(row=ri, column=1, value=t.get("name", "")).border = THIN_BORDER
+            ws6.cell(row=ri, column=2, value=t.get("suite", "")).border = THIN_BORDER
+            ws6.cell(row=ri, column=3, value=t.get("sf", 0)).number_format = NUMBER_FMT
+            ws6.cell(row=ri, column=3).border = THIN_BORDER
+            ws6.cell(row=ri, column=4, value=t.get("type", "NNN")).border = THIN_BORDER
+            ws6.cell(row=ri, column=5, value=t.get("rentPSF", 0)).number_format = CURRENCY_CENTS_FMT
+            ws6.cell(row=ri, column=5).border = THIN_BORDER
+            ws6.cell(row=ri, column=6, value=t.get("camPSF", 0)).number_format = CURRENCY_CENTS_FMT
+            ws6.cell(row=ri, column=6).border = THIN_BORDER
+            ws6.cell(row=ri, column=7, value=(t.get("escalPct", 0) or 0) / 100).number_format = PERCENT_FMT
+            ws6.cell(row=ri, column=7).border = THIN_BORDER
+            ws6.cell(row=ri, column=8, value=t.get("start", "")).border = THIN_BORDER
+            ws6.cell(row=ri, column=9, value=t.get("end", "")).border = THIN_BORDER
+            ws6.cell(row=ri, column=10, value=t.get("tiPSF", 0)).number_format = CURRENCY_CENTS_FMT
+            ws6.cell(row=ri, column=10).border = THIN_BORDER
+            ws6.cell(row=ri, column=11, value=(t.get("lcPct", 0) or 0) / 100).number_format = PERCENT_FMT
+            ws6.cell(row=ri, column=11).border = THIN_BORDER
 
     # ── Write to buffer ──
     buffer = io.BytesIO()

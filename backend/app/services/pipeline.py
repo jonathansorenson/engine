@@ -59,6 +59,17 @@ COLUMN_ALIASES = {
         "lease to", "lease thru", "maturity", "termination",
         "lease expir date", "lease expiration date",
     ],
+    "cam_psf": [
+        "cam psf", "cam/sf", "cam per sf", "cam per sq ft",
+        "cam charges psf", "recovery psf", "expense recovery psf",
+        "nnn recovery psf", "total recovery psf", "opex recovery psf",
+    ],
+    "cam_annual": [
+        "cam", "annual cam", "cam charges", "nnn recovery",
+        "expense recovery", "total recovery", "expense reimbursement",
+        "operating expense recovery", "cam reimbursement",
+        "common area maintenance", "estimated cam",
+    ],
     "lease_type": [
         "lease type", "lease class", "structure",
         "nnn", "gross", "modified gross", "full service",
@@ -306,7 +317,7 @@ def extract_excel_rent_roll(excel_path: str) -> Optional[List[Dict[str, Any]]]:
                     if not val_str or val_str.lower() in ["", "none", "-", "n/a", "null"]:
                         continue
 
-                    if field in ["sf", "annual_rent", "monthly_rent", "rent_psf"]:
+                    if field in ["sf", "annual_rent", "monthly_rent", "rent_psf", "cam_psf", "cam_annual"]:
                         try:
                             cleaned = re.sub(r'[,$\s\(\)]', '', val_str)
                             if cleaned and cleaned.replace('.', '').replace('-', '').isdigit():
@@ -335,9 +346,15 @@ def extract_excel_rent_roll(excel_path: str) -> Optional[List[Dict[str, Any]]]:
                 if "annual_rent" in entry and "monthly_rent" not in entry:
                     entry["monthly_rent"] = entry["annual_rent"] / 12
                 if "annual_rent" in entry and "sf" in entry and "rent_psf" not in entry and entry["sf"] > 0:
-                    entry["rent_psf"] = round(entry["annual_rent"] / entry["sf"], 2)
+                    entry["rent_psf"] = entry["annual_rent"] / entry["sf"]
                 if "rent_psf" in entry and "sf" in entry and "annual_rent" not in entry:
                     entry["annual_rent"] = entry["rent_psf"] * entry["sf"]
+
+                # Derive CAM PSF from annual CAM or vice versa
+                if "cam_annual" in entry and "sf" in entry and "cam_psf" not in entry and entry["sf"] > 0:
+                    entry["cam_psf"] = entry["cam_annual"] / entry["sf"]
+                if "cam_psf" in entry and "sf" in entry and "cam_annual" not in entry:
+                    entry["cam_annual"] = entry["cam_psf"] * entry["sf"]
 
                 # STRICT: require at least one identifier AND one numeric value
                 has_id = "unit" in entry or "tenant" in entry
@@ -738,7 +755,7 @@ def extract_rent_roll_from_pdf_tables(tables: List[Dict[str, Any]]) -> List[Dict
                 if not val_str or val_str.lower() in ["", "none", "-", "n/a"]:
                     continue
 
-                if field in ["sf", "annual_rent", "monthly_rent", "rent_psf"]:
+                if field in ["sf", "annual_rent", "monthly_rent", "rent_psf", "cam_psf", "cam_annual"]:
                     try:
                         cleaned = re.sub(r'[,$\s\(\)]', '', val_str)
                         if cleaned:

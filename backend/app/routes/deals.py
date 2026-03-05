@@ -388,7 +388,11 @@ async def parse_rent_roll_v2(
         for i, r in enumerate(rent_roll):
             rent_psf = r.get("rent_psf") or 0
             if not rent_psf and r.get("annual_rent") and r.get("sf"):
-                rent_psf = round(r["annual_rent"] / r["sf"], 2)
+                rent_psf = r["annual_rent"] / r["sf"]
+
+            cam_psf = r.get("cam_psf") or 0
+            if not cam_psf and r.get("cam_annual") and r.get("sf") and r["sf"] > 0:
+                cam_psf = r["cam_annual"] / r["sf"]
 
             v2_tenants.append({
                 "id": i + 1,
@@ -396,6 +400,7 @@ async def parse_rent_roll_v2(
                 "suite": r.get("unit") or r.get("suite") or "",
                 "sf": r.get("sf") or 0,
                 "rentPSF": rent_psf,
+                "camPSF": cam_psf,
                 "type": "NNN",
                 "escalPct": 3,
                 "start": r.get("lease_start") or "",
