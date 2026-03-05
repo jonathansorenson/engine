@@ -2564,7 +2564,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const [cfPeriod, setCfPeriod] = useState('annual');
   const [saveStatus, setSaveStatus] = useState('saved');
 
-  // Hydrate on mount
+  // Hydrate on mount — pull from saved v2_state first, then fall back to parsed OM data
   useEffect(() => {
     if (initialDeal.v2_state) {
       setP(initialDeal.v2_state.assumptions || V2_DEFAULTS);
@@ -2572,15 +2572,60 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       setTenants(initialDeal.v2_state.tenants || []);
       setEvents(initialDeal.v2_state.valueAddEvents || []);
       setCapItems(initialDeal.v2_state.capexItems || []);
-    }
-    if (initialDeal.parsed_data?.property) {
-      const { name, address, sf } = initialDeal.parsed_data.property;
-      setP(prev => ({
-        ...prev,
-        name: name || prev.name,
-        address: address || prev.address,
-        sf: sf || prev.sf,
-      }));
+    } else if (initialDeal.parsed_data) {
+      // Fresh upload — seed V2 assumptions from the parsed OM data
+      const pd = initialDeal.parsed_data;
+      const prop = pd.property || {};
+      const fin = pd.financials || {};
+      const assum = pd.assumptions || {};
+      const rawPrice = prop.asking_price || fin.asking_price || 0;
+      const noi = fin.noi || 0;
+      const capRate = fin.cap_rate ? (fin.cap_rate > 1 ? fin.cap_rate : fin.cap_rate * 100) : 0;
+      const totalSF = prop.total_sf || fin.total_sf || 0;
+      const purchasePrice = rawPrice > 0 ? rawPrice : (noi > 0 && capRate > 0 ? Math.round(noi / (capRate / 100)) : V2_DEFAULTS.purchasePrice);
+      const address = prop.address ? `${prop.address || ''}${prop.city ? ', ' + prop.city : ''}${prop.state ? ' ' + prop.state : ''}`.trim() : '';
+
+      const hl = [];
+      const seeded = { ...V2_DEFAULTS };
+      if (prop.name) { seeded.name = prop.name; hl.push('name'); }
+      if (address) { seeded.address = address; hl.push('address'); }
+      if (prop.property_type) { seeded.assetType = prop.property_type; hl.push('assetType'); }
+      if (totalSF > 0) { seeded.sf = totalSF; hl.push('sf'); }
+      if (purchasePrice > 0) { seeded.purchasePrice = purchasePrice; hl.push('purchasePrice'); }
+      if (noi > 0) { seeded.year1NOI = noi; hl.push('year1NOI'); }
+      if (capRate > 0) { seeded.exitCap = capRate; hl.push('exitCap'); }
+      // Map parsed assumptions if present
+      if (assum.ltv) seeded.ltv = assum.ltv > 1 ? assum.ltv : assum.ltv * 100;
+      if (assum.interest_rate) seeded.rate = assum.interest_rate > 1 ? assum.interest_rate : assum.interest_rate * 100;
+      if (assum.hold_period) seeded.holdPeriod = assum.hold_period;
+      if (assum.amortization_years) seeded.amort = assum.amortization_years;
+      if (assum.exit_cap_rate) seeded.exitCap = assum.exit_cap_rate > 1 ? assum.exit_cap_rate : assum.exit_cap_rate * 100;
+      if (assum.noi_growth) seeded.rentGrowth = assum.noi_growth > 1 ? assum.noi_growth : assum.noi_growth * 100;
+
+      setP(seeded);
+      setHlF(hl);
+
+      // Seed rent roll if parsed
+      if (pd.rent_roll && pd.rent_roll.length > 0) {
+        const mappedTenants = pd.rent_roll.map((r, i) => ({
+          id: i + 1,
+          name: r.tenant || r.name || `Tenant ${i + 1}`,
+          suite: r.unit || r.suite || '',
+          sf: r.sf || 0,
+          rentPSF: r.rent_psf || (r.annual_rent && r.sf ? r.annual_rent / r.sf : 0),
+          type: 'NNN',
+          escalPct: 3,
+          start: r.lease_start || r.start || '',
+          end: r.lease_end || r.expiry || r.end || '',
+          tiPSF: 0,
+          lcPct: 5,
+          recoveryRatio: 100,
+        }));
+        setTenants(mappedTenants);
+        if (mappedTenants.length > 0) {
+          setP(prev => ({ ...prev, useRentRoll: true }));
+        }
+      }
     }
   }, []);
 
