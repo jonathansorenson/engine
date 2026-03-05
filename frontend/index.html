@@ -2134,13 +2134,17 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
       baseRent = rrBaseRent[yr];
       cam = rrCAM[yr];
       const grossRev = baseRent + cam;
-      // Per-tenant lease expiry vacancy + flat vacancy adj
-      vacancyLoss = rrVacancyLoss[yr] + grossRev * ((p.vacancy || 0) / 100);
-      freeRentLoss = rrFreeRent[yr];
-      const egr = grossRev - vacancyLoss - freeRentLoss;
-      noi = egr; // operating expenses are embedded (NNN structure)
-      tiCost = rrTI[yr] + rrLC[yr]; // TI + LC as capital costs below NOI
-      lcCost = 0; // already combined into tiCost for simplicity
+      if (grossRev > 0) {
+        // Rent roll has actual revenue data
+        vacancyLoss = rrVacancyLoss[yr] + grossRev * ((p.vacancy || 0) / 100);
+        freeRentLoss = rrFreeRent[yr];
+        const egr = grossRev - vacancyLoss - freeRentLoss;
+        noi = egr;
+        tiCost = rrTI[yr] + rrLC[yr];
+      } else {
+        // Tenants exist but have no rent data — fall back to year1NOI
+        noi = (p.year1NOI || 0) * Math.pow(1 + (p.rentGrowth || 0) / 100, yr - 1) * (1 - (p.vacancy || 0) / 100);
+      }
     } else {
       noi = (p.year1NOI || 0) * Math.pow(1 + (p.rentGrowth || 0) / 100, yr - 1) * (1 - (p.vacancy || 0) / 100);
     }
@@ -2720,6 +2724,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           suite: r.unit || r.suite || '',
           sf: r.sf || 0,
           rentPSF: r.rent_psf || (r.annual_rent && r.sf ? r.annual_rent / r.sf : 0),
+          camPSF: r.cam_psf || (r.cam_annual && r.sf ? r.cam_annual / r.sf : 0),
           type: 'NNN',
           escalPct: 3,
           start: r.lease_start || r.start || '',
@@ -4458,7 +4463,12 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   );
 };
 
-        const DashboardView = ({ deal: initialDeal, onBack }) => {
+        /* ═══════════════════════════════════════════════════════════
+         * V1 DASHBOARD — ARCHIVED
+         * All deals now route through DashboardV2View.
+         * Kept for reference — do not delete.
+         * ═══════════════════════════════════════════════════════════ */
+        const DashboardView_ARCHIVED = ({ deal: initialDeal, onBack }) => {
             const [deal, setDeal] = useState(initialDeal);
             const [activeTab, setActiveTab] = useState('overview');
             const [uploadingRentRoll, setUploadingRentRoll] = useState(false);
@@ -5186,11 +5196,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
                     {currentView === 'dashboard' && deal && (
                         <ErrorBoundary onBack={handleBack}>
-                            {(deal.version === '2' || deal.v2_state) ? (
-                                <DashboardV2View deal={deal} onBack={handleBack} />
-                            ) : (
-                                <DashboardView deal={deal} onBack={handleBack} />
-                            )}
+                            <DashboardV2View deal={deal} onBack={handleBack} />
                         </ErrorBoundary>
                     )}
 
