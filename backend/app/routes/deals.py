@@ -355,6 +355,70 @@ async def attach_rent_roll(
         raise HTTPException(status_code=500, detail=f"Error processing rent roll: {str(e)}")
 
 
+@router.post("/parse-rent-roll")
+async def parse_rent_roll_v2(
+    request: Request,
+    excel_file: UploadFile = File(...),
+):
+    """
+    Parse an Excel rent roll and return V2-formatted tenant data.
+    Stateless — does not require a deal ID. Returns JSON array of tenants.
+    """
+    upload_dir = get_upload_dir()
+    excel_path = None
+
+    try:
+        import uuid as _uuid
+        excel_filename = f"rr_parse_{_uuid.uuid4().hex[:8]}_{excel_file.filename}"
+        excel_path = os.path.join(upload_dir, excel_filename)
+        with open(excel_path, "wb") as f:
+            f.write(await excel_file.read())
+
+        from app.services.pipeline import extract_excel_rent_roll
+        rent_roll = extract_excel_rent_roll(excel_path)
+
+        if not rent_roll:
+            raise HTTPException(
+                status_code=400,
+                detail="No rent roll data found. Ensure columns like Unit/Suite, Tenant, SF, Rent, and Lease dates exist."
+            )
+
+        # Map to V2 tenant schema
+        v2_tenants = []
+        for i, r in enumerate(rent_roll):
+            rent_psf = r.get("rent_psf") or 0
+            if not rent_psf and r.get("annual_rent") and r.get("sf"):
+                rent_psf = round(r["annual_rent"] / r["sf"], 2)
+
+            v2_tenants.append({
+                "id": i + 1,
+                "name": r.get("tenant") or r.get("name") or f"Tenant {i + 1}",
+                "suite": r.get("unit") or r.get("suite") or "",
+                "sf": r.get("sf") or 0,
+                "rentPSF": rent_psf,
+                "type": "NNN",
+                "escalPct": 3,
+                "start": r.get("lease_start") or "",
+                "end": r.get("lease_end") or r.get("expiry") or "",
+                "tiPSF": 0,
+                "lcPct": 5,
+                "recoveryRatio": 100,
+            })
+
+        return {"tenants": v2_tenants, "count": len(v2_tenants)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing rent roll: {str(e)}")
+    finally:
+        if excel_path and os.path.exists(excel_path):
+            try:
+                os.remove(excel_path)
+            except Exception:
+                pass
+
+
 @router.put("/{deal_id}/assumptions", response_model=DealResponse)
 async def update_assumptions(
     deal_id: str,

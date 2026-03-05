@@ -2085,8 +2085,9 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
   const exitBal = years[years.length - 1]?.loanBal || 0;
   const prepayAmt = exitBal * ((p.prepayPct || 1) / 100);
   const saleNet = exitVal - exitBal - prepayAmt;
-  const goingCap = pp > 0 ? (p.year1NOI || 0) / pp * 100 : 0;
-  const yoc = totalCost > 0 ? (p.year1NOI || 0) / totalCost * 100 : 0;
+  const yr1ModelNOI = years[0]?.noi || 0;
+  const goingCap = pp > 0 ? yr1ModelNOI / pp * 100 : 0;
+  const yoc = totalCost > 0 ? yr1ModelNOI / totalCost * 100 : 0;
 
   // IRR cash flows
   const opCFs = years.map(y => y.levCF);
@@ -2234,7 +2235,7 @@ const V2Card = ({ label, value, sub, good }) => (
   </div>
 );
 
-const V2Inp = ({ label, value, onChange, prefix, suffix, type = 'text', hl }) => (
+const V2Inp = ({ label, value, onChange, prefix, suffix, type = 'text', hl, placeholder }) => (
   <div style={{ marginBottom: '12px' }}>
     {label && <label style={{
       display: 'block',
@@ -2253,6 +2254,7 @@ const V2Inp = ({ label, value, onChange, prefix, suffix, type = 'text', hl }) =>
       <input
         type={type}
         value={value}
+        placeholder={placeholder || ''}
         onChange={(e) => onChange(e.target.value)}
         style={{
           flex: 1,
@@ -2563,6 +2565,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const [sensM, setSensM] = useState('irr');
   const [cfPeriod, setCfPeriod] = useState('annual');
   const [saveStatus, setSaveStatus] = useState('saved');
+  const [rrUpSt, setRrUpSt] = useState('idle'); // idle | loading | success | error
+  const [rrUpMsg, setRrUpMsg] = useState('');
+  const rrFileRef = useRef(null);
 
   // Hydrate on mount — pull from saved v2_state first, then fall back to parsed OM data
   useEffect(() => {
@@ -2592,7 +2597,11 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       if (prop.property_type) { seeded.assetType = prop.property_type; hl.push('assetType'); }
       if (totalSF > 0) { seeded.sf = totalSF; hl.push('sf'); }
       if (purchasePrice > 0) { seeded.purchasePrice = purchasePrice; hl.push('purchasePrice'); }
-      if (noi > 0) { seeded.year1NOI = noi; hl.push('year1NOI'); }
+      if (noi > 0) {
+        seeded.year1NOI = noi;
+        seeded.vacancy = 0; // OM NOI is already net of vacancy — don't double-count
+        hl.push('year1NOI');
+      }
       if (capRate > 0) { seeded.exitCap = capRate; hl.push('exitCap'); }
       // Map parsed assumptions if present
       if (assum.ltv) seeded.ltv = assum.ltv > 1 ? assum.ltv : assum.ltv * 100;
@@ -2628,6 +2637,40 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       }
     }
   }, []);
+
+  // Rent roll Excel upload handler
+  const handleRRUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRrUpSt('loading');
+    setRrUpMsg('Parsing rent roll...');
+    const fd = new FormData();
+    fd.append('excel_file', file);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/deals/parse-rent-roll`, { method: 'POST', body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tenants && data.tenants.length > 0) {
+          setTenants(data.tenants);
+          setP(prev => ({ ...prev, useRentRoll: true, vacancy: 0 }));
+          setRrUpMsg(`Loaded ${data.count} tenants from Excel`);
+          setRrUpSt('success');
+        } else {
+          setRrUpMsg('No tenant data found in file');
+          setRrUpSt('error');
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setRrUpMsg(err.detail || 'Upload failed');
+        setRrUpSt('error');
+      }
+    } catch (err) {
+      setRrUpMsg('Upload failed: ' + err.message);
+      setRrUpSt('error');
+    }
+    // Reset file input so same file can be re-uploaded
+    if (rrFileRef.current) rrFileRef.current.value = '';
+  };
 
   // Auto-save
   useEffect(() => {
@@ -2665,7 +2708,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         if (obj.propertyName) { setP(prev => ({ ...prev, name: obj.propertyName })); hl.push('name'); }
         if (obj.address) { setP(prev => ({ ...prev, address: obj.address })); hl.push('address'); }
         if (obj.squareFeet) { setP(prev => ({ ...prev, sf: obj.squareFeet })); hl.push('sf'); }
-        if (obj.year1NOI) { setP(prev => ({ ...prev, year1NOI: obj.year1NOI })); hl.push('year1NOI'); }
+        if (obj.year1NOI) { setP(prev => ({ ...prev, year1NOI: obj.year1NOI, vacancy: 0 })); hl.push('year1NOI'); }
         setHlF(hl);
         setOmMsg('Extraction complete! Fields highlighted.');
         setOmSt('success');
@@ -3005,11 +3048,12 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                       suffix="%"
                     />
                     <V2Inp
-                      label="Vacancy %"
+                      label="Vacancy Adj %"
                       type="number"
                       value={p.vacancy}
                       onChange={(v) => setP(prev => ({ ...prev, vacancy: parseFloat(v) || 0 }))}
                       suffix="%"
+                      placeholder="0 if NOI is net"
                     />
                   </>
                 )}
@@ -3140,7 +3184,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   label="Levered IRR"
                   value={fmtP(calc.levIRR)}
                   sub={`vs ${p.hurdleIRR}% hurdle`}
-                  good={calc.levIRR >= (p.hurdleIRR / 100)}
+                  good={calc.levIRR >= p.hurdleIRR}
                 />
                 <V2Card
                   label="Unlevered IRR"
@@ -3161,7 +3205,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card
                   label="Going-in Cap"
                   value={fmtP(calc.goingCap)}
-                  sub="Y1 NOI / PP"
+                  sub="Model NOI / PP"
                 />
                 <V2Card
                   label="Yield on Cost"
@@ -3321,33 +3365,86 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 />
               </div>
 
-              <button
-                onClick={() => setTenants(prev => [...prev, {
-                  name: '',
-                  suite: '',
-                  sf: 0,
-                  leaseType: 'NNN',
-                  baseSF: 0,
-                  escalation: 0,
-                  leaseStart: '',
-                  leaseEnd: '',
-                  nnnRecov: 0,
-                  tiPSF: 0,
-                  lcPct: 0,
-                }])}
-                style={{
-                  backgroundColor: 'var(--teal)',
-                  border: 'none',
-                  color: '#fff',
-                  padding: '8px 12px',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  marginBottom: '16px',
-                }}
-              >
-                + Add Tenant
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setTenants(prev => [...prev, {
+                    id: prev.length + 1,
+                    name: '',
+                    suite: '',
+                    sf: 0,
+                    rentPSF: 0,
+                    type: 'NNN',
+                    escalPct: 3,
+                    start: '',
+                    end: '',
+                    tiPSF: 0,
+                    lcPct: 5,
+                    recoveryRatio: 100,
+                  }])}
+                  style={{
+                    backgroundColor: 'var(--teal)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  + Add Tenant
+                </button>
+
+                <input
+                  ref={rrFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleRRUpload}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  onClick={() => rrFileRef.current?.click()}
+                  disabled={rrUpSt === 'loading'}
+                  style={{
+                    backgroundColor: 'var(--blue)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    cursor: rrUpSt === 'loading' ? 'wait' : 'pointer',
+                    fontSize: '12px',
+                    opacity: rrUpSt === 'loading' ? 0.6 : 1,
+                  }}
+                >
+                  {rrUpSt === 'loading' ? '⏳ Parsing...' : '📎 Upload Excel Rent Roll'}
+                </button>
+
+                {tenants.length > 0 && (
+                  <button
+                    onClick={() => { if (confirm('Clear all tenants?')) setTenants([]); }}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--red)',
+                      color: 'var(--red)',
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    Clear All
+                  </button>
+                )}
+
+                {rrUpMsg && (
+                  <span style={{
+                    fontSize: '11px',
+                    color: rrUpSt === 'success' ? 'var(--teal)' : rrUpSt === 'error' ? 'var(--red)' : 'var(--text-secondary)',
+                    marginLeft: '4px',
+                  }}>
+                    {rrUpMsg}
+                  </span>
+                )}
+              </div>
 
               {tenants.map((t, i) => (
                 <div key={i} style={{
@@ -3357,13 +3454,30 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   padding: '12px',
                   marginBottom: '12px',
                 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                      {t.name || `Tenant ${i + 1}`}
+                      {t.suite ? ` — ${t.suite}` : ''}
+                    </span>
+                    <button
+                      onClick={() => setTenants(tenants.filter((_, j) => j !== i))}
+                      style={{
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: 'var(--red)',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        padding: '2px 6px',
+                      }}
+                    >✕</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                     <V2Inp
                       label="Tenant Name"
                       value={t.name || ''}
                       onChange={(v) => {
                         const nt = [...tenants];
-                        nt[i].name = v;
+                        nt[i] = { ...nt[i], name: v };
                         setTenants(nt);
                       }}
                     />
@@ -3372,21 +3486,45 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                       value={t.suite || ''}
                       onChange={(v) => {
                         const nt = [...tenants];
-                        nt[i].suite = v;
+                        nt[i] = { ...nt[i], suite: v };
                         setTenants(nt);
                       }}
                     />
                     <V2Inp
-                      label="Square Feet"
+                      label="SF"
                       type="number"
                       value={t.sf || 0}
                       onChange={(v) => {
                         const nt = [...tenants];
-                        nt[i].sf = parseFloat(v) || 0;
+                        nt[i] = { ...nt[i], sf: parseFloat(v) || 0 };
                         setTenants(nt);
                       }}
                     />
-                    <div style={{ marginBottom: '12px' }}>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    <V2Inp
+                      label="Rent /SF"
+                      type="number"
+                      value={t.rentPSF || 0}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i] = { ...nt[i], rentPSF: parseFloat(v) || 0 };
+                        setTenants(nt);
+                      }}
+                      prefix="$"
+                    />
+                    <V2Inp
+                      label="Escalation"
+                      type="number"
+                      value={t.escalPct || 0}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i] = { ...nt[i], escalPct: parseFloat(v) || 0 };
+                        setTenants(nt);
+                      }}
+                      suffix="%"
+                    />
+                    <div style={{ marginBottom: '8px' }}>
                       <label style={{
                         display: 'block',
                         fontSize: '11px',
@@ -3395,9 +3533,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         textTransform: 'uppercase',
                         marginBottom: '6px',
                       }}>Lease Type</label>
-                      <select value={t.leaseType || 'NNN'} onChange={(e) => {
+                      <select value={t.type || 'NNN'} onChange={(e) => {
                         const nt = [...tenants];
-                        nt[i].leaseType = e.target.value;
+                        nt[i] = { ...nt[i], type: e.target.value };
                         setTenants(nt);
                       }} style={{
                         width: '100%',
@@ -3413,43 +3551,64 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         <option>Modified Gross</option>
                       </select>
                     </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                     <V2Inp
-                      label="Base Rent /SF"
-                      type="number"
-                      value={t.baseSF || 0}
+                      label="Lease Start"
+                      type="date"
+                      value={t.start || ''}
                       onChange={(v) => {
                         const nt = [...tenants];
-                        nt[i].baseSF = parseFloat(v) || 0;
+                        nt[i] = { ...nt[i], start: v };
+                        setTenants(nt);
+                      }}
+                    />
+                    <V2Inp
+                      label="Lease End"
+                      type="date"
+                      value={t.end || ''}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i] = { ...nt[i], end: v };
+                        setTenants(nt);
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <V2Inp
+                      label="TI /SF"
+                      type="number"
+                      value={t.tiPSF || 0}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i] = { ...nt[i], tiPSF: parseFloat(v) || 0 };
                         setTenants(nt);
                       }}
                       prefix="$"
                     />
                     <V2Inp
-                      label="Escalation %"
+                      label="LC %"
                       type="number"
-                      value={t.escalation || 0}
+                      value={t.lcPct || 0}
                       onChange={(v) => {
                         const nt = [...tenants];
-                        nt[i].escalation = parseFloat(v) || 0;
+                        nt[i] = { ...nt[i], lcPct: parseFloat(v) || 0 };
+                        setTenants(nt);
+                      }}
+                      suffix="%"
+                    />
+                    <V2Inp
+                      label="NNN Recovery %"
+                      type="number"
+                      value={t.recoveryRatio || 100}
+                      onChange={(v) => {
+                        const nt = [...tenants];
+                        nt[i] = { ...nt[i], recoveryRatio: parseFloat(v) || 0 };
                         setTenants(nt);
                       }}
                       suffix="%"
                     />
                   </div>
-                  <button
-                    onClick={() => setTenants(tenants.filter((_, j) => j !== i))}
-                    style={{
-                      backgroundColor: 'rgba(248, 113, 113, 0.2)',
-                      border: '1px solid var(--red)',
-                      color: 'var(--red)',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                    }}
-                  >
-                    Remove
-                  </button>
                 </div>
               ))}
             </V2Sect>
