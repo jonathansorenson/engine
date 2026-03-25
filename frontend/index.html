@@ -2074,61 +2074,75 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
         if (le >= yrStart && le < yrEnd) { expiryYr = yr; break; }
       }
 
+      // Compute absolute month where downtime begins (1-indexed from Year 1 Month 1)
+      // Tenant occupies through le.getMonth(), downtime starts the following month
+      let downtimeStartAbsMonth = null;
+      if (expiryYr) {
+        const lastOccupiedMonthInYear = le.getMonth() + 1; // 1-indexed within expiry year
+        downtimeStartAbsMonth = (expiryYr - 1) * 12 + lastOccupiedMonthInYear + 1;
+      }
+
+      // Helper: count months of range [startAbs, endAbs] falling within model year yr
+      const monthsInYear = (startAbs, endAbs, yr) => {
+        const yrFirst = (yr - 1) * 12 + 1;
+        const yrLast = yr * 12;
+        return Math.max(0, Math.min(endAbs, yrLast) - Math.max(startAbs, yrFirst) + 1);
+      };
+
       for (let yr = 1; yr <= hold + 1; yr++) {
         const yrStart = new Date(today.getFullYear() + yr - 1, 0, 1);
         const elapsed = Math.max(0, (yrStart - ls) / (365.25 * 86400 * 1000));
         const escFactor = Math.pow(1 + esc, elapsed);
+        const annualBase = sf * t.rentPSF * escFactor;
+        const annualCam = sf * (t.camPSF || 0) * escFactor;
+        const monthlyBase = annualBase / 12;
+        const monthlyCam = annualCam / 12;
 
         if (!expiryYr || yr < expiryYr) {
-          // Pre-expiry: full rent collection
+          // Pre-expiry: full rent collection (unchanged)
           if (yrStart >= ls) {
-            rrBaseRent[yr] += sf * t.rentPSF * escFactor;
-            rrCAM[yr] += sf * (t.camPSF || 0) * escFactor;
+            rrBaseRent[yr] += annualBase;
+            rrCAM[yr] += annualCam;
           }
-        } else if (yr === expiryYr && useML) {
-          // Expiry year: apply weighted-blend turnover costs
-          const monthlyRent = (sf * t.rentPSF * escFactor) / 12;
-          const monthlyCam = (sf * (t.camPSF || 0) * escFactor) / 12;
 
-          // Months occupied before expiry in this year
-          const yrStartMonth = yrStart.getMonth();
-          const leMonth = le.getMonth();
-          const occupiedMonths = Math.max(0, Math.min(12, le.getMonth() - yrStart.getMonth() + (le.getFullYear() === yrStart.getFullYear() ? 1 : 12)));
+        } else if (useML && downtimeStartAbsMonth) {
+          // Expiry year + post-expiry: month-level turnover simulation
+          // Phases: vacancy → free rent → paying (new lease)
+          const vacEndAbs = downtimeStartAbsMonth + vacMonths - 1;
+          const freeStartAbs = vacEndAbs + 1;
+          const freeEndAbs = freeStartAbs + freeMonths - 1;
 
-          // Full year of rent (potential)
-          const fullBaseRent = sf * t.rentPSF * escFactor;
-          const fullCam = sf * (t.camPSF || 0) * escFactor;
-          rrBaseRent[yr] += fullBaseRent;
-          rrCAM[yr] += fullCam;
+          // Count how many months of each phase fall in this year
+          const vacInYear = monthsInYear(downtimeStartAbsMonth, vacEndAbs, yr);
+          const freeInYear = monthsInYear(freeStartAbs, freeEndAbs, yr);
 
-          // Weighted vacancy cost: probability-blended
-          // If renews: no vacancy, renewal TI/LC only
-          // If vacates: vacancy months lost rent, free rent on re-lease, new TI/LC
-          const vacCostNew = vacMonths * (monthlyRent + monthlyCam);
-          const freeRentCost = freeMonths * monthlyRent;
+          // Gross-up: record full 12-month potential rent
+          rrBaseRent[yr] += annualBase;
+          rrCAM[yr] += annualCam;
 
-          // Weighted blend
-          const blendedVacancy = (1 - renewProb) * vacCostNew;
-          const blendedFreeRent = (1 - renewProb) * freeRentCost;
-          const blendedTI = renewProb * (sf * tiRenewPSF) + (1 - renewProb) * (sf * tiNewPSF);
-          const blendedLC = renewProb * (fullBaseRent * lcRenewPct) + (1 - renewProb) * (fullBaseRent * lcNewPct);
+          // Vacancy loss: base + CAM lost during vacant months (weighted by non-renewal prob)
+          rrVacancyLoss[yr] += (1 - renewProb) * vacInYear * (monthlyBase + monthlyCam);
 
-          rrVacancyLoss[yr] += blendedVacancy;
-          rrFreeRent[yr] += blendedFreeRent;
-          rrTI[yr] += blendedTI;
-          rrLC[yr] += blendedLC;
+          // Free rent loss: base rent lost during free rent months (CAM still collected)
+          rrFreeRent[yr] += (1 - renewProb) * freeInYear * monthlyBase;
+
+          // TI / LC: one-time costs in the expiry year only
+          if (yr === expiryYr) {
+            rrTI[yr] += renewProb * (sf * tiRenewPSF) + (1 - renewProb) * (sf * tiNewPSF);
+            rrLC[yr] += renewProb * (annualBase * lcRenewPct) + (1 - renewProb) * (annualBase * lcNewPct);
+          }
+
         } else if (yr === expiryYr && !useML) {
           // No market leasing — just collect rent through expiry
           if (yrStart >= ls) {
-            rrBaseRent[yr] += sf * t.rentPSF * escFactor;
-            rrCAM[yr] += sf * (t.camPSF || 0) * escFactor;
+            rrBaseRent[yr] += annualBase;
+            rrCAM[yr] += annualCam;
           }
+
         } else {
-          // Post-expiry: tenant re-leased (or renewed) — continue at market with escalation
-          const postExpiryYrs = yr - expiryYr;
-          const postEscFactor = Math.pow(1 + esc, elapsed);
-          rrBaseRent[yr] += sf * t.rentPSF * postEscFactor;
-          rrCAM[yr] += sf * (t.camPSF || 0) * postEscFactor;
+          // Post-expiry, no market leasing — continue full rent with escalation
+          rrBaseRent[yr] += annualBase;
+          rrCAM[yr] += annualCam;
         }
       }
     });
