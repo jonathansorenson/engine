@@ -1994,6 +1994,7 @@ const fmtP = (v, d=1) => isN(v) ? v.toFixed(d) + "%" : "—";
 const fmtM = v => isN(v) ? "$" + (v / 1e6).toFixed(2) + "M" : "—";
 const fmtK = v => isN(v) ? "$" + Math.round(v).toLocaleString() : "—";
 const fmtX = v => isN(v) ? v.toFixed(2) + "x" : "—";
+const fmtM0 = (v) => isN(v) ? v.toLocaleString() : '—';
 
 // V2 IRR Calculator (500 iterations, more robust)
 const calcIRRv2 = (cfs) => {
@@ -2287,6 +2288,7 @@ const V2_DEFAULTS = {
   tiReserve: 0,
   lcReservePct: 3,
   showTILC: true,
+  hasOutsideInvestors: true,
   // Market Leasing Assumptions
   useMarketLeasing: true,
   marketRenewalProb: 75,
@@ -2299,6 +2301,7 @@ const V2_DEFAULTS = {
 };
 
 const V2_WF_DEFAULTS = {
+  dealStructure: 'syndicated',
   lpPercent: 90,
   gpPercent: 10,
   prefReturn: 8,
@@ -2557,7 +2560,7 @@ const V2Tog = ({ value, onChange, label }) => (
 );
 
 // Print & Export
-const printMemoV2 = (deal, calc) => {
+const printMemoV2 = (deal, calc, p, tenants) => {
   const w = window.open('', '_blank');
   const html = `
     <html>
@@ -2588,6 +2591,11 @@ const printMemoV2 = (deal, calc) => {
       <div style="margin-bottom: 20px;">
         <span class="badge ${calc.goGreen ? 'go' : 'nogo'}">${calc.goGreen ? 'GO' : 'NO-GO'}</span>
       </div>
+
+      <h2>Executive Summary</h2>
+      <p style="line-height: 1.6; font-size: 14px;">
+        The ${deal.name || (p && p.name) || 'Property'} is a ${fmtM0((p && p.sf) || 0)} SF ${(p && p.assetType) || 'commercial'} property${(p && p.address) ? ' located at ' + p.address : ''}. The property is offered at ${fmtM(calc.pp)} ${(p && p.sf > 0) ? '($' + (calc.pp / p.sf).toFixed(0) + '/SF)' : ''}. At the going-in cap rate of ${fmtP(calc.goingCap)}, the property generates Year 1 NOI of ${fmtM(calc.years[0]?.noi || 0)}. Over a ${(p && p.holdPeriod) || 5}-year hold period, the projected levered IRR is ${fmtP(calc.levIRR)} with a ${fmtX(calc.em)} equity multiple. The investment requires ${fmtM(calc.equity)} in equity with ${fmtP(calc.pp > 0 ? calc.loan / calc.pp * 100 : 0)} LTV financing.${tenants && tenants.length > 0 ? ' The property has ' + tenants.length + ' tenants.' : ''}
+      </p>
 
       <h2>Capital Structure</h2>
       <div class="grid">
@@ -2717,6 +2725,50 @@ const exportV2Excel = async (deal, calc, p, wf, tenants, events, capItems) => {
   }
 };
 
+const exportMemoWord = async (deal, calc, p, wf, tenants) => {
+  try {
+    const payload = {
+      v2_state: { assumptions: p, waterfall: wf, tenants, valueAddEvents: [], capexItems: [] },
+      calc,
+    };
+    const res = await fetch(`${API_URL}/api/v1/export/v2/memo/docx`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${deal.name || p.name || 'deal'}_memo.docx`;
+      a.click();
+    }
+  } catch (e) { console.error('Word export failed:', e); }
+};
+
+const exportMemoPDF = async (deal, calc, p, wf, tenants) => {
+  try {
+    const payload = {
+      v2_state: { assumptions: p, waterfall: wf, tenants, valueAddEvents: [], capexItems: [] },
+      calc,
+    };
+    const res = await fetch(`${API_URL}/api/v1/export/v2/memo/html`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${deal.name || p.name || 'deal'}_memo.html`;
+      a.click();
+    }
+  } catch (e) { console.error('PDF export failed:', e); }
+};
+
 // Main DashboardV2View Component
 const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const { useState, useEffect, useCallback, useMemo, useRef } = React;
@@ -2737,6 +2789,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const [dbtMsg, setDbtMsg] = useState('');
   const [sensM, setSensM] = useState('irr');
   const [cfPeriod, setCfPeriod] = useState('annual');
+  const [cfUnit, setCfUnit] = useState('auto');
   const [saveStatus, setSaveStatus] = useState('saved');
   const [rrUpSt, setRrUpSt] = useState('idle'); // idle | loading | success | error
   const [rrUpMsg, setRrUpMsg] = useState('');
@@ -3112,18 +3165,18 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           }}>
             {calc.goGreen ? 'GO' : 'NO-GO'}
           </div>
-          <button onClick={() => printMemoV2(initialDeal, calc)} style={{
-            backgroundColor: 'var(--blue)',
-            border: 'none',
-            color: '#fff',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: '600',
-          }}>
-            Print Memo
-          </button>
+          <button onClick={() => printMemoV2(initialDeal, calc, p, tenants)} style={{
+            backgroundColor: 'var(--blue)', border: 'none', color: '#fff',
+            padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
+          }}>Memo</button>
+          <button onClick={() => exportMemoWord(initialDeal, calc, p, wf, tenants)} style={{
+            backgroundColor: '#5B5FC7', border: 'none', color: '#fff',
+            padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
+          }}>Word</button>
+          <button onClick={() => exportMemoPDF(initialDeal, calc, p, wf, tenants)} style={{
+            backgroundColor: '#D97706', border: 'none', color: '#fff',
+            padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
+          }}>PDF</button>
           <button onClick={() => exportV2Excel(initialDeal, calc, p, wf, tenants, events, capItems)} style={{
             backgroundColor: 'var(--teal)',
             border: 'none',
@@ -3157,6 +3210,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         <V2TabBtn label="Sensitivity" active={tab === 'sensitivity'} onClick={() => setTab('sensitivity')} />
         <V2TabBtn label="Charts" active={tab === 'charts'} onClick={() => setTab('charts')} />
         <V2TabBtn label="Waterfall" active={tab === 'waterfall'} onClick={() => setTab('waterfall')} />
+        <V2TabBtn label="Returns" active={tab === 'returns'} onClick={() => setTab('returns')} />
         <V2TabBtn label="Compare" active={tab === 'compare'} onClick={() => setTab('compare')} />
       </div>
 
@@ -3439,6 +3493,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
               </V2Sect>
 
               <V2Sect title="Investor Hurdles">
+                <V2Tog label="Has Outside Investors" value={p.hasOutsideInvestors !== false} onChange={(v) => setP(prev => ({...prev, hasOutsideInvestors: v}))} />
+                {p.hasOutsideInvestors !== false && <>
                 {/* Preset selector */}
                 <div style={{ marginBottom: '12px' }}>
                   <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>Structure</div>
@@ -3526,6 +3582,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   onChange={(v) => setP(prev => ({ ...prev, hurdleEM: parseFloat(v) || 1.75 }))}
                   suffix="x"
                 />
+                </>}
               </V2Sect>
             </div>
 
@@ -3614,6 +3671,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
             {/* Col 3: Returns */}
             <div>
+              <div style={{border: '2px solid #FBBF24', borderRadius: '8px', background: 'linear-gradient(135deg, rgba(251,191,36,0.05), transparent)', boxShadow: '0 0 20px rgba(251,191,36,0.1)'}}>
               <V2Sect title="Returns">
                 <V2Card
                   label="Levered IRR"
@@ -3653,6 +3711,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   sub="NOI / Debt Service"
                 />
               </V2Sect>
+              </div>
 
               <V2Sect title="IRR Waterfall">
                 <V2Card label="Equity In" value={fmtM(calc.equity)} />
@@ -3748,6 +3807,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card label="Orig Fee" value={fmtM(calc.origFee)} />
                 <V2Card label="Prepay Penalty (Exit)" value={fmtM(calc.prepayAmt)} />
                 <V2Card label="DSCR (Y1)" value={fmtX(calc.dscr)} good={calc.dscr >= 1.25} />
+                <V2Card label="Debt Yield (Y1)" value={fmtP(calc.loan > 0 ? (calc.years[0]?.noi || 0) / calc.loan * 100 : 0)} good={calc.loan > 0 ? (calc.years[0]?.noi || 0) / calc.loan >= 0.09 : false} />
               </V2Sect>
 
               <V2Sect title="Amortization Schedule">
@@ -4285,6 +4345,16 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     onClick={() => setCfPeriod(p)}
                   />
                 ))}
+                <div style={{ display: 'flex', gap: '8px', marginLeft: '24px' }}>
+                  {['auto', '$', '$K', '$M'].map(u => (
+                    <button key={u} onClick={() => setCfUnit(u)} style={{
+                      backgroundColor: cfUnit === u ? 'var(--blue)' : 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      color: cfUnit === u ? '#fff' : 'var(--text-primary)',
+                      padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px',
+                    }}>{u === 'auto' ? 'Auto' : u}</button>
+                  ))}
+                </div>
               </div>
             </V2Sect>
 
@@ -4295,6 +4365,16 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card label="Total CapEx" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + (y.capexRes + y.specCapex), 0))} />
                 {p.showTILC !== false && <V2Card label="Total TI/LC" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.tiLC, 0))} />}
                 <V2Card label="Total Net CF" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.levCF, 0))} />
+              </div>
+            </V2Sect>
+
+            <V2Sect title="Quick Adjust">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+                <V2Inp label="Purchase Price" value={p.purchasePrice} onChange={(v) => setP(prev => ({...prev, purchasePrice: Number(v)}))} prefix="$" />
+                <V2Inp label="LTV %" value={p.ltv} onChange={(v) => setP(prev => ({...prev, ltv: Number(v)}))} suffix="%" />
+                <V2Inp label="Interest Rate" value={p.rate} onChange={(v) => setP(prev => ({...prev, rate: Number(v)}))} suffix="%" />
+                <V2Inp label="Exit Cap" value={p.exitCap} onChange={(v) => setP(prev => ({...prev, exitCap: Number(v)}))} suffix="%" />
+                <V2Inp label="Hold Period" value={p.holdPeriod} onChange={(v) => setP(prev => ({...prev, holdPeriod: Number(v)}))} suffix="yrs" />
               </div>
             </V2Sect>
 
@@ -4348,6 +4428,10 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
                   const fmtCell = (v) => {
                     if (!isN(v)) return '—';
+                    if (cfUnit === '$M') return '$' + (v / 1e6).toFixed(2) + 'M';
+                    if (cfUnit === '$K') return '$' + (v / 1e3).toFixed(0) + 'K';
+                    if (cfUnit === '$') return '$' + v.toLocaleString(undefined, {maximumFractionDigits: 0});
+                    // Auto
                     const abs = Math.abs(v);
                     if (abs >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
                     if (abs >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
@@ -4401,6 +4485,18 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                       {periods.map((pd, idx) => (
                         <td key={pd._key || pd.yr || idx} style={{ textAlign: 'right', padding: '6px 8px', color: pd.levCF >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: '600', whiteSpace: 'nowrap' }}>{fmtCell(pd.levCF)}</td>
                       ))}
+                    </tr>
+                    {/* Cash-on-Cash % */}
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: '500', color: 'var(--text-secondary)', position: 'sticky', left: 0, backgroundColor: 'var(--surface)', zIndex: 1, fontStyle: 'italic' }}>Cash-on-Cash %</td>
+                      {periods.map((pd, idx) => {
+                        const coc = calc.equity > 0 ? pd.levCF / calc.equity * (divisor === 1 ? 100 : 100 * divisor) : 0;
+                        return (
+                          <td key={pd._key || pd.yr || idx} style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontStyle: 'italic' }}>
+                            {coc.toFixed(1)}%
+                          </td>
+                        );
+                      })}
                     </tr>
                   </tbody>
                 </table>
@@ -4581,6 +4677,27 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
             <div>
               <V2Sect title="Distribution Waterfall Config">
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                  {['syndicated', 'direct'].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setWf(prev => ({ ...prev, dealStructure: s }))}
+                      style={{
+                        backgroundColor: (wf.dealStructure || 'syndicated') === s ? 'var(--blue)' : 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        color: (wf.dealStructure || 'syndicated') === s ? '#fff' : 'var(--text-primary)',
+                        padding: '8px 16px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                      }}
+                    >
+                      {s === 'syndicated' ? 'Syndicated (GP/LP)' : 'Direct / Solo Investor'}
+                    </button>
+                  ))}
+                </div>
+                {(wf.dealStructure || 'syndicated') === 'syndicated' && <>
                 <V2Sld
                   label="LP %"
                   min={50}
@@ -4631,10 +4748,12 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   onChange={(v) => setWf(prev => ({ ...prev, tier3Split: v }))}
                   display={`${wf.tier3Split}%`}
                 />
+                </>}
               </V2Sect>
             </div>
 
             <div>
+              {(wf.dealStructure || 'syndicated') === 'syndicated' ? (
               <V2Sect title="Waterfall Results">
                 <V2Card label="LP Equity In" value={fmtM(calc.lpEq)} />
                 <V2Card label="GP Equity In" value={fmtM(calc.gpEq)} />
@@ -4644,6 +4763,107 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card label="LP EM" value={fmtX(calc.lpEM)} />
                 <V2Card label="GP IRR" value={fmtP(calc.gpIRR)} />
                 <V2Card label="GP Promote" value={fmtM(calc.gpPromote)} />
+              </V2Sect>
+              ) : (
+              <V2Sect title="Direct Investment Returns">
+                <V2Card label="Equity Invested" value={fmtM(calc.equity)} />
+                <V2Card label="Total Distributions" value={fmtM(calc.totalReturn)} />
+                <V2Card label="Net Gain" value={fmtM(calc.totalReturn - calc.equity)} good={calc.totalReturn > calc.equity} />
+                <V2Card label="Levered IRR" value={fmtP(calc.levIRR)} good={calc.levIRR >= (p.hurdleTier1 || p.hurdleIRR)} />
+                <V2Card label="Equity Multiple" value={fmtX(calc.em)} good={calc.em >= p.hurdleEM} />
+                <V2Card label="Avg Cash-on-Cash" value={fmtP(calc.avgCoC)} />
+              </V2Sect>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* RETURNS TAB */}
+        {tab === 'returns' && (
+          <div>
+            <V2Sect title="Investment Returns" style={{}}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <V2Card label="Levered IRR" value={fmtP(calc.levIRR)} sub={`vs ${p.hurdleTier1 || p.hurdleIRR}% hurdle`} good={calc.levIRR >= (p.hurdleTier1 || p.hurdleIRR)} />
+                <V2Card label="Unlevered IRR" value={fmtP(calc.unlevIRR)} />
+                <V2Card label="Equity Multiple" value={fmtX(calc.em)} sub={`vs ${p.hurdleEM}x hurdle`} good={calc.em >= p.hurdleEM} />
+                <V2Card label="Avg Cash-on-Cash" value={fmtP(calc.avgCoC)} />
+              </div>
+            </V2Sect>
+
+            <V2Sect title="Capital Efficiency">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                <V2Card label="Going-in Cap" value={fmtP(calc.goingCap)} />
+                <V2Card label="Yield on Cost" value={fmtP(calc.yoc)} />
+                <V2Card label="DSCR (Y1)" value={fmtX(calc.dscr)} good={calc.dscr >= 1.25} />
+                <V2Card label="Debt Yield (Y1)" value={fmtP(calc.loan > 0 ? (calc.years[0]?.noi || 0) / calc.loan * 100 : 0)} />
+              </div>
+            </V2Sect>
+
+            <V2Sect title="Return Attribution">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <V2Card label="Cash Flow Returns" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.levCF, 0))} sub="Operating cash flow" />
+                <V2Card label="Appreciation" value={fmtM(calc.exitVal - calc.pp)} sub="Exit value - purchase price" />
+                <V2Card label="Debt Paydown" value={fmtM(calc.loan - calc.exitBal)} sub="Principal reduction" />
+              </div>
+            </V2Sect>
+
+            <V2Sect title="Year-by-Year Returns">
+              <div style={{ overflowX: 'auto', fontSize: '11px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-secondary)' }}>Year</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-secondary)' }}>NOI</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-secondary)' }}>Levered CF</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-secondary)' }}>Cash-on-Cash</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-secondary)' }}>DSCR</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--text-secondary)' }}>Cumulative CF</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(calc.holdYears || calc.years.filter(y => y.yr <= (p.holdPeriod || 5))).map((y, i, arr) => {
+                      const cumCF = arr.slice(0, i + 1).reduce((s, yy) => s + yy.levCF, 0);
+                      const coc = calc.equity > 0 ? y.levCF / calc.equity * 100 : 0;
+                      const yrDscr = y.annDS > 0 ? y.noi / y.annDS : 0;
+                      return (
+                        <tr key={y.yr} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '6px 8px' }}>Year {y.yr}</td>
+                          <td style={{ textAlign: 'right', padding: '6px 8px' }}>{fmtM(y.noi)}</td>
+                          <td style={{ textAlign: 'right', padding: '6px 8px', color: y.levCF >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtM(y.levCF)}</td>
+                          <td style={{ textAlign: 'right', padding: '6px 8px' }}>{coc.toFixed(1)}%</td>
+                          <td style={{ textAlign: 'right', padding: '6px 8px', color: yrDscr >= 1.25 ? 'var(--green)' : yrDscr < 1 ? 'var(--red)' : 'var(--amber)' }}>{yrDscr.toFixed(2)}x</td>
+                          <td style={{ textAlign: 'right', padding: '6px 8px' }}>{fmtM(cumCF)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </V2Sect>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+              <V2Sect title="Exit Analysis">
+                <V2Card label={`Exit Year NOI (Y${(p.holdPeriod || 5) + 1})`} value={fmtM(calc.exitNOI)} />
+                <V2Card label="Exit Cap Rate" value={fmtP(p.exitCap)} />
+                <V2Card label="Gross Sale Price" value={fmtM(calc.exitVal)} />
+                <V2Card label="Net Proceeds" value={fmtM(calc.saleNet)} good={true} />
+              </V2Sect>
+
+              <V2Sect title="Investment Decision">
+                <div style={{
+                  padding: '24px',
+                  textAlign: 'center',
+                  borderRadius: '8px',
+                  border: `2px solid ${calc.goGreen ? 'var(--green)' : 'var(--red)'}`,
+                  backgroundColor: calc.goGreen ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)',
+                }}>
+                  <div style={{ fontSize: '28px', fontWeight: '700', color: calc.goGreen ? 'var(--green)' : 'var(--red)' }}>
+                    {calc.goGreen ? 'GO' : 'NO-GO'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                    Hurdles: {p.hurdleTier1 || p.hurdleIRR}% IRR / {p.hurdleEM}x EM
+                  </div>
+                </div>
               </V2Sect>
             </div>
           </div>

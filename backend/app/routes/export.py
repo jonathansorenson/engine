@@ -2,12 +2,25 @@
 
 import io
 import math
+from datetime import datetime
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel as PydanticBaseModel
 from typing import Optional, List, Dict, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.chart import BarChart, LineChart, Reference
+from openpyxl.utils import get_column_letter
+from openpyxl.workbook.defined_name import DefinedName
+
+try:
+    from docx import Document
+    from docx.shared import Inches, Pt, Cm, Emu
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
 
 router = APIRouter(prefix="/api/v1/export", tags=["export"])
 
@@ -86,10 +99,28 @@ def _calculate_irr(cash_flows: list, guess: float = 0.10) -> Optional[float]:
 
 
 def _safe_pct(val, default=0):
-    """Normalize a percentage value — if >1 treat as already ×100."""
+    """Normalize a percentage value — if >1 treat as already x100."""
     if val is None:
         return default
     return val / 100 if val > 1 else val
+
+
+def _fmt_currency(val):
+    """Format a number as currency string for text contexts."""
+    if val is None:
+        return "$0"
+    if abs(val) >= 1_000_000:
+        return f"${val / 1_000_000:,.1f}M"
+    elif abs(val) >= 1_000:
+        return f"${val / 1_000:,.0f}K"
+    return f"${val:,.0f}"
+
+
+def _fmt_pct(val):
+    """Format decimal as percentage string."""
+    if val is None:
+        return "0.0%"
+    return f"{val * 100:.1f}%" if val < 1 else f"{val:.1f}%"
 
 
 # ═══════════════════════════════════════════════════════════
@@ -108,6 +139,9 @@ RED_FILL = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="soli
 AMBER_FILL = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
 GREEN_FONT = Font(name="Calibri", size=10, color="166534")
 RED_FONT = Font(name="Calibri", size=10, color="991B1B")
+BLUE_FILL = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+METRIC_FILL = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
+METRIC_FONT = Font(name="Calibri", bold=True, size=10, color="1E3A5F")
 
 CURRENCY_FMT = '#,##0'
 CURRENCY_CENTS_FMT = '#,##0.00'
@@ -155,7 +189,7 @@ def _section_header(ws, row, title, cols=2):
 
 
 # ═══════════════════════════════════════════════════════════
-# EXPORT ENDPOINT
+# V1 EXPORT ENDPOINT
 # ═══════════════════════════════════════════════════════════
 
 @router.post("")
@@ -339,12 +373,12 @@ async def export_deal_to_excel(data: ExportRequest):
     hold_periods = [3, 5, 7, 10]
 
     ws3.merge_cells("A1:E1")
-    ws3.cell(row=1, column=1, value="Levered IRR Sensitivity — Exit Cap × Hold Period").font = TITLE_FONT
+    ws3.cell(row=1, column=1, value="Levered IRR Sensitivity — Exit Cap x Hold Period").font = TITLE_FONT
     ws3.column_dimensions["A"].width = 16
 
     row = 3
     # Header
-    ws3.cell(row=row, column=1, value="Exit Cap ↓ / Hold →").font = HEADER_FONT
+    ws3.cell(row=row, column=1, value="Exit Cap / Hold").font = HEADER_FONT
     ws3.cell(row=row, column=1).fill = HEADER_FILL
     ws3.cell(row=row, column=1).border = THIN_BORDER
     for ci, hp in enumerate(hold_periods, 2):
@@ -407,11 +441,11 @@ async def export_deal_to_excel(data: ExportRequest):
     exit_cap_rates = [0.050, 0.055, 0.060, 0.065, 0.070, 0.075, 0.080]
 
     ws4.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(exit_cap_rates) + 1)
-    ws4.cell(row=1, column=1, value=f"Property Value at Exit (Year {hold_years}) — NOI Growth × Exit Cap").font = TITLE_FONT
+    ws4.cell(row=1, column=1, value=f"Property Value at Exit (Year {hold_years}) — NOI Growth x Exit Cap").font = TITLE_FONT
     ws4.column_dimensions["A"].width = 18
 
     row = 3
-    ws4.cell(row=row, column=1, value="Growth ↓ / Cap →").font = HEADER_FONT
+    ws4.cell(row=row, column=1, value="Growth / Cap").font = HEADER_FONT
     ws4.cell(row=row, column=1).fill = HEADER_FILL
     ws4.cell(row=row, column=1).border = THIN_BORDER
     for ci, ecr in enumerate(exit_cap_rates, 2):
@@ -463,11 +497,11 @@ async def export_deal_to_excel(data: ExportRequest):
     row = _add_kv_row(ws5, row, "Debt Constant", debt_constant, PERCENT_FMT)
     row = _add_kv_row(ws5, row, "Leverage Spread", leverage_spread, PERCENT_FMT)
     if leverage_spread > 0.005:
-        row = _add_kv_row(ws5, row, "Leverage Status", "✓ Positive — Favorable")
+        row = _add_kv_row(ws5, row, "Leverage Status", "Positive — Favorable")
     elif leverage_spread > -0.005:
-        row = _add_kv_row(ws5, row, "Leverage Status", "◐ Neutral")
+        row = _add_kv_row(ws5, row, "Leverage Status", "Neutral")
     else:
-        row = _add_kv_row(ws5, row, "Leverage Status", "✗ Negative — Unfavorable")
+        row = _add_kv_row(ws5, row, "Leverage Status", "Negative — Unfavorable")
 
     # NOI vs Debt Service Table
     row += 1
@@ -520,8 +554,8 @@ async def export_deal_to_excel(data: ExportRequest):
     ref_rates = [3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0]
     ref_amorts = [15, 20, 25, 30]
 
-    row = _section_header(ws5, row, "Debt Constant Reference (Rate × Amortization)", 1 + len(ref_amorts))
-    ws5.cell(row=row, column=1, value="Rate ↓ / Amort →").font = HEADER_FONT
+    row = _section_header(ws5, row, "Debt Constant Reference (Rate x Amortization)", 1 + len(ref_amorts))
+    ws5.cell(row=row, column=1, value="Rate / Amort").font = HEADER_FONT
     ws5.cell(row=row, column=1).fill = HEADER_FILL
     ws5.cell(row=row, column=1).border = THIN_BORDER
     for ci, am in enumerate(ref_amorts, 2):
@@ -651,11 +685,66 @@ class V2ExportRequest(PydanticBaseModel):
     calc: Optional[Dict[str, Any]] = None
 
 
+def _v2_build_tenant_analytics(tenants: list, total_sf: float):
+    """Build tenant analytics data used by multiple sheets."""
+    if not tenants:
+        return {}
+
+    # Parse expiry years
+    expiry_buckets = {}  # year -> list of tenants
+    for t in tenants:
+        end_str = t.get("end", "")
+        yr = None
+        if end_str:
+            try:
+                if len(end_str) >= 4:
+                    yr = int(end_str[:4])
+            except (ValueError, TypeError):
+                pass
+        if yr:
+            expiry_buckets.setdefault(yr, []).append(t)
+
+    # Top tenants by revenue
+    tenants_with_rev = []
+    for t in tenants:
+        sf = t.get("sf", 0) or 0
+        rent_psf = t.get("rentPSF", 0) or 0
+        annual_rev = sf * rent_psf
+        tenants_with_rev.append({**t, "_annual_rev": annual_rev, "_sf": sf})
+    tenants_with_rev.sort(key=lambda x: x["_annual_rev"], reverse=True)
+
+    total_revenue = sum(t["_annual_rev"] for t in tenants_with_rev)
+    top_tenant_pct = tenants_with_rev[0]["_annual_rev"] / total_revenue if total_revenue > 0 and tenants_with_rev else 0
+
+    # WALT calculation
+    now_year = datetime.now().year
+    weighted_years = 0
+    total_weight_sf = 0
+    for t in tenants:
+        sf = t.get("sf", 0) or 0
+        end_str = t.get("end", "")
+        if end_str and sf > 0:
+            try:
+                end_yr = int(end_str[:4])
+                remaining = max(0, end_yr - now_year)
+                weighted_years += remaining * sf
+                total_weight_sf += sf
+            except (ValueError, TypeError):
+                pass
+    walt = weighted_years / total_weight_sf if total_weight_sf > 0 else 0
+
+    return {
+        "expiry_buckets": expiry_buckets,
+        "tenants_with_rev": tenants_with_rev,
+        "total_revenue": total_revenue,
+        "top_tenant_pct": top_tenant_pct,
+        "walt": walt,
+    }
+
+
 @router.post("/v2")
 async def export_v2_deal_to_excel(data: V2ExportRequest):
-    """Generate institutional-grade V2 Excel workbook with formulas and named ranges."""
-    from openpyxl.utils import get_column_letter
-    from openpyxl.workbook.defined_name import DefinedName
+    """Generate institutional-grade V2 Excel workbook with formulas, charts and analytics."""
 
     wb = Workbook()
 
@@ -670,6 +759,10 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
 
     prop_name = p.get("name", "Untitled Deal")
     hold = p.get("holdPeriod", 5)
+    total_sf = p.get("sf", 0) or 0
+
+    # Pre-compute tenant analytics for reuse
+    tenant_analytics = _v2_build_tenant_analytics(tenants, total_sf)
 
     # ══════════════════════════════════════════
     # Sheet 1: Assumptions (with named ranges)
@@ -695,7 +788,7 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     sf_cell = f"B{sf_row}"
     try:
         wb.defined_names.add(DefinedName("SF", attr_text=f"Assumptions!{sf_cell}"))
-    except:
+    except Exception:
         pass
 
     row += 1
@@ -703,10 +796,11 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     # Acquisition Section
     row = _section_header(ws, row, "Acquisition", 2)
     pp_row = row
-    row = _add_kv_row(ws, row, "Purchase Price", p.get("purchasePrice", calc.get("pp", 0)), CURRENCY_FMT)
+    purchase_price = p.get("purchasePrice", calc.get("pp", 0))
+    row = _add_kv_row(ws, row, "Purchase Price", purchase_price, CURRENCY_FMT)
     try:
         wb.defined_names.add(DefinedName("PurchasePrice", attr_text=f"Assumptions!$B${pp_row}"))
-    except:
+    except Exception:
         pass
 
     row = _add_kv_row(ws, row, "Acq Cost %", (p.get("acqCostPct", 0) or 0) / 100, PERCENT_FMT)
@@ -717,45 +811,67 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     # Financing Section
     row = _section_header(ws, row, "Financing", 2)
     ltv_row = row
-    row = _add_kv_row(ws, row, "LTV", (p.get("ltv", 65) or 65) / 100, PERCENT_FMT)
+    ltv_pct = (p.get("ltv", 65) or 65)
+    row = _add_kv_row(ws, row, "LTV", ltv_pct / 100, PERCENT_FMT)
     try:
         wb.defined_names.add(DefinedName("LTV", attr_text=f"Assumptions!$B${ltv_row}"))
-    except:
+    except Exception:
         pass
 
     rate_row = row
     row = _add_kv_row(ws, row, "Interest Rate", (p.get("rate", 6) or 6) / 100, PERCENT_FMT)
     try:
         wb.defined_names.add(DefinedName("Rate", attr_text=f"Assumptions!$B${rate_row}"))
-    except:
+    except Exception:
         pass
 
     amort_row = row
     row = _add_kv_row(ws, row, "Amortization (yrs)", p.get("amortYears", 25), NUMBER_FMT)
     try:
         wb.defined_names.add(DefinedName("AmortYears", attr_text=f"Assumptions!$B${amort_row}"))
-    except:
+    except Exception:
         pass
 
     row = _add_kv_row(ws, row, "Interest Only Period", p.get("ioPeriod", 0), NUMBER_FMT)
     row = _add_kv_row(ws, row, "Origination Fee %", (p.get("origFee", 0) or 0) / 100, PERCENT_FMT)
 
+    # Compute loan amount & equity for named ranges
+    loan_amount_val = (purchase_price or 0) * (ltv_pct / 100)
+    equity_val = calc.get("totalEq", 0) or calc.get("equity", 0) or ((purchase_price or 0) - loan_amount_val)
+
+    # Add Loan Amount and Equity as named range cells
+    row += 1
+    row = _section_header(ws, row, "Derived Capital Structure", 2)
+    la_row = row
+    row = _add_kv_row(ws, row, "Loan Amount", loan_amount_val, CURRENCY_FMT)
+    try:
+        wb.defined_names.add(DefinedName("LoanAmount", attr_text=f"Assumptions!$B${la_row}"))
+    except Exception:
+        pass
+
+    eq_row = row
+    row = _add_kv_row(ws, row, "Total Equity", equity_val, CURRENCY_FMT)
+    try:
+        wb.defined_names.add(DefinedName("Equity", attr_text=f"Assumptions!$B${eq_row}"))
+    except Exception:
+        pass
+
     row += 1
 
     # Operations Section
     row = _section_header(ws, row, "Operations", 2)
-    noi_row = row
+    noi_assum_row = row
     row = _add_kv_row(ws, row, "Year 1 NOI", p.get("y1NOI", calc.get("y1NOI", 0)), CURRENCY_FMT)
     try:
-        wb.defined_names.add(DefinedName("Y1NOI", attr_text=f"Assumptions!$B${noi_row}"))
-    except:
+        wb.defined_names.add(DefinedName("Y1NOI", attr_text=f"Assumptions!$B${noi_assum_row}"))
+    except Exception:
         pass
 
     growth_row = row
     row = _add_kv_row(ws, row, "Rent Growth %", (p.get("rentGrowth", 2) or 2) / 100, PERCENT_FMT)
     try:
         wb.defined_names.add(DefinedName("RentGrowth", attr_text=f"Assumptions!$B${growth_row}"))
-    except:
+    except Exception:
         pass
 
     row = _add_kv_row(ws, row, "Vacancy %", (p.get("vacancy", 5) or 5) / 100, PERCENT_FMT)
@@ -769,14 +885,14 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     row = _add_kv_row(ws, row, "Hold Period (yrs)", p.get("holdPeriod", 5), NUMBER_FMT)
     try:
         wb.defined_names.add(DefinedName("HoldPeriod", attr_text=f"Assumptions!$B${hold_row}"))
-    except:
+    except Exception:
         pass
 
     exit_cap_row = row
     row = _add_kv_row(ws, row, "Exit Cap Rate", (p.get("exitCap", 6.5) or 6.5) / 100, PERCENT_FMT)
     try:
         wb.defined_names.add(DefinedName("ExitCap", attr_text=f"Assumptions!$B${exit_cap_row}"))
-    except:
+    except Exception:
         pass
 
     row = _add_kv_row(ws, row, "Prepay Penalty %", (p.get("prepayPct", 1) or 1) / 100, PERCENT_FMT)
@@ -811,10 +927,11 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
 
     # Set year column widths
     num_years = len(years)
+    total_col = num_years + 2  # column index for "Total" column
     for i in range(num_years + 1):
         ws2.column_dimensions[get_column_letter(i + 2)].width = 14
 
-    ws2.merge_cells(f"A1:{get_column_letter(num_years + 2)}1")
+    ws2.merge_cells(f"A1:{get_column_letter(total_col)}1")
     ws2.cell(row=1, column=1, value="Cash Flow Projection (Annual P&L)").font = TITLE_FONT
 
     # Year headers
@@ -832,38 +949,45 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
         cell.alignment = Alignment(horizontal="center")
         cell.border = THIN_BORDER
 
-    # Totals column
-    col = num_years + 2
-    cell = ws2.cell(row=row, column=col, value="Total")
+    # Total column header
+    cell = ws2.cell(row=row, column=total_col, value="Total")
     cell.font = HEADER_FONT
     cell.fill = HEADER_FILL
     cell.alignment = Alignment(horizontal="center")
     cell.border = THIN_BORDER
     row += 1
 
+    # ── Helper: add a data row with optional SUM total column ──
+    def _add_cf_data_row(ws, row_num, label, values, negate=False, fmt=CURRENCY_FMT, add_total=True):
+        """Write a cash flow row with values and optional SUM total."""
+        ws.cell(row=row_num, column=1, value=label).font = LABEL_FONT
+        ws.cell(row=row_num, column=1).border = THIN_BORDER
+        for i, val in enumerate(values):
+            col = i + 2
+            v = -(val or 0) if negate else (val or 0)
+            cell = ws.cell(row=row_num, column=col, value=v)
+            cell.number_format = fmt
+            cell.border = THIN_BORDER
+        if add_total and len(values) > 0:
+            first_col = get_column_letter(2)
+            last_col = get_column_letter(num_years + 1)
+            total_cell = ws.cell(row=row_num, column=total_col,
+                                 value=f"=SUM({first_col}{row_num}:{last_col}{row_num})")
+            total_cell.number_format = fmt
+            total_cell.border = THIN_BORDER
+        return row_num
+
     # Revenue section
-    row = _section_header(ws2, row, "REVENUE", num_years + 2)
+    row = _section_header(ws2, row, "REVENUE", total_col)
 
     # Potential Base Rent
     br_row = row
-    ws2.cell(row=row, column=1, value="Potential Base Rent").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=y.get("baseRent", 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    _add_cf_data_row(ws2, row, "Potential Base Rent", [y.get("baseRent", 0) for y in years])
     row += 1
 
     # CAM / Expense Recovery
     cam_row = row
-    ws2.cell(row=row, column=1, value="CAM / Expense Recovery").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=y.get("cam", 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    _add_cf_data_row(ws2, row, "CAM / Expense Recovery", [y.get("cam", 0) for y in years])
     row += 1
 
     # Potential Gross Revenue (formula)
@@ -876,28 +1000,23 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
         cell = ws2.cell(row=row, column=col, value=f"={col_letter}{br_row}+{col_letter}{cam_row}")
         cell.number_format = CURRENCY_FMT
         cell.border = THIN_BORDER
+    # Total for PGR
+    first_col = get_column_letter(2)
+    last_col = get_column_letter(num_years + 1)
+    ws2.cell(row=row, column=total_col,
+             value=f"=SUM({first_col}{pgr_row}:{last_col}{pgr_row})").number_format = CURRENCY_FMT
+    ws2.cell(row=row, column=total_col).border = THIN_BORDER
     row += 1
 
     # Vacancy Loss
-    vac_row = row
-    ws2.cell(row=row, column=1, value="Vacancy Loss").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=-(y.get("vacancyLoss", 0) or 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    vac_loss_row = row
+    _add_cf_data_row(ws2, row, "Vacancy Loss", [y.get("vacancyLoss", 0) for y in years], negate=True)
     row += 1
 
     # Free Rent
     fr_row = row
-    ws2.cell(row=row, column=1, value="Free Rent").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=-(y.get("freeRentLoss", 0) or y.get("freeRent", 0) or 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    _add_cf_data_row(ws2, row, "Free Rent",
+                     [y.get("freeRentLoss", 0) or y.get("freeRent", 0) or 0 for y in years], negate=True)
     row += 1
 
     # Effective Gross Revenue (formula)
@@ -906,83 +1025,51 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     ws2.cell(row=row, column=1).border = THIN_BORDER
     for i in range(num_years):
         col = i + 2
-        col_letter = get_column_letter(col)
-        cell = ws2.cell(row=row, column=col, value=f"={col_letter}{pgr_row}+{col_letter}{vac_row}+{col_letter}{fr_row}")
+        cl = get_column_letter(col)
+        cell = ws2.cell(row=row, column=col,
+                        value=f"={cl}{pgr_row}+{cl}{vac_loss_row}+{cl}{fr_row}")
         cell.number_format = CURRENCY_FMT
         cell.border = THIN_BORDER
+    ws2.cell(row=row, column=total_col,
+             value=f"=SUM({first_col}{egr_row}:{last_col}{egr_row})").number_format = CURRENCY_FMT
+    ws2.cell(row=row, column=total_col).border = THIN_BORDER
     row += 1
 
     row += 1
-    row = _section_header(ws2, row, "NET OPERATING INCOME", num_years + 2)
+    row = _section_header(ws2, row, "NET OPERATING INCOME", total_col)
 
     # NOI
     noi_row = row
-    ws2.cell(row=row, column=1, value="NOI").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=y.get("noi", 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    _add_cf_data_row(ws2, row, "NOI", [y.get("noi", 0) for y in years])
     row += 1
 
     row += 1
-    row = _section_header(ws2, row, "DEBT & CASH FLOW", num_years + 2)
+    row = _section_header(ws2, row, "DEBT & CASH FLOW", total_col)
 
     # Debt Service
     ds_row = row
-    ws2.cell(row=row, column=1, value="Debt Service").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=-(y.get("annDS", 0) or 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    _add_cf_data_row(ws2, row, "Debt Service", [y.get("annDS", 0) for y in years], negate=True)
     row += 1
 
     # CapEx & Reserves
     capex_row = row
-    ws2.cell(row=row, column=1, value="CapEx & Reserves").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        capex_val = -((y.get("capexRes", 0) or 0) + (y.get("specCapex", 0) or 0))
-        cell = ws2.cell(row=row, column=col, value=capex_val)
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    capex_vals = [(y.get("capexRes", 0) or 0) + (y.get("specCapex", 0) or 0) for y in years]
+    _add_cf_data_row(ws2, row, "CapEx & Reserves", capex_vals, negate=True)
     row += 1
 
     # TI / LC
     tilc_row = row
-    ws2.cell(row=row, column=1, value="TI / LC").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=-(y.get("tiLC", 0) or 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    _add_cf_data_row(ws2, row, "TI / LC", [y.get("tiLC", 0) for y in years], negate=True)
     row += 1
 
     # Value-Add Income
     vai_row = row
-    ws2.cell(row=row, column=1, value="Value-Add Income").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=y.get("vaInc", 0) or 0)
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    _add_cf_data_row(ws2, row, "Value-Add Income", [y.get("vaInc", 0) or 0 for y in years])
     row += 1
 
     # Value-Add Cost
-    vac_row = row
-    ws2.cell(row=row, column=1, value="Value-Add Cost").font = LABEL_FONT
-    ws2.cell(row=row, column=1).border = THIN_BORDER
-    for i, y in enumerate(years):
-        col = i + 2
-        cell = ws2.cell(row=row, column=col, value=-(y.get("vaCost", 0) or 0))
-        cell.number_format = CURRENCY_FMT
-        cell.border = THIN_BORDER
+    vac_cost_row = row
+    _add_cf_data_row(ws2, row, "Value-Add Cost", [y.get("vaCost", 0) or 0 for y in years], negate=True)
     row += 1
 
     row += 1
@@ -993,25 +1080,97 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     ws2.cell(row=row, column=1).fill = AMBER_FILL
     for i in range(num_years):
         col = i + 2
-        col_letter = get_column_letter(col)
+        cl = get_column_letter(col)
         cell = ws2.cell(row=row, column=col,
-                       value=f"={col_letter}{noi_row}+{col_letter}{ds_row}+{col_letter}{capex_row}+{col_letter}{tilc_row}+{col_letter}{vai_row}+{col_letter}{vac_row}")
+                        value=f"={cl}{noi_row}+{cl}{ds_row}+{cl}{capex_row}+{cl}{tilc_row}+{cl}{vai_row}+{cl}{vac_cost_row}")
         cell.number_format = CURRENCY_FMT
         cell.border = THIN_BORDER
         cell.fill = AMBER_FILL
         cell.font = Font(name="Calibri", bold=True)
 
-    # Totals column
-    col = num_years + 2
-    col_letter = get_column_letter(col)
-    cell = ws2.cell(row=row, column=col, value=f"=SUM({get_column_letter(2)}{ncf_row}:{get_column_letter(num_years+1)}{ncf_row})")
-    cell.number_format = CURRENCY_FMT
-    cell.border = THIN_BORDER
-    cell.fill = AMBER_FILL
-    cell.font = Font(name="Calibri", bold=True)
+    # NCF total column (SUM formula)
+    ncf_total_cell = ws2.cell(row=row, column=total_col,
+                               value=f"=SUM({first_col}{ncf_row}:{last_col}{ncf_row})")
+    ncf_total_cell.number_format = CURRENCY_FMT
+    ncf_total_cell.border = THIN_BORDER
+    ncf_total_cell.fill = AMBER_FILL
+    ncf_total_cell.font = Font(name="Calibri", bold=True)
+
+    # ── CASH FLOW METRICS section ──
+    row += 2
+    row = _section_header(ws2, row, "CASH FLOW METRICS", total_col)
+
+    # Cash-on-Cash % row (formula = NCF / Equity)
+    coc_row = row
+    ws2.cell(row=row, column=1, value="Cash-on-Cash %").font = METRIC_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    ws2.cell(row=row, column=1).fill = METRIC_FILL
+    for i in range(num_years):
+        col = i + 2
+        cl = get_column_letter(col)
+        cell = ws2.cell(row=row, column=col,
+                        value=f"=IF(Equity<>0,{cl}{ncf_row}/Equity,0)")
+        cell.number_format = PERCENT_FMT
+        cell.border = THIN_BORDER
+        cell.fill = METRIC_FILL
+    # Average CoC in total column
+    ws2.cell(row=row, column=total_col,
+             value=f"=IF(Equity<>0,{get_column_letter(total_col)}{ncf_row}/(Equity*{num_years}),0)").number_format = PERCENT_FMT
+    ws2.cell(row=row, column=total_col).border = THIN_BORDER
+    ws2.cell(row=row, column=total_col).fill = METRIC_FILL
+    row += 1
+
+    # DSCR row (formula = NOI / ABS(DS))
+    dscr_cf_row = row
+    ws2.cell(row=row, column=1, value="DSCR").font = METRIC_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    ws2.cell(row=row, column=1).fill = METRIC_FILL
+    for i in range(num_years):
+        col = i + 2
+        cl = get_column_letter(col)
+        cell = ws2.cell(row=row, column=col,
+                        value=f"=IF(ABS({cl}{ds_row})<>0,{cl}{noi_row}/ABS({cl}{ds_row}),0)")
+        cell.number_format = RATIO_FMT
+        cell.border = THIN_BORDER
+        cell.fill = METRIC_FILL
+    ws2.cell(row=row, column=total_col).border = THIN_BORDER
+    ws2.cell(row=row, column=total_col).fill = METRIC_FILL
+    row += 1
+
+    # Debt Yield row (formula = NOI / LoanAmount)
+    dy_row = row
+    ws2.cell(row=row, column=1, value="Debt Yield").font = METRIC_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    ws2.cell(row=row, column=1).fill = METRIC_FILL
+    for i in range(num_years):
+        col = i + 2
+        cl = get_column_letter(col)
+        cell = ws2.cell(row=row, column=col,
+                        value=f"=IF(LoanAmount<>0,{cl}{noi_row}/LoanAmount,0)")
+        cell.number_format = PERCENT_FMT
+        cell.border = THIN_BORDER
+        cell.fill = METRIC_FILL
+    ws2.cell(row=row, column=total_col).border = THIN_BORDER
+    ws2.cell(row=row, column=total_col).fill = METRIC_FILL
+    row += 1
+
+    # Loan Balance row
+    lb_row = row
+    ws2.cell(row=row, column=1, value="Loan Balance").font = METRIC_FONT
+    ws2.cell(row=row, column=1).border = THIN_BORDER
+    ws2.cell(row=row, column=1).fill = METRIC_FILL
+    for i, y in enumerate(years):
+        col = i + 2
+        cell = ws2.cell(row=row, column=col, value=y.get("loanBal", 0) or 0)
+        cell.number_format = CURRENCY_FMT
+        cell.border = THIN_BORDER
+        cell.fill = METRIC_FILL
+    ws2.cell(row=row, column=total_col).border = THIN_BORDER
+    ws2.cell(row=row, column=total_col).fill = METRIC_FILL
+    row += 1
 
     # ══════════════════════════════════════════
-    # Sheet 3: Returns (with formulas)
+    # Sheet 3: Returns (with formulas + Deal Summary)
     # ══════════════════════════════════════════
     ws3 = wb.create_sheet("Returns")
     ws3.column_dimensions["A"].width = 30
@@ -1051,6 +1210,58 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     v_cell.font = Font(name="Calibri", bold=True, size=12, color="166534" if calc.get("goGreen") else "991B1B")
     v_cell.fill = GREEN_FILL if calc.get("goGreen") else RED_FILL
     v_cell.border = THIN_BORDER
+    row += 2
+
+    # ── Deal Summary Write-Up ──
+    row = _section_header(ws3, row, "Executive Summary", 2)
+
+    # Build summary paragraph
+    sf_val = total_sf
+    asset_type = p.get("assetType", "commercial")
+    address = p.get("address", "N/A")
+    irr_val = calc.get("levIRR", 0) or 0
+    em_val = calc.get("em", 0) or 0
+    y1_noi = calc.get("y1NOI", 0) or p.get("y1NOI", 0) or 0
+    going_cap = calc.get("goingCap", 0) or 0
+    price_psf = (purchase_price / sf_val) if sf_val > 0 else 0
+
+    # Lease concentration note
+    lease_note = ""
+    if tenant_analytics and tenant_analytics.get("top_tenant_pct", 0) > 0:
+        top_pct = tenant_analytics["top_tenant_pct"]
+        if top_pct > 0.30:
+            top_name = tenant_analytics["tenants_with_rev"][0].get("name", "top tenant") if tenant_analytics["tenants_with_rev"] else "top tenant"
+            lease_note = f"concentration risk ({top_name} represents {top_pct*100:.0f}% of revenue)"
+        else:
+            lease_note = "diversified tenant base"
+    else:
+        lease_note = "tenant roll analysis pending"
+
+    # Near-term expiry note
+    expiry_note = ""
+    if tenant_analytics and tenant_analytics.get("walt", 0) > 0:
+        walt = tenant_analytics["walt"]
+        if walt < 3:
+            expiry_note = f"near-term lease rollover risk (WALT: {walt:.1f} years)"
+        else:
+            expiry_note = f"stable lease term (WALT: {walt:.1f} years)"
+    else:
+        expiry_note = "lease term analysis pending"
+
+    summary_text = (
+        f"The {prop_name} is a {sf_val:,.0f} SF {asset_type} property "
+        f"located at {address}, offered at {_fmt_currency(purchase_price)} "
+        f"({_fmt_currency(price_psf)}/SF). The going-in cap rate is {going_cap:.2f}% "
+        f"with a projected levered IRR of {irr_val:.2f}% and {em_val:.2f}x equity multiple "
+        f"over a {hold}-year hold period. The property generates Year 1 NOI of {_fmt_currency(y1_noi)}. "
+        f"Key considerations include {lease_note} and {expiry_note}."
+    )
+
+    ws3.merge_cells(start_row=row, start_column=1, end_row=row + 3, end_column=2)
+    summary_cell = ws3.cell(row=row, column=1, value=summary_text)
+    summary_cell.font = Font(name="Calibri", size=10, italic=True)
+    summary_cell.alignment = Alignment(wrap_text=True, vertical="top")
+    summary_cell.border = THIN_BORDER
 
     # ══════════════════════════════════════════
     # Sheet 4: Waterfall (with tier labels)
@@ -1225,6 +1436,232 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
             ws6.cell(row=ri, column=11, value=(t.get("lcPct", 0) or 0) / 100).number_format = PERCENT_FMT
             ws6.cell(row=ri, column=11).border = THIN_BORDER
 
+    # ══════════════════════════════════════════
+    # Sheet 7: Key Insights
+    # ══════════════════════════════════════════
+    ws_insights = wb.create_sheet("Key Insights")
+    ws_insights.column_dimensions["A"].width = 28
+    ws_insights.column_dimensions["B"].width = 18
+    ws_insights.column_dimensions["C"].width = 18
+    ws_insights.column_dimensions["D"].width = 18
+    ws_insights.column_dimensions["E"].width = 18
+
+    ws_insights.merge_cells("A1:E1")
+    ws_insights.cell(row=1, column=1, value="Key Insights & Tenant Analytics").font = TITLE_FONT
+
+    row = 3
+
+    if tenants and tenant_analytics:
+        # ── Lease Expiration Profile ──
+        row = _section_header(ws_insights, row, "Lease Expiration Profile", 5)
+        for ci, h in enumerate(["Year", "# Tenants Expiring", "SF Expiring", "% of Total SF", "Revenue At Risk"], 1):
+            cell = ws_insights.cell(row=row, column=ci, value=h)
+            cell.font = HEADER_FONT
+            cell.fill = HEADER_FILL
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = THIN_BORDER
+        row += 1
+
+        expiry_buckets = tenant_analytics.get("expiry_buckets", {})
+        for yr_key in sorted(expiry_buckets.keys()):
+            bucket_tenants = expiry_buckets[yr_key]
+            n_tenants = len(bucket_tenants)
+            sf_expiring = sum(t.get("sf", 0) or 0 for t in bucket_tenants)
+            pct_sf = sf_expiring / total_sf if total_sf > 0 else 0
+            rev_at_risk = sum((t.get("sf", 0) or 0) * (t.get("rentPSF", 0) or 0) for t in bucket_tenants)
+
+            ws_insights.cell(row=row, column=1, value=yr_key).border = THIN_BORDER
+            ws_insights.cell(row=row, column=2, value=n_tenants).border = THIN_BORDER
+            ws_insights.cell(row=row, column=2).alignment = Alignment(horizontal="center")
+            ws_insights.cell(row=row, column=3, value=sf_expiring).number_format = NUMBER_FMT
+            ws_insights.cell(row=row, column=3).border = THIN_BORDER
+            pct_cell = ws_insights.cell(row=row, column=4, value=pct_sf)
+            pct_cell.number_format = PERCENT_FMT
+            pct_cell.border = THIN_BORDER
+            if pct_sf > 0.25:
+                pct_cell.fill = RED_FILL
+                pct_cell.font = RED_FONT
+            elif pct_sf > 0.15:
+                pct_cell.fill = AMBER_FILL
+            ws_insights.cell(row=row, column=5, value=rev_at_risk).number_format = CURRENCY_FMT
+            ws_insights.cell(row=row, column=5).border = THIN_BORDER
+            row += 1
+
+        row += 1
+
+        # ── Top 5 Tenants by Revenue ──
+        row = _section_header(ws_insights, row, "Top 5 Tenants by Revenue", 5)
+        for ci, h in enumerate(["Tenant", "SF", "Rent/SF", "Annual Revenue", "% of Total"], 1):
+            cell = ws_insights.cell(row=row, column=ci, value=h)
+            cell.font = HEADER_FONT
+            cell.fill = HEADER_FILL
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = THIN_BORDER
+        row += 1
+
+        top5 = tenant_analytics.get("tenants_with_rev", [])[:5]
+        total_rev = tenant_analytics.get("total_revenue", 0)
+        for t in top5:
+            ws_insights.cell(row=row, column=1, value=t.get("name", "")).border = THIN_BORDER
+            ws_insights.cell(row=row, column=2, value=t.get("_sf", 0)).number_format = NUMBER_FMT
+            ws_insights.cell(row=row, column=2).border = THIN_BORDER
+            ws_insights.cell(row=row, column=3, value=t.get("rentPSF", 0)).number_format = CURRENCY_CENTS_FMT
+            ws_insights.cell(row=row, column=3).border = THIN_BORDER
+            ws_insights.cell(row=row, column=4, value=t.get("_annual_rev", 0)).number_format = CURRENCY_FMT
+            ws_insights.cell(row=row, column=4).border = THIN_BORDER
+            pct = t.get("_annual_rev", 0) / total_rev if total_rev > 0 else 0
+            ws_insights.cell(row=row, column=5, value=pct).number_format = PERCENT_FMT
+            ws_insights.cell(row=row, column=5).border = THIN_BORDER
+            row += 1
+
+        row += 1
+
+        # ── Concentration & WALT ──
+        row = _section_header(ws_insights, row, "Risk Metrics", 2)
+        top_pct = tenant_analytics.get("top_tenant_pct", 0)
+        top_name = top5[0].get("name", "N/A") if top5 else "N/A"
+        row = _add_kv_row(ws_insights, row, f"Top Tenant ({top_name})", top_pct, PERCENT_FMT)
+        walt = tenant_analytics.get("walt", 0)
+        row = _add_kv_row(ws_insights, row, "Weighted Avg Lease Term (WALT)", f"{walt:.1f} years")
+
+        # Color-code concentration
+        conc_cell = ws_insights.cell(row=row, column=1, value="Concentration Risk")
+        conc_cell.font = LABEL_FONT
+        conc_cell.border = THIN_BORDER
+        if top_pct > 0.30:
+            risk_cell = ws_insights.cell(row=row, column=2, value="HIGH")
+            risk_cell.fill = RED_FILL
+            risk_cell.font = RED_FONT
+        elif top_pct > 0.15:
+            risk_cell = ws_insights.cell(row=row, column=2, value="MODERATE")
+            risk_cell.fill = AMBER_FILL
+        else:
+            risk_cell = ws_insights.cell(row=row, column=2, value="LOW")
+            risk_cell.fill = GREEN_FILL
+            risk_cell.font = GREEN_FONT
+        risk_cell.border = THIN_BORDER
+    else:
+        ws_insights.cell(row=row, column=1, value="No tenant data available. Add tenants in the Rent Roll tab to generate analytics.").font = Font(name="Calibri", italic=True, size=10)
+
+    # ══════════════════════════════════════════
+    # Sheet 8: Charts
+    # ══════════════════════════════════════════
+    if num_years > 0:
+        ws_charts = wb.create_sheet("Charts")
+        ws_charts.column_dimensions["A"].width = 10
+
+        # ── Data table for charts (hidden-ish at top of Charts sheet) ──
+        chart_data_start = 1
+        ws_charts.cell(row=1, column=1, value="Year").font = HEADER_FONT
+        ws_charts.cell(row=1, column=1).fill = HEADER_FILL
+        ws_charts.cell(row=1, column=2, value="NOI").font = HEADER_FONT
+        ws_charts.cell(row=1, column=2).fill = HEADER_FILL
+        ws_charts.cell(row=1, column=3, value="Debt Service").font = HEADER_FONT
+        ws_charts.cell(row=1, column=3).fill = HEADER_FILL
+        ws_charts.cell(row=1, column=4, value="Net Cash Flow").font = HEADER_FONT
+        ws_charts.cell(row=1, column=4).fill = HEADER_FILL
+        ws_charts.cell(row=1, column=5, value="Loan Balance").font = HEADER_FONT
+        ws_charts.cell(row=1, column=5).fill = HEADER_FILL
+
+        for i, y in enumerate(years):
+            r = i + 2
+            ws_charts.cell(row=r, column=1, value=f"Year {y.get('yr', i+1)}")
+            ws_charts.cell(row=r, column=2, value=y.get("noi", 0))
+            ws_charts.cell(row=r, column=3, value=abs(y.get("annDS", 0) or 0))
+            ncf_val = (y.get("noi", 0) or 0) - abs(y.get("annDS", 0) or 0) - (y.get("capexRes", 0) or 0) - (y.get("specCapex", 0) or 0) - (y.get("tiLC", 0) or 0) + (y.get("vaInc", 0) or 0) - (y.get("vaCost", 0) or 0)
+            ws_charts.cell(row=r, column=4, value=ncf_val)
+            ws_charts.cell(row=r, column=5, value=y.get("loanBal", 0) or 0)
+
+        data_end = num_years + 1
+
+        # ── Chart A: NOI vs DS vs NCF (Bar) ──
+        chart1 = BarChart()
+        chart1.type = "col"
+        chart1.style = 10
+        chart1.title = "NOI vs Debt Service vs Net Cash Flow"
+        chart1.y_axis.title = "Amount ($)"
+        chart1.x_axis.title = "Year"
+        chart1.width = 20
+        chart1.height = 12
+
+        cats = Reference(ws_charts, min_col=1, min_row=2, max_row=data_end)
+        noi_data = Reference(ws_charts, min_col=2, min_row=1, max_row=data_end)
+        ds_data = Reference(ws_charts, min_col=3, min_row=1, max_row=data_end)
+        ncf_data = Reference(ws_charts, min_col=4, min_row=1, max_row=data_end)
+
+        chart1.add_data(noi_data, titles_from_data=True)
+        chart1.add_data(ds_data, titles_from_data=True)
+        chart1.add_data(ncf_data, titles_from_data=True)
+        chart1.set_categories(cats)
+
+        # Color the series
+        chart1.series[0].graphicalProperties.solidFill = "22C55E"  # green for NOI
+        chart1.series[1].graphicalProperties.solidFill = "EF4444"  # red for DS
+        chart1.series[2].graphicalProperties.solidFill = "3B82F6"  # blue for NCF
+
+        ws_charts.add_chart(chart1, f"A{data_end + 3}")
+
+        # ── Chart B: Loan Balance (Line) ──
+        chart2 = LineChart()
+        chart2.style = 10
+        chart2.title = "Loan Balance Over Hold Period"
+        chart2.y_axis.title = "Loan Balance ($)"
+        chart2.x_axis.title = "Year"
+        chart2.width = 20
+        chart2.height = 12
+
+        lb_data = Reference(ws_charts, min_col=5, min_row=1, max_row=data_end)
+        chart2.add_data(lb_data, titles_from_data=True)
+        chart2.set_categories(cats)
+        chart2.series[0].graphicalProperties.line.solidFill = "F59E0B"  # amber
+
+        ws_charts.add_chart(chart2, f"A{data_end + 20}")
+
+        # ── Chart C: Lease Expiration Profile (Bar) — if tenants exist ──
+        if tenants and tenant_analytics and tenant_analytics.get("expiry_buckets"):
+            expiry_buckets = tenant_analytics["expiry_buckets"]
+            sorted_years = sorted(expiry_buckets.keys())
+
+            # Write expiry data for chart
+            exp_start_row = data_end + 38
+            ws_charts.cell(row=exp_start_row, column=1, value="Expiry Year").font = HEADER_FONT
+            ws_charts.cell(row=exp_start_row, column=1).fill = HEADER_FILL
+            ws_charts.cell(row=exp_start_row, column=2, value="# Tenants").font = HEADER_FONT
+            ws_charts.cell(row=exp_start_row, column=2).fill = HEADER_FILL
+            ws_charts.cell(row=exp_start_row, column=3, value="SF Expiring").font = HEADER_FONT
+            ws_charts.cell(row=exp_start_row, column=3).fill = HEADER_FILL
+
+            for idx, yr_key in enumerate(sorted_years):
+                r = exp_start_row + 1 + idx
+                ws_charts.cell(row=r, column=1, value=yr_key)
+                ws_charts.cell(row=r, column=2, value=len(expiry_buckets[yr_key]))
+                sf_exp = sum(t.get("sf", 0) or 0 for t in expiry_buckets[yr_key])
+                ws_charts.cell(row=r, column=3, value=sf_exp)
+
+            exp_end = exp_start_row + len(sorted_years)
+
+            chart3 = BarChart()
+            chart3.type = "col"
+            chart3.style = 10
+            chart3.title = "Lease Expiration Profile"
+            chart3.y_axis.title = "Count / SF"
+            chart3.x_axis.title = "Year"
+            chart3.width = 20
+            chart3.height = 12
+
+            exp_cats = Reference(ws_charts, min_col=1, min_row=exp_start_row + 1, max_row=exp_end)
+            exp_tenant_data = Reference(ws_charts, min_col=2, min_row=exp_start_row, max_row=exp_end)
+            exp_sf_data = Reference(ws_charts, min_col=3, min_row=exp_start_row, max_row=exp_end)
+
+            chart3.add_data(exp_tenant_data, titles_from_data=True)
+            chart3.add_data(exp_sf_data, titles_from_data=True)
+            chart3.set_categories(exp_cats)
+
+            chart3.series[0].graphicalProperties.solidFill = "8B5CF6"  # purple
+            chart3.series[1].graphicalProperties.solidFill = "F97316"  # orange
+
+            ws_charts.add_chart(chart3, f"A{exp_end + 3}")
+
     # ── Write to buffer ──
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -1237,5 +1674,386 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ═══════════════════════════════════════════════════════════
+# V2 MEMO HTML EXPORT
+# ═══════════════════════════════════════════════════════════
+
+@router.post("/v2/memo/html")
+async def export_v2_memo_html(data: V2ExportRequest):
+    """Generate a styled HTML memo for the deal — can be printed to PDF via browser."""
+    state = data.v2_state or {}
+    calc = data.calc or {}
+    p = state.get("assumptions", {})
+    wf = state.get("waterfall", {})
+    tenants = state.get("tenants", [])
+    years = calc.get("years", [])
+
+    prop_name = p.get("name", "Untitled Deal")
+    hold = p.get("holdPeriod", 5)
+    total_sf = p.get("sf", 0) or 0
+    purchase_price = p.get("purchasePrice", calc.get("pp", 0)) or 0
+    ltv_pct = (p.get("ltv", 65) or 65)
+    loan_amount = purchase_price * ltv_pct / 100
+    equity_val = calc.get("totalEq", 0) or calc.get("equity", 0) or (purchase_price - loan_amount)
+    irr_val = calc.get("levIRR", 0) or 0
+    em_val = calc.get("em", 0) or 0
+    going_cap = calc.get("goingCap", 0) or 0
+    y1_noi = calc.get("y1NOI", 0) or p.get("y1NOI", 0) or 0
+    price_psf = purchase_price / total_sf if total_sf > 0 else 0
+
+    tenant_analytics = _v2_build_tenant_analytics(tenants, total_sf)
+
+    # Build HTML
+    html_parts = []
+    html_parts.append(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{prop_name} — Investment Memo</title>
+<style>
+  @page {{ size: letter; margin: 1in; }}
+  body {{ font-family: 'Segoe UI', Calibri, Arial, sans-serif; color: #1a1a2e; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 40px; }}
+  h1 {{ color: #0A1628; border-bottom: 3px solid #0A1628; padding-bottom: 10px; }}
+  h2 {{ color: #132A42; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 30px; }}
+  table {{ border-collapse: collapse; width: 100%; margin: 15px 0; }}
+  th {{ background: #0A1628; color: white; padding: 8px 12px; text-align: left; }}
+  td {{ padding: 6px 12px; border-bottom: 1px solid #e0e0e0; }}
+  tr:nth-child(even) {{ background: #f8f9fa; }}
+  .metric {{ display: inline-block; background: #EFF6FF; border: 1px solid #DBEAFE; border-radius: 8px; padding: 12px 20px; margin: 5px; text-align: center; min-width: 140px; }}
+  .metric .label {{ font-size: 11px; color: #6b7280; text-transform: uppercase; }}
+  .metric .value {{ font-size: 20px; font-weight: bold; color: #0A1628; }}
+  .go {{ color: #166534; background: #DCFCE7; padding: 4px 12px; border-radius: 4px; font-weight: bold; }}
+  .nogo {{ color: #991B1B; background: #FEE2E2; padding: 4px 12px; border-radius: 4px; font-weight: bold; }}
+  .summary {{ background: #f0f4f8; border-left: 4px solid #0A1628; padding: 15px 20px; margin: 20px 0; font-style: italic; }}
+  .footer {{ margin-top: 40px; padding-top: 15px; border-top: 1px solid #ccc; font-size: 11px; color: #999; }}
+</style>
+</head>
+<body>
+<h1>{prop_name}</h1>
+<p style="color: #6b7280; margin-top: -10px;">Investment Memo &mdash; Generated {datetime.now().strftime('%B %d, %Y')}</p>
+""")
+
+    # Executive Summary
+    lease_note = "diversified tenant base"
+    expiry_note = "lease term analysis pending"
+    if tenant_analytics:
+        top_pct = tenant_analytics.get("top_tenant_pct", 0)
+        walt = tenant_analytics.get("walt", 0)
+        if top_pct > 0.30:
+            top_name = tenant_analytics["tenants_with_rev"][0].get("name", "top tenant") if tenant_analytics.get("tenants_with_rev") else "top tenant"
+            lease_note = f"concentration risk ({top_name} at {top_pct*100:.0f}% of revenue)"
+        if walt > 0:
+            expiry_note = f"WALT of {walt:.1f} years"
+
+    html_parts.append(f"""
+<h2>Executive Summary</h2>
+<div class="summary">
+The {prop_name} is a {total_sf:,.0f} SF {p.get('assetType', 'commercial')} property
+located at {p.get('address', 'N/A')}, offered at {_fmt_currency(purchase_price)}
+({_fmt_currency(price_psf)}/SF). The going-in cap rate is {going_cap:.2f}%
+with a projected levered IRR of {irr_val:.2f}% and {em_val:.2f}x equity multiple
+over a {hold}-year hold period. Year 1 NOI: {_fmt_currency(y1_noi)}.
+Key considerations include {lease_note} and {expiry_note}.
+</div>
+""")
+
+    # Key Metrics
+    verdict_class = "go" if calc.get("goGreen") else "nogo"
+    verdict_text = "GO" if calc.get("goGreen") else "NO-GO"
+    html_parts.append(f"""
+<h2>Key Return Metrics</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0;">
+  <div class="metric"><div class="label">Levered IRR</div><div class="value">{irr_val:.2f}%</div></div>
+  <div class="metric"><div class="label">Equity Multiple</div><div class="value">{em_val:.2f}x</div></div>
+  <div class="metric"><div class="label">Avg CoC</div><div class="value">{(calc.get('avgCoC', 0) or 0):.2f}%</div></div>
+  <div class="metric"><div class="label">DSCR</div><div class="value">{(calc.get('dscr', 0) or 0):.2f}x</div></div>
+  <div class="metric"><div class="label">Going-In Cap</div><div class="value">{going_cap:.2f}%</div></div>
+  <div class="metric"><div class="label">Verdict</div><div class="value"><span class="{verdict_class}">{verdict_text}</span></div></div>
+</div>
+""")
+
+    # Capital Structure
+    html_parts.append(f"""
+<h2>Capital Structure</h2>
+<table>
+  <tr><th>Item</th><th>Amount</th><th>Per SF</th></tr>
+  <tr><td>Purchase Price</td><td>{_fmt_currency(purchase_price)}</td><td>{_fmt_currency(price_psf)}</td></tr>
+  <tr><td>Loan Amount ({ltv_pct:.0f}% LTV)</td><td>{_fmt_currency(loan_amount)}</td><td>{_fmt_currency(loan_amount/total_sf if total_sf > 0 else 0)}</td></tr>
+  <tr><td>Equity Required</td><td>{_fmt_currency(equity_val)}</td><td>{_fmt_currency(equity_val/total_sf if total_sf > 0 else 0)}</td></tr>
+</table>
+""")
+
+    # Cash Flow table
+    if years:
+        html_parts.append("<h2>Cash Flow Projection</h2><table><tr><th>Year</th><th>NOI</th><th>Debt Service</th><th>Net CF</th></tr>")
+        for y in years:
+            noi_v = y.get("noi", 0) or 0
+            ds_v = y.get("annDS", 0) or 0
+            ncf_v = noi_v - abs(ds_v) - (y.get("capexRes", 0) or 0) - (y.get("specCapex", 0) or 0) - (y.get("tiLC", 0) or 0)
+            html_parts.append(f"<tr><td>Year {y.get('yr', '')}</td><td>{_fmt_currency(noi_v)}</td><td>{_fmt_currency(abs(ds_v))}</td><td>{_fmt_currency(ncf_v)}</td></tr>")
+        html_parts.append("</table>")
+
+    # Waterfall
+    if wf:
+        lp_out = calc.get("lpOut", 0) or 0
+        gp_out = calc.get("gpOut", 0) or 0
+        html_parts.append(f"""
+<h2>Waterfall Distribution</h2>
+<table>
+  <tr><th>Metric</th><th>LP</th><th>GP</th></tr>
+  <tr><td>Equity</td><td>{_fmt_currency(calc.get('lpEq', 0))}</td><td>{_fmt_currency(calc.get('gpEq', 0))}</td></tr>
+  <tr><td>Total Distributions</td><td>{_fmt_currency(lp_out)}</td><td>{_fmt_currency(gp_out)}</td></tr>
+  <tr><td>IRR</td><td>{(calc.get('lpIRR', 0) or 0):.2f}%</td><td>{(calc.get('gpIRR', 0) or 0):.2f}%</td></tr>
+  <tr><td>GP Promote</td><td></td><td>{_fmt_currency(calc.get('gpPromote', 0))}</td></tr>
+</table>
+""")
+
+    html_parts.append(f"""
+<div class="footer">
+  <p>Generated by CRE Lytic &mdash; {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+  <p>This memo is for informational purposes only and does not constitute investment advice.</p>
+</div>
+</body></html>""")
+
+    html_content = "".join(html_parts)
+
+    safe_name = prop_name.replace(" ", "_").replace("/", "-")
+    safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]
+    filename = f"{safe_name}_Memo.html"
+
+    return StreamingResponse(
+        io.BytesIO(html_content.encode("utf-8")),
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ═══════════════════════════════════════════════════════════
+# V2 MEMO DOCX EXPORT
+# ═══════════════════════════════════════════════════════════
+
+@router.post("/v2/memo/docx")
+async def export_v2_memo_docx(data: V2ExportRequest):
+    """Generate a professional Word memo from V2 deal data."""
+    if not HAS_DOCX:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=501,
+            content={"detail": "python-docx is not installed. Run: pip install python-docx"},
+        )
+
+    state = data.v2_state or {}
+    calc = data.calc or {}
+    p = state.get("assumptions", {})
+    wf = state.get("waterfall", {})
+    tenants = state.get("tenants", [])
+    years = calc.get("years", [])
+
+    prop_name = p.get("name", "Untitled Deal")
+    hold = p.get("holdPeriod", 5)
+    total_sf = p.get("sf", 0) or 0
+    purchase_price = p.get("purchasePrice", calc.get("pp", 0)) or 0
+    ltv_pct = (p.get("ltv", 65) or 65)
+    loan_amount = purchase_price * ltv_pct / 100
+    equity_val = calc.get("totalEq", 0) or calc.get("equity", 0) or (purchase_price - loan_amount)
+    irr_val = calc.get("levIRR", 0) or 0
+    em_val = calc.get("em", 0) or 0
+    going_cap = calc.get("goingCap", 0) or 0
+    y1_noi = calc.get("y1NOI", 0) or p.get("y1NOI", 0) or 0
+    price_psf = purchase_price / total_sf if total_sf > 0 else 0
+
+    tenant_analytics = _v2_build_tenant_analytics(tenants, total_sf)
+
+    doc = Document()
+
+    # Styles
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(10)
+
+    # Title
+    title_para = doc.add_heading(prop_name, level=0)
+    title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    subtitle = doc.add_paragraph()
+    subtitle_run = subtitle.add_run(f"Investment Memo — {datetime.now().strftime('%B %d, %Y')}")
+    subtitle_run.font.size = Pt(10)
+    subtitle_run.font.color.rgb = None  # default
+    subtitle_run.italic = True
+
+    # ── Executive Summary ──
+    doc.add_heading("Executive Summary", level=1)
+
+    lease_note = "diversified tenant base"
+    expiry_note = "lease term analysis pending"
+    if tenant_analytics:
+        top_pct = tenant_analytics.get("top_tenant_pct", 0)
+        walt = tenant_analytics.get("walt", 0)
+        if top_pct > 0.30:
+            top_name = tenant_analytics["tenants_with_rev"][0].get("name", "top tenant") if tenant_analytics.get("tenants_with_rev") else "top tenant"
+            lease_note = f"concentration risk ({top_name} at {top_pct*100:.0f}% of revenue)"
+        if walt > 0:
+            expiry_note = f"WALT of {walt:.1f} years"
+
+    summary_text = (
+        f"The {prop_name} is a {total_sf:,.0f} SF {p.get('assetType', 'commercial')} property "
+        f"located at {p.get('address', 'N/A')}, offered at {_fmt_currency(purchase_price)} "
+        f"({_fmt_currency(price_psf)}/SF). The going-in cap rate is {going_cap:.2f}% "
+        f"with a projected levered IRR of {irr_val:.2f}% and {em_val:.2f}x equity multiple "
+        f"over a {hold}-year hold period. The property generates Year 1 NOI of {_fmt_currency(y1_noi)}. "
+        f"Key considerations include {lease_note} and {expiry_note}."
+    )
+    summary_para = doc.add_paragraph(summary_text)
+    summary_para.style.font.size = Pt(10)
+
+    # ── Capital Structure ──
+    doc.add_heading("Capital Structure", level=1)
+    cap_table = doc.add_table(rows=4, cols=3)
+    cap_table.style = 'Light Grid Accent 1'
+    cap_table.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+    cap_headers = ["Item", "Amount", "Per SF"]
+    for i, h in enumerate(cap_headers):
+        cap_table.rows[0].cells[i].text = h
+        for paragraph in cap_table.rows[0].cells[i].paragraphs:
+            for run in paragraph.runs:
+                run.bold = True
+
+    cap_data = [
+        ("Purchase Price", _fmt_currency(purchase_price), _fmt_currency(price_psf)),
+        (f"Loan ({ltv_pct:.0f}% LTV)", _fmt_currency(loan_amount), _fmt_currency(loan_amount/total_sf if total_sf > 0 else 0)),
+        ("Equity", _fmt_currency(equity_val), _fmt_currency(equity_val/total_sf if total_sf > 0 else 0)),
+    ]
+    for ri, (label, amt, psf) in enumerate(cap_data, 1):
+        cap_table.rows[ri].cells[0].text = label
+        cap_table.rows[ri].cells[1].text = str(amt)
+        cap_table.rows[ri].cells[2].text = str(psf)
+
+    # ── Returns Summary ──
+    doc.add_heading("Returns Summary", level=1)
+    ret_table = doc.add_table(rows=6, cols=2)
+    ret_table.style = 'Light Grid Accent 1'
+    ret_table.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+    ret_data = [
+        ("Metric", "Value"),
+        ("Levered IRR", f"{irr_val:.2f}%"),
+        ("Equity Multiple", f"{em_val:.2f}x"),
+        ("Avg Cash-on-Cash", f"{(calc.get('avgCoC', 0) or 0):.2f}%"),
+        ("DSCR (Year 1)", f"{(calc.get('dscr', 0) or 0):.2f}x"),
+        ("Verdict", "GO" if calc.get("goGreen") else "NO-GO"),
+    ]
+    for ri, (label, val) in enumerate(ret_data):
+        ret_table.rows[ri].cells[0].text = label
+        ret_table.rows[ri].cells[1].text = str(val)
+        if ri == 0:
+            for cell in ret_table.rows[ri].cells:
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.bold = True
+
+    # ── Cash Flow Table ──
+    if years:
+        doc.add_heading("Cash Flow Projection", level=1)
+        cf_table = doc.add_table(rows=len(years) + 1, cols=4)
+        cf_table.style = 'Light Grid Accent 1'
+        cf_table.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+        cf_headers = ["Year", "NOI", "Debt Service", "Net CF"]
+        for i, h in enumerate(cf_headers):
+            cf_table.rows[0].cells[i].text = h
+            for paragraph in cf_table.rows[0].cells[i].paragraphs:
+                for run in paragraph.runs:
+                    run.bold = True
+
+        for ri, y in enumerate(years, 1):
+            noi_v = y.get("noi", 0) or 0
+            ds_v = abs(y.get("annDS", 0) or 0)
+            ncf_v = noi_v - ds_v - (y.get("capexRes", 0) or 0) - (y.get("specCapex", 0) or 0) - (y.get("tiLC", 0) or 0)
+            cf_table.rows[ri].cells[0].text = f"Year {y.get('yr', ri)}"
+            cf_table.rows[ri].cells[1].text = _fmt_currency(noi_v)
+            cf_table.rows[ri].cells[2].text = _fmt_currency(ds_v)
+            cf_table.rows[ri].cells[3].text = _fmt_currency(ncf_v)
+
+    # ── Waterfall Distribution ──
+    if wf:
+        doc.add_heading("Waterfall Distribution", level=1)
+        wf_table = doc.add_table(rows=5, cols=3)
+        wf_table.style = 'Light Grid Accent 1'
+        wf_table.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+        wf_data = [
+            ("Metric", "LP", "GP"),
+            ("Equity", _fmt_currency(calc.get("lpEq", 0)), _fmt_currency(calc.get("gpEq", 0))),
+            ("Total Distributions", _fmt_currency(calc.get("lpOut", 0)), _fmt_currency(calc.get("gpOut", 0))),
+            ("IRR", f"{(calc.get('lpIRR', 0) or 0):.2f}%", f"{(calc.get('gpIRR', 0) or 0):.2f}%"),
+            ("GP Promote", "", _fmt_currency(calc.get("gpPromote", 0))),
+        ]
+        for ri, row_data in enumerate(wf_data):
+            for ci, val in enumerate(row_data):
+                wf_table.rows[ri].cells[ci].text = str(val)
+            if ri == 0:
+                for cell in wf_table.rows[ri].cells:
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            run.bold = True
+
+    # ── Key Insights ──
+    if tenants and tenant_analytics:
+        doc.add_heading("Key Insights", level=1)
+
+        walt = tenant_analytics.get("walt", 0)
+        top_pct = tenant_analytics.get("top_tenant_pct", 0)
+        top5 = tenant_analytics.get("tenants_with_rev", [])[:5]
+
+        doc.add_paragraph(f"Weighted Average Lease Term (WALT): {walt:.1f} years")
+        doc.add_paragraph(f"Top Tenant Concentration: {top_pct*100:.1f}% of total revenue")
+
+        if top5:
+            doc.add_heading("Top Tenants by Revenue", level=2)
+            tt_table = doc.add_table(rows=len(top5) + 1, cols=4)
+            tt_table.style = 'Light Grid Accent 1'
+            tt_table.alignment = WD_TABLE_ALIGNMENT.LEFT
+
+            tt_headers = ["Tenant", "SF", "Annual Revenue", "% of Total"]
+            for i, h in enumerate(tt_headers):
+                tt_table.rows[0].cells[i].text = h
+                for paragraph in tt_table.rows[0].cells[i].paragraphs:
+                    for run in paragraph.runs:
+                        run.bold = True
+
+            total_rev = tenant_analytics.get("total_revenue", 0)
+            for ri, t in enumerate(top5, 1):
+                tt_table.rows[ri].cells[0].text = t.get("name", "")
+                tt_table.rows[ri].cells[1].text = f"{t.get('_sf', 0):,.0f}"
+                tt_table.rows[ri].cells[2].text = _fmt_currency(t.get("_annual_rev", 0))
+                pct = t.get("_annual_rev", 0) / total_rev * 100 if total_rev > 0 else 0
+                tt_table.rows[ri].cells[3].text = f"{pct:.1f}%"
+
+    # Footer
+    doc.add_paragraph("")
+    footer = doc.add_paragraph()
+    footer_run = footer.add_run(f"Generated by CRE Lytic — {datetime.now().strftime('%Y-%m-%d %H:%M')}. "
+                                "This memo is for informational purposes only.")
+    footer_run.font.size = Pt(8)
+    footer_run.italic = True
+
+    # Save to buffer
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    safe_name = prop_name.replace(" ", "_").replace("/", "-")
+    safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]
+    filename = f"{safe_name}_Memo.docx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
