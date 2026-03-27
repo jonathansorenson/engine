@@ -2241,12 +2241,14 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
   const gpPromote = Math.max(0, gpOut - gpEq);
   const goGreen = (levIRR || 0) >= (p.hurdleTier1 || p.hurdleIRR || 9) && em >= (p.hurdleEM || 1.5);
 
+  const gpTotalDist = gpOut;
   return {
     pp, totalCost, loan, equity, origFee, acqCost,
     years, holdYears, exitNOI, exitVal, exitBal, saleNet, prepayAmt,
     goingCap, yoc, levIRR, unlevIRR, em, dscr, avgCoC,
     levCFsForIRR, totalReturn,
-    lpEq, gpEq, lpOut, gpOut, lpIRR, gpIRR, lpEM, gpPromote,
+    lpEq, gpEq, lpOut, gpOut, gpTotalDist, lpIRR, gpIRR, lpEM, gpPromote,
+    lpOpShare, gpOpShare, lpTerminal, gpTerminal, lpCFs, gpCFs,
     goGreen
   };
 };
@@ -2794,6 +2796,13 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const [rrUpSt, setRrUpSt] = useState('idle'); // idle | loading | success | error
   const [rrUpMsg, setRrUpMsg] = useState('');
   const rrFileRef = useRef(null);
+  const [t12St, setT12St] = useState('idle');
+  const [t12Msg, setT12Msg] = useState('');
+  const [t12Data, setT12Data] = useState(null);
+  // MLA profiles: per-space-type market leasing assumptions (Argus-style)
+  const [mlaProfiles, setMlaProfiles] = useState([
+    { id: 1, spaceType: 'Office', marketRentPSF: 25, rentEscalPct: 3, termYears: 5, renewalProb: 75, vacantMonths: 6, freeRentMonths: 2, tiNewPSF: 15, tiRenewalPSF: 10, lcNewPct: 6, lcRenewalPct: 4 },
+  ]);
 
   // Hydrate on mount — pull from saved v2_state first, then fall back to parsed OM data
   useEffect(() => {
@@ -3037,19 +3046,23 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         if (chartInstances.current[key]) chartInstances.current[key].destroy();
         chartInstances.current[key] = new window.Chart(ref.current.getContext('2d'), cfg);
       };
+      const legendStyle = { color: '#E8EDF2', font: { size: 14, weight: '500', family: "'DM Sans', system-ui, sans-serif" }, padding: 20, boxWidth: 14, boxHeight: 14, usePointStyle: true, pointStyle: 'rectRounded' };
+      const axTick = { color: '#B0BEC5', font: { size: 12, family: "'DM Sans', system-ui, sans-serif" } };
+      const gridStyle = { color: 'rgba(30, 51, 71, 0.6)' };
+      const titleFont = { color: '#E8EDF2', font: { size: 15, weight: '600', family: "'DM Sans', system-ui, sans-serif" }, display: true, padding: { bottom: 12 } };
       // 1) NOI vs Debt Service vs Net CF (bar)
       mkChart(cfChartRef, 'cf', {
         type: 'bar',
         data: {
           labels,
           datasets: [
-            { label: 'NOI ($M)', data: hold.map(y => y.noi / 1e6), backgroundColor: '#00BFA5' },
-            { label: 'Debt Service ($M)', data: hold.map(y => -y.annDS / 1e6), backgroundColor: '#F87171' },
-            { label: 'Net CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: '#34D399' },
+            { label: 'NOI ($M)', data: hold.map(y => y.noi / 1e6), backgroundColor: '#00BFA5', borderRadius: 3 },
+            { label: 'Debt Service ($M)', data: hold.map(y => -y.annDS / 1e6), backgroundColor: '#F87171', borderRadius: 3 },
+            { label: 'Net CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: '#34D399', borderRadius: 3 },
           ],
         },
-        options: { responsive: true, plugins: { legend: { labels: { color: 'var(--text-secondary)' } } },
-          scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(1) + 'M' } }, x: { ticks: { color: '#94A3B8' } } } },
+        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'NOI vs Debt Service vs Net Cash Flow' } },
+          scales: { y: { beginAtZero: true, grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
       });
       // 2) Loan Balance Paydown (line)
       mkChart(loanChartRef, 'loan', {
@@ -3059,11 +3072,11 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           datasets: [{
             label: 'Loan Balance ($M)',
             data: hold.map(y => y.loanBal / 1e6),
-            borderColor: '#4A8FD4', backgroundColor: 'rgba(74,143,212,0.1)', tension: 0.3, fill: true,
+            borderColor: '#4A8FD4', borderWidth: 2.5, backgroundColor: 'rgba(74,143,212,0.1)', tension: 0.3, fill: true, pointRadius: 4, pointHoverRadius: 6,
           }],
         },
-        options: { responsive: true, plugins: { legend: { labels: { color: 'var(--text-secondary)' } } },
-          scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(1) + 'M' } }, x: { ticks: { color: '#94A3B8' } } } },
+        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Loan Balance Paydown' } },
+          scales: { y: { beginAtZero: true, grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
       });
       // 3) Equity Build / Cumulative CF (line + bar)
       mkChart(eqChartRef, 'eq', {
@@ -3071,13 +3084,13 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         data: {
           labels,
           datasets: [
-            { label: 'Annual CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: 'rgba(52,211,153,0.6)', order: 2 },
+            { label: 'Annual CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: 'rgba(52,211,153,0.6)', borderRadius: 3, order: 2 },
             { label: 'Cumulative ($M)', data: hold.reduce((acc, y) => { const prev = acc.length ? acc[acc.length - 1] : 0; acc.push(prev + y.levCF / 1e6); return acc; }, []),
-              type: 'line', borderColor: '#A78BFA', backgroundColor: 'transparent', tension: 0.3, order: 1 },
+              type: 'line', borderColor: '#A78BFA', borderWidth: 2.5, backgroundColor: 'transparent', tension: 0.3, order: 1, pointRadius: 4, pointHoverRadius: 6 },
           ],
         },
-        options: { responsive: true, plugins: { legend: { labels: { color: 'var(--text-secondary)' } } },
-          scales: { y: { ticks: { callback: v => '$' + v.toFixed(1) + 'M' } }, x: { ticks: { color: '#94A3B8' } } } },
+        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Equity Build & Cumulative Cash Flow' } },
+          scales: { y: { grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
       });
       // 4) Returns Snapshot (horizontal bar)
       mkChart(hurChartRef, 'hur', {
@@ -3088,11 +3101,12 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             label: 'Return (%)',
             data: [calc.levIRR || 0, calc.unlevIRR || 0, calc.goingCap || 0, calc.yoc || 0, calc.avgCoC || 0],
             backgroundColor: ['#00BFA5', '#34D399', '#4A8FD4', '#A78BFA', '#F59E0B'],
+            borderRadius: 3,
           }],
         },
         options: { indexAxis: 'y', responsive: true,
-          plugins: { legend: { display: false } },
-          scales: { x: { ticks: { callback: v => v.toFixed(1) + '%' } }, y: { ticks: { color: '#94A3B8' } } } },
+          plugins: { legend: { display: false }, title: { ...titleFont, text: 'Returns Snapshot' } },
+          scales: { x: { grid: gridStyle, ticks: { ...axTick, callback: v => v.toFixed(1) + '%' } }, y: { grid: { display: false }, ticks: { color: '#E8EDF2', font: { size: 14, weight: '500', family: "'DM Sans', system-ui, sans-serif" } } } } },
       });
     });
     return () => cancelAnimationFrame(raf);
@@ -3202,9 +3216,10 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         backgroundColor: 'var(--bg)',
       }}>
         <V2TabBtn label="Upload" active={tab === 'upload'} onClick={() => setTab('upload')} />
-        <V2TabBtn label="Deal" active={tab === 'deal'} onClick={() => setTab('deal')} />
+        <V2TabBtn label="Assumptions" active={tab === 'deal'} onClick={() => setTab('deal')} />
         <V2TabBtn label="Debt" active={tab === 'debt'} onClick={() => setTab('debt')} />
         <V2TabBtn label="Rent Roll" active={tab === 'rentroll'} onClick={() => setTab('rentroll')} badge={tenants.length} />
+        <V2TabBtn label="MLA" active={tab === 'mla'} onClick={() => setTab('mla')} />
         <V2TabBtn label="Value-Add" active={tab === 'valueadd'} onClick={() => setTab('valueadd')} badge={events.length + capItems.length} />
         <V2TabBtn label="Cash Flows" active={tab === 'cashflows'} onClick={() => setTab('cashflows')} />
         <V2TabBtn label="Sensitivity" active={tab === 'sensitivity'} onClick={() => setTab('sensitivity')} />
@@ -3220,42 +3235,188 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         {/* UPLOAD TAB */}
         {tab === 'upload' && (
           <div>
-            <V2Sect title="Operating Memorandum">
-              <div style={{
-                border: '2px dashed var(--border)',
-                borderRadius: '8px',
-                padding: '32px',
-                textAlign: 'center',
-                backgroundColor: 'var(--surface)',
-                cursor: 'pointer',
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (e.dataTransfer.files[0]) handleOM(e.dataTransfer.files[0]);
-              }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📄</div>
-                <div style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  Drop OM PDF or image here
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              {/* 1) Offering Memorandum */}
+              <V2Sect title="Offering Memorandum (PDF)">
+                <div style={{
+                  border: '2px dashed var(--border)',
+                  borderRadius: '8px',
+                  padding: '24px 16px',
+                  textAlign: 'center',
+                  backgroundColor: 'var(--surface)',
+                  cursor: 'pointer',
+                  minHeight: '120px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files[0]) handleOM(e.dataTransfer.files[0]);
+                }}
+                onClick={() => document.getElementById('om-file-input')?.click()}>
+                  <div style={{ fontSize: '28px', marginBottom: '6px' }}>📄</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '2px', fontWeight: 600 }}>
+                    Drop OM PDF or image
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    PDF, PNG, JPG
+                  </div>
+                  <input
+                    id="om-file-input"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => e.target.files[0] && handleOM(e.target.files[0])}
+                    style={{ display: 'none' }}
+                  />
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Supported: PDF, PNG, JPG
+                {omSt === 'loading' && <div style={{ marginTop: '10px', color: 'var(--blue)', fontSize: '12px' }}>🔄 {omMsg}</div>}
+                {omSt === 'success' && (
+                  <div style={{ marginTop: '10px', padding: '8px', backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: '4px', color: 'var(--green)', fontSize: '12px' }}>
+                    ✓ {omMsg}
+                  </div>
+                )}
+                {omSt === 'error' && <div style={{ marginTop: '10px', color: 'var(--red)', fontSize: '12px' }}>✕ {omMsg}</div>}
+              </V2Sect>
+
+              {/* 2) Rent Roll (Excel/PDF) */}
+              <V2Sect title="Rent Roll (Excel)">
+                <div style={{
+                  border: '2px dashed var(--border)',
+                  borderRadius: '8px',
+                  padding: '24px 16px',
+                  textAlign: 'center',
+                  backgroundColor: 'var(--surface)',
+                  cursor: 'pointer',
+                  minHeight: '120px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files[0];
+                  if (file) {
+                    setRrUpSt('loading'); setRrUpMsg('Parsing rent roll...');
+                    const fd = new FormData(); fd.append('excel_file', file);
+                    fetch(`${API_URL}/api/v1/deals/parse-rent-roll`, { method: 'POST', body: fd })
+                      .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail); }))
+                      .then(data => { const t = data.tenants || data; setTenants(t); setP(prev => ({...prev, useRentRoll: true})); setRrUpSt('success'); setRrUpMsg(`${t.length} tenants loaded`); })
+                      .catch(e => { setRrUpSt('error'); setRrUpMsg(e.message); });
+                  }
+                }}
+                onClick={() => document.getElementById('rr-file-input')?.click()}>
+                  <div style={{ fontSize: '28px', marginBottom: '6px' }}>📊</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '2px', fontWeight: 600 }}>
+                    Drop Rent Roll Excel
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    XLSX, XLS, CSV
+                  </div>
+                  <input
+                    id="rr-file-input"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={(e) => {
+                      const file = e.target.files[0]; if (!file) return;
+                      setRrUpSt('loading'); setRrUpMsg('Parsing rent roll...');
+                      const fd = new FormData(); fd.append('excel_file', file);
+                      fetch(`${API_URL}/api/v1/deals/parse-rent-roll`, { method: 'POST', body: fd })
+                        .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail); }))
+                        .then(data => { const t = data.tenants || data; setTenants(t); setP(prev => ({...prev, useRentRoll: true})); setRrUpSt('success'); setRrUpMsg(`${t.length} tenants loaded`); })
+                        .catch(e => { setRrUpSt('error'); setRrUpMsg(e.message); });
+                    }}
+                    style={{ display: 'none' }}
+                  />
                 </div>
-                <input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={(e) => e.target.files[0] && handleOM(e.target.files[0])}
-                  style={{ marginTop: '16px', display: 'none' }}
-                />
-              </div>
-              {omSt === 'loading' && <div style={{ marginTop: '16px', color: 'var(--blue)' }}>🔄 {omMsg}</div>}
-              {omSt === 'success' && (
-                <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: '4px', color: 'var(--green)' }}>
-                  ✓ {omMsg}
+                {rrUpSt === 'loading' && <div style={{ marginTop: '10px', color: 'var(--blue)', fontSize: '12px' }}>🔄 {rrUpMsg}</div>}
+                {rrUpSt === 'success' && (
+                  <div style={{ marginTop: '10px', padding: '8px', backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: '4px', color: 'var(--green)', fontSize: '12px' }}>
+                    ✓ {rrUpMsg}
+                  </div>
+                )}
+                {rrUpSt === 'error' && <div style={{ marginTop: '10px', color: 'var(--red)', fontSize: '12px' }}>✕ {rrUpMsg}</div>}
+              </V2Sect>
+
+              {/* 3) T12 / Operating Statement */}
+              <V2Sect title="T12 / Operating Statement (Excel)">
+                <div style={{
+                  border: '2px dashed var(--border)',
+                  borderRadius: '8px',
+                  padding: '24px 16px',
+                  textAlign: 'center',
+                  backgroundColor: 'var(--surface)',
+                  cursor: 'pointer',
+                  minHeight: '120px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files[0];
+                  if (file) {
+                    setT12St('loading'); setT12Msg('Parsing T12...');
+                    const fd = new FormData(); fd.append('excel_file', file);
+                    fetch(`${API_URL}/api/v1/deals/parse-t12`, { method: 'POST', body: fd })
+                      .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail); }))
+                      .then(data => {
+                        setT12Data(data);
+                        const ann = data.annual || {};
+                        if (ann.noi) setP(prev => ({...prev, year1NOI: Math.round(ann.noi)}));
+                        setT12St('success'); setT12Msg(`${data.months_parsed || 12} months parsed — NOI: $${((ann.noi || 0)/1e6).toFixed(2)}M`);
+                      })
+                      .catch(e => { setT12St('error'); setT12Msg(e.message); });
+                  }
+                }}
+                onClick={() => document.getElementById('t12-file-input')?.click()}>
+                  <div style={{ fontSize: '28px', marginBottom: '6px' }}>📈</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '2px', fontWeight: 600 }}>
+                    Drop T12 / OpEx Statement
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    XLSX, XLS, CSV
+                  </div>
+                  <input
+                    id="t12-file-input"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={(e) => {
+                      const file = e.target.files[0]; if (!file) return;
+                      setT12St('loading'); setT12Msg('Parsing T12...');
+                      const fd = new FormData(); fd.append('excel_file', file);
+                      fetch(`${API_URL}/api/v1/deals/parse-t12`, { method: 'POST', body: fd })
+                        .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail); }))
+                        .then(data => {
+                          setT12Data(data);
+                          const ann = data.annual || {};
+                          if (ann.noi) setP(prev => ({...prev, year1NOI: Math.round(ann.noi)}));
+                          setT12St('success'); setT12Msg(`${data.months_parsed || 12} months parsed — NOI: $${((ann.noi || 0)/1e6).toFixed(2)}M`);
+                        })
+                        .catch(e => { setT12St('error'); setT12Msg(e.message); });
+                    }}
+                    style={{ display: 'none' }}
+                  />
                 </div>
-              )}
-              {omSt === 'error' && <div style={{ marginTop: '16px', color: 'var(--red)' }}>✕ {omMsg}</div>}
-            </V2Sect>
+                {t12St === 'loading' && <div style={{ marginTop: '10px', color: 'var(--blue)', fontSize: '12px' }}>🔄 {t12Msg}</div>}
+                {t12St === 'success' && (
+                  <div style={{ marginTop: '10px', padding: '8px', backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: '4px', color: 'var(--green)', fontSize: '12px' }}>
+                    ✓ {t12Msg}
+                  </div>
+                )}
+                {t12St === 'error' && <div style={{ marginTop: '10px', color: 'var(--red)', fontSize: '12px' }}>✕ {t12Msg}</div>}
+              </V2Sect>
+            </div>
+
+            {/* T12 Summary Preview */}
+            {t12Data && t12Data.annual && (
+              <V2Sect title="T12 Summary">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                  <V2Card label="Gross Potential Rent" value={fmtM(t12Data.annual.gross_potential_rent)} />
+                  <V2Card label="Effective Gross Revenue" value={fmtM(t12Data.annual.effective_gross_revenue)} />
+                  <V2Card label="Total OpEx" value={fmtM(t12Data.annual.total_opex)} />
+                  <V2Card label="Net Operating Income" value={fmtM(t12Data.annual.noi)} good={t12Data.annual.noi > 0} />
+                </div>
+              </V2Sect>
+            )}
+
             <button onClick={() => setTab('deal')} style={{
               backgroundColor: 'var(--blue)',
               border: 'none',
@@ -3266,12 +3427,12 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
               fontSize: '14px',
               fontWeight: '600',
             }}>
-              Review Deal →
+              Review Assumptions →
             </button>
           </div>
         )}
 
-        {/* DEAL TAB */}
+        {/* ASSUMPTIONS TAB */}
         {tab === 'deal' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
             {/* Col 1: Property & Income */}
@@ -4122,6 +4283,110 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           </div>
         )}
 
+        {/* MLA TAB — Market Leasing Assumptions (Argus-Style) */}
+        {tab === 'mla' && (
+          <div>
+            <V2Sect title="Market Leasing Assumption Profiles">
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                Define per-space-type leasing assumptions. These drive vacancy, free rent, TI/LC, and re-tenanting costs when leases expire in the cash flow model.
+                {initialDeal?.source === 'argus' && <span style={{ color: 'var(--teal)', marginLeft: '8px' }}>Auto-populated from ARGUS import</span>}
+              </div>
+              <button
+                onClick={() => setMlaProfiles(prev => [...prev, {
+                  id: Date.now(), spaceType: 'Retail', marketRentPSF: 20, rentEscalPct: 3, termYears: 5,
+                  renewalProb: 70, vacantMonths: 6, freeRentMonths: 2, tiNewPSF: 15, tiRenewalPSF: 8, lcNewPct: 6, lcRenewalPct: 4,
+                }])}
+                style={{
+                  padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                  border: '1px solid var(--teal)', background: 'rgba(0,191,165,0.1)', color: 'var(--teal)',
+                  cursor: 'pointer', marginBottom: '16px',
+                }}
+              >+ Add Profile</button>
+
+              {mlaProfiles.map((prof, idx) => (
+                <div key={prof.id} style={{
+                  border: '1px solid var(--border)', borderRadius: '8px', padding: '16px',
+                  backgroundColor: 'var(--surface)', marginBottom: '12px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <select
+                        value={prof.spaceType}
+                        onChange={(e) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, spaceType: e.target.value} : p))}
+                        style={{
+                          backgroundColor: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+                          padding: '6px 10px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600,
+                        }}
+                      >
+                        {['Office', 'Retail', 'Industrial', 'Warehouse', 'Laboratory', 'Restaurant', 'Medical', 'Flex'].map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Profile {idx + 1}</span>
+                    </div>
+                    {mlaProfiles.length > 1 && (
+                      <button onClick={() => setMlaProfiles(prev => prev.filter(p => p.id !== prof.id))}
+                        style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: '14px', padding: '4px' }}>✕</button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                    <V2Inp label="Market Rent /SF" type="number" prefix="$" value={prof.marketRentPSF}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, marketRentPSF: parseFloat(v) || 0} : p))} />
+                    <V2Inp label="Rent Escalation" type="number" suffix="%" value={prof.rentEscalPct}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, rentEscalPct: parseFloat(v) || 0} : p))} />
+                    <V2Inp label="Term Length" type="number" suffix="yrs" value={prof.termYears}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, termYears: parseInt(v) || 5} : p))} />
+                    <V2Inp label="Renewal Probability" type="number" suffix="%" value={prof.renewalProb}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, renewalProb: parseFloat(v) || 0} : p))} />
+                    <V2Inp label="Months Vacant" type="number" suffix="mo" value={prof.vacantMonths}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, vacantMonths: parseInt(v) || 0} : p))} />
+                    <V2Inp label="Free Rent (New)" type="number" suffix="mo" value={prof.freeRentMonths}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, freeRentMonths: parseInt(v) || 0} : p))} />
+                    <V2Inp label="TI New /SF" type="number" prefix="$" value={prof.tiNewPSF}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, tiNewPSF: parseFloat(v) || 0} : p))} />
+                    <V2Inp label="TI Renewal /SF" type="number" prefix="$" value={prof.tiRenewalPSF}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, tiRenewalPSF: parseFloat(v) || 0} : p))} />
+                    <V2Inp label="LC New %" type="number" suffix="%" value={prof.lcNewPct}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, lcNewPct: parseFloat(v) || 0} : p))} />
+                    <V2Inp label="LC Renewal %" type="number" suffix="%" value={prof.lcRenewalPct}
+                      onChange={(v) => setMlaProfiles(prev => prev.map(p => p.id === prof.id ? {...p, lcRenewalPct: parseFloat(v) || 0} : p))} />
+                  </div>
+                </div>
+              ))}
+            </V2Sect>
+
+            {/* Apply to global defaults button */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  const primary = mlaProfiles[0];
+                  if (primary) {
+                    setP(prev => ({
+                      ...prev,
+                      marketRenewalProb: primary.renewalProb,
+                      marketVacantMonths: primary.vacantMonths,
+                      marketFreeRentMonths: primary.freeRentMonths,
+                      marketTINewPSF: primary.tiNewPSF,
+                      marketTIRenewalPSF: primary.tiRenewalPSF,
+                      marketLCNewPct: primary.lcNewPct,
+                      marketLCRenewalPct: primary.lcRenewalPct,
+                      rentGrowth: primary.rentEscalPct,
+                    }));
+                  }
+                }}
+                style={{
+                  padding: '10px 20px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                  border: 'none', background: 'var(--teal)', color: '#fff', cursor: 'pointer',
+                }}
+              >Apply Primary Profile to Assumptions Defaults</button>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', alignSelf: 'center' }}>
+                Syncs Profile 1 values to the Assumptions tab leasing defaults
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* VALUE-ADD TAB */}
         {tab === 'valueadd' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
@@ -4774,6 +5039,87 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card label="Avg Cash-on-Cash" value={fmtP(calc.avgCoC)} />
               </V2Sect>
               )}
+            </div>
+
+            {/* Embedded Cash Flow Table */}
+            <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+              <V2Sect title="Waterfall Cash Flows">
+                <div style={{ overflowX: 'auto', fontSize: '11px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '8px', color: 'var(--text-secondary)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Year</th>
+                        <th style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)', fontSize: '10px', textTransform: 'uppercase' }}>NOI</th>
+                        <th style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)', fontSize: '10px', textTransform: 'uppercase' }}>Debt Service</th>
+                        <th style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)', fontSize: '10px', textTransform: 'uppercase' }}>Levered CF</th>
+                        {(wf.dealStructure || 'syndicated') === 'syndicated' && <>
+                          <th style={{ textAlign: 'right', padding: '8px', color: '#00BFA5', fontSize: '10px', textTransform: 'uppercase' }}>LP Share</th>
+                          <th style={{ textAlign: 'right', padding: '8px', color: '#A78BFA', fontSize: '10px', textTransform: 'uppercase' }}>GP Share</th>
+                        </>}
+                        <th style={{ textAlign: 'right', padding: '8px', color: 'var(--text-secondary)', fontSize: '10px', textTransform: 'uppercase' }}>Cumulative</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Year 0 — Equity Investment */}
+                      <tr style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'rgba(248, 113, 113, 0.05)' }}>
+                        <td style={{ padding: '8px', fontWeight: 600 }}>Y0 (Invest)</td>
+                        <td style={{ textAlign: 'right', padding: '8px', color: 'var(--slate)' }}>—</td>
+                        <td style={{ textAlign: 'right', padding: '8px', color: 'var(--slate)' }}>—</td>
+                        <td style={{ textAlign: 'right', padding: '8px', color: 'var(--red)', fontWeight: 600 }}>({fmtM(calc.equity)})</td>
+                        {(wf.dealStructure || 'syndicated') === 'syndicated' && <>
+                          <td style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>({fmtM(calc.lpEq)})</td>
+                          <td style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>({fmtM(calc.gpEq)})</td>
+                        </>}
+                        <td style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>({fmtM(calc.equity)})</td>
+                      </tr>
+                      {/* Operating Years */}
+                      {(calc.holdYears || []).map((y, i, arr) => {
+                        const cumCF = arr.slice(0, i + 1).reduce((s, yy) => s + yy.levCF, 0) - calc.equity;
+                        const lpYr = calc.lpOpShare ? calc.lpOpShare[i] || 0 : y.levCF * (wf.lpPercent / 100);
+                        const gpYr = calc.gpOpShare ? calc.gpOpShare[i] || 0 : y.levCF * ((100 - wf.lpPercent) / 100);
+                        const isLast = i === arr.length - 1;
+                        return (
+                          <tr key={y.yr} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '8px', fontWeight: 600 }}>Y{y.yr}</td>
+                            <td style={{ textAlign: 'right', padding: '8px' }}>{fmtM(y.noi)}</td>
+                            <td style={{ textAlign: 'right', padding: '8px', color: 'var(--red)' }}>{fmtM(-y.annDS)}</td>
+                            <td style={{ textAlign: 'right', padding: '8px', color: y.levCF >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 500 }}>{fmtM(y.levCF)}</td>
+                            {(wf.dealStructure || 'syndicated') === 'syndicated' && <>
+                              <td style={{ textAlign: 'right', padding: '8px', color: '#00BFA5' }}>{fmtM(lpYr)}</td>
+                              <td style={{ textAlign: 'right', padding: '8px', color: '#A78BFA' }}>{fmtM(gpYr)}</td>
+                            </>}
+                            <td style={{ textAlign: 'right', padding: '8px', color: cumCF >= 0 ? 'var(--green)' : 'var(--amber)' }}>{fmtM(cumCF)}</td>
+                          </tr>
+                        );
+                      })}
+                      {/* Exit / Reversion Row */}
+                      <tr style={{ borderBottom: '2px solid var(--border)', backgroundColor: 'rgba(52, 211, 153, 0.05)' }}>
+                        <td style={{ padding: '8px', fontWeight: 700 }}>Exit</td>
+                        <td style={{ textAlign: 'right', padding: '8px', color: 'var(--slate)', fontSize: '10px' }}>Sale: {fmtM(calc.exitVal)}</td>
+                        <td style={{ textAlign: 'right', padding: '8px', color: 'var(--red)', fontSize: '10px' }}>Payoff: ({fmtM(calc.exitBal)})</td>
+                        <td style={{ textAlign: 'right', padding: '8px', color: 'var(--green)', fontWeight: 700 }}>{fmtM(calc.saleNet)}</td>
+                        {(wf.dealStructure || 'syndicated') === 'syndicated' && <>
+                          <td style={{ textAlign: 'right', padding: '8px', color: '#00BFA5', fontWeight: 600 }}>{fmtM(Math.max(0, calc.lpTerminal || 0))}</td>
+                          <td style={{ textAlign: 'right', padding: '8px', color: '#A78BFA', fontWeight: 600 }}>{fmtM(Math.max(0, calc.gpTerminal || 0))}</td>
+                        </>}
+                        <td style={{ textAlign: 'right', padding: '8px' }}></td>
+                      </tr>
+                      {/* Totals Row */}
+                      <tr style={{ backgroundColor: 'var(--surface)' }}>
+                        <td style={{ padding: '8px', fontWeight: 700 }}>Total</td>
+                        <td style={{ textAlign: 'right', padding: '8px', fontWeight: 600 }}>{fmtM((calc.holdYears || []).reduce((s, y) => s + y.noi, 0))}</td>
+                        <td style={{ textAlign: 'right', padding: '8px', fontWeight: 600, color: 'var(--red)' }}>{fmtM(-(calc.holdYears || []).reduce((s, y) => s + y.annDS, 0))}</td>
+                        <td style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: 'var(--green)' }}>{fmtM(calc.totalReturn)}</td>
+                        {(wf.dealStructure || 'syndicated') === 'syndicated' && <>
+                          <td style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: '#00BFA5' }}>{fmtM(calc.lpOut)}</td>
+                          <td style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: '#A78BFA' }}>{fmtM(calc.gpTotalDist)}</td>
+                        </>}
+                        <td style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: calc.totalReturn - calc.equity >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtM(calc.totalReturn - calc.equity)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </V2Sect>
             </div>
           </div>
         )}

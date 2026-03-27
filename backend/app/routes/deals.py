@@ -401,8 +401,8 @@ async def parse_rent_roll_v2(
                 "sf": r.get("sf") or 0,
                 "rentPSF": rent_psf,
                 "camPSF": cam_psf,
-                "type": "NNN",
-                "escalPct": 3,
+                "type": r.get("lease_type") or "NNN",
+                "escalPct": r.get("escalation") or 3,
                 "start": r.get("lease_start") or "",
                 "end": r.get("lease_end") or r.get("expiry") or "",
                 "tiPSF": 0,
@@ -421,6 +421,48 @@ async def parse_rent_roll_v2(
             try:
                 os.remove(excel_path)
             except Exception:
+                pass
+
+
+@router.post("/parse-t12")
+async def parse_t12_statement(
+    request: Request,
+    excel_file: UploadFile = File(...),
+):
+    """
+    Parse a T12 operating statement (Excel/CSV) and return structured income/expense data.
+    Stateless — does not require a deal ID. Returns monthly and annual financials.
+    """
+    upload_dir = get_upload_dir()
+    excel_path = None
+
+    try:
+        import uuid as _uuid
+        excel_filename = f"t12_parse_{_uuid.uuid4().hex[:8]}_{excel_file.filename}"
+        excel_path = os.path.join(upload_dir, excel_filename)
+        with open(excel_path, "wb") as f:
+            f.write(await excel_file.read())
+
+        from app.services.t12_parser import parse_t12_excel
+        result = parse_t12_excel(excel_path)
+
+        if not result or not result.get("annual"):
+            raise HTTPException(
+                status_code=400,
+                detail="No operating statement data found. Ensure the file has monthly columns with income/expense line items."
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing T12: {str(e)}")
+    finally:
+        if excel_path and os.path.exists(excel_path):
+            try:
+                os.remove(excel_path)
+            except:
                 pass
 
 

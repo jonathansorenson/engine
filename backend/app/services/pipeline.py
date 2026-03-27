@@ -78,6 +78,16 @@ COLUMN_ALIASES = {
         "status", "occupied", "occupancy", "vacancy", "vacant",
         "occ status", "lease status", "current status",
     ],
+    "escalation": [
+        "escalation", "annual escalation", "escal", "bump",
+        "annual increase", "rent escalation", "rent increase",
+        "annual bump", "step", "rent bump", "escalation %",
+    ],
+    "lease_term": [
+        "lease term", "term", "term length", "lease length",
+        "term years", "remaining term", "term remaining",
+        "original term", "lease duration",
+    ],
 }
 
 # Short/ambiguous headers that should NOT match on their own via substring
@@ -181,6 +191,58 @@ def _build_merged_headers(rows: List[List], candidate_idx: int) -> List[str]:
                     merged[ci] = cell_str
 
     return merged
+
+
+def _normalize_date(value) -> str:
+    """Normalize a date value to YYYY-MM-DD string.
+    Handles datetime objects, 'Jan 2025', '1/1/25', '01-01-2025', 'January 1, 2025', etc."""
+    from datetime import datetime
+
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+
+    val_str = str(value).strip()
+    if not val_str or val_str.lower() in ["", "none", "-", "n/a", "mtm", "month-to-month"]:
+        return val_str
+
+    # Already ISO format
+    if re.match(r'\d{4}-\d{2}-\d{2}', val_str):
+        return val_str
+
+    # Try common date formats
+    date_formats = [
+        "%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y",
+        "%d/%m/%Y", "%d-%m-%Y",
+        "%b %Y", "%B %Y", "%b %d, %Y", "%B %d, %Y",
+        "%b %d %Y", "%B %d %Y",
+        "%m/%Y", "%Y/%m/%d",
+    ]
+    for fmt in date_formats:
+        try:
+            dt = datetime.strptime(val_str, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    return val_str
+
+
+def _normalize_lease_type(val_str: str) -> str:
+    """Normalize lease type strings to canonical form."""
+    v = val_str.lower().strip()
+    if v in ["nnn", "triple net", "net net net", "triple-net"]:
+        return "NNN"
+    if v in ["nn", "double net", "net-net"]:
+        return "NN"
+    if v in ["n", "net", "single net"]:
+        return "N"
+    if v in ["gross", "full service", "fs", "full-service"]:
+        return "Gross"
+    if v in ["mg", "modified gross", "mod gross", "modified"]:
+        return "MG"
+    if v in ["ig", "industrial gross"]:
+        return "IG"
+    return val_str
 
 
 def extract_excel_rent_roll(excel_path: str) -> Optional[List[Dict[str, Any]]]:
@@ -317,7 +379,7 @@ def extract_excel_rent_roll(excel_path: str) -> Optional[List[Dict[str, Any]]]:
                     if not val_str or val_str.lower() in ["", "none", "-", "n/a", "null"]:
                         continue
 
-                    if field in ["sf", "annual_rent", "monthly_rent", "rent_psf", "cam_psf", "cam_annual"]:
+                    if field in ["sf", "annual_rent", "monthly_rent", "rent_psf", "cam_psf", "cam_annual", "escalation", "lease_term"]:
                         try:
                             cleaned = re.sub(r'[,$\s\(\)]', '', val_str)
                             if cleaned and cleaned.replace('.', '').replace('-', '').isdigit():
@@ -329,14 +391,9 @@ def extract_excel_rent_roll(excel_path: str) -> Optional[List[Dict[str, Any]]]:
                         except (ValueError, TypeError):
                             pass
                     elif field in ["lease_start", "lease_end"]:
-                        try:
-                            from datetime import datetime
-                            if isinstance(value, datetime):
-                                entry[field] = value.strftime("%Y-%m-%d")
-                            else:
-                                entry[field] = val_str
-                        except Exception:
-                            entry[field] = val_str
+                        entry[field] = _normalize_date(value)
+                    elif field == "lease_type":
+                        entry[field] = _normalize_lease_type(val_str)
                     else:
                         entry[field] = val_str
 
@@ -695,9 +752,38 @@ def extract_financial_details(text: str) -> Dict[str, Any]:
         if 0.5 < val < 5:
             financials["dscr"] = val
 
+    # ── Expense Ratio ──
+    exp_ratio_patterns = [
+        r"(?:Expense|Operating|OpEx)\s*Ratio[\s:]*(\d+\.?\d*)\s*%",
+        r"(\d+\.?\d*)\s*%\s*(?:expense|operating)\s*ratio",
+    ]
+    for pattern in exp_ratio_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            val = float(match.group(1))
+            if 10 < val < 80:
+                financials["expense_ratio"] = val
+                break
+
+    # ── Price per SF ──
+    ppsf_patterns = [
+        r"(?:Price|Asking)\s*(?:Per|/)\s*(?:SF|Sq\.?\s*Ft\.?)[\s:]*\$?([\d,]+(?:\.\d+)?)",
+        r"\$?([\d,]+(?:\.\d+)?)\s*(?:per|/)\s*(?:SF|sq\.?\s*ft\.?)",
+    ]
+    for pattern in ppsf_patterns:
+        ppsf = extract_numeric_value(text, pattern)
+        if ppsf and 10 < ppsf < 5000:
+            financials["price_per_sf"] = ppsf
+            break
+
     # ── Derive NOI from revenue and expenses if missing ──
     if "noi" not in financials and "annual_revenue" in financials and "operating_expenses" in financials:
         financials["noi"] = financials["annual_revenue"] - financials["operating_expenses"]
+
+    # ── Derive expense ratio if we have revenue and expenses ──
+    if "expense_ratio" not in financials and "annual_revenue" in financials and "operating_expenses" in financials:
+        if financials["annual_revenue"] > 0:
+            financials["expense_ratio"] = round(financials["operating_expenses"] / financials["annual_revenue"] * 100, 1)
 
     return financials
 
