@@ -2177,7 +2177,7 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
     if (yr <= hold) loanBal = Math.max(0, loanBal - prinPaid);
     const capexRes = yr <= hold ? (p.useCapexPct ? noi * ((p.capexReservePct || 2) / 100) : (p.capexReserveFlat || 0)) : 0;
     const specCapex = yr <= hold ? capItems.filter(c => c.year === yr).reduce((s, c) => s + (c.amount || 0), 0) : 0;
-    const tiLC = yr <= hold ? (p.useRentRoll ? tiCost : ((p.tiReserve || 0) + noi * ((p.lcReservePct || 0) / 100))) : 0;
+    const tiLC = yr <= hold && p.showTILC !== false ? (p.useRentRoll ? tiCost : ((p.tiReserve || 0) + noi * ((p.lcReservePct || 0) / 100))) : 0;
     const vaInc = yr <= hold ? events.filter(e => e.year === yr && e.type === "income").reduce((s, e) => s + (e.amount || 0), 0) : 0;
     const vaCost = yr <= hold ? events.filter(e => e.year === yr && e.type === "cost").reduce((s, e) => s + (e.amount || 0), 0) : 0;
     const levCF = noi - annDS - capexRes - specCapex - tiLC + vaInc - vaCost;
@@ -2286,6 +2286,7 @@ const V2_DEFAULTS = {
   useCapexPct: true,
   tiReserve: 0,
   lcReservePct: 3,
+  showTILC: true,
   // Market Leasing Assumptions
   useMarketLeasing: true,
   marketRenewalProb: 75,
@@ -2401,45 +2402,92 @@ const V2Inp = ({ label, value, onChange, prefix, suffix, type = 'text', hl, plac
   </div>
 );
 
-const V2Sld = ({ label, value, min, max, step, onChange, display }) => (
-  <div style={{ marginBottom: '12px' }}>
-    <div style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '8px',
-    }}>
-      <label style={{
-        fontSize: '11px',
-        fontWeight: '600',
-        color: 'var(--text-secondary)',
-        textTransform: 'uppercase',
-      }}>{label}</label>
-      <span style={{
-        fontSize: '13px',
-        color: 'var(--blue)',
-        fontFamily: "'JetBrains Mono', monospace",
-        fontWeight: '600',
-      }}>{display || value}</span>
+const V2Sld = ({ label, value, min, max, step, onChange, display }) => {
+  const [editing, setEditing] = React.useState(false);
+  const [editVal, setEditVal] = React.useState('');
+  const handleStartEdit = () => {
+    setEditVal(String(value));
+    setEditing(true);
+  };
+  const handleCommit = () => {
+    setEditing(false);
+    const parsed = parseFloat(editVal);
+    if (!isNaN(parsed)) {
+      onChange(Math.min(max, Math.max(min, parsed)));
+    }
+  };
+  return (
+    <div style={{ marginBottom: '12px' }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '8px',
+      }}>
+        <label style={{
+          fontSize: '11px',
+          fontWeight: '600',
+          color: 'var(--text-secondary)',
+          textTransform: 'uppercase',
+        }}>{label}</label>
+        {editing ? (
+          <input
+            type="number"
+            value={editVal}
+            min={min}
+            max={max}
+            step={step || 0.1}
+            autoFocus
+            onChange={(e) => setEditVal(e.target.value)}
+            onBlur={handleCommit}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCommit(); if (e.key === 'Escape') setEditing(false); }}
+            style={{
+              width: '70px',
+              fontSize: '13px',
+              color: 'var(--blue)',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: '600',
+              background: 'var(--surface)',
+              border: '1px solid var(--blue)',
+              borderRadius: '4px',
+              padding: '2px 6px',
+              textAlign: 'right',
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <span
+            onClick={handleStartEdit}
+            title="Click to type a value"
+            style={{
+              fontSize: '13px',
+              color: 'var(--blue)',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: '600',
+              cursor: 'pointer',
+              borderBottom: '1px dashed var(--blue)',
+            }}>{display || value}</span>
+        )}
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step || 0.1}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{
+          width: '100%',
+          height: '6px',
+          borderRadius: '3px',
+          background: 'var(--border)',
+          outline: 'none',
+          WebkitAppearance: 'none',
+        }}
+      />
     </div>
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step || 0.1}
-      value={value}
-      onChange={(e) => onChange(parseFloat(e.target.value))}
-      style={{
-        width: '100%',
-        height: '6px',
-        borderRadius: '3px',
-        background: 'var(--border)',
-        outline: 'none',
-        WebkitAppearance: 'none',
-      }}
-    />
-  </div>
-);
+  );
+};
 
 const V2TabBtn = ({ label, active, onClick, badge }) => (
   <button
@@ -2985,7 +3033,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           labels: ['Levered IRR', 'Unlev IRR', 'Going-in Cap', 'YoC', 'Avg CoC'],
           datasets: [{
             label: 'Return (%)',
-            data: [calc.levIRR || 0, calc.unlevIRR || 0, (calc.goingCap || 0) * 100, (calc.yoc || 0) * 100, (calc.avgCoC || 0) * 100],
+            data: [calc.levIRR || 0, calc.unlevIRR || 0, calc.goingCap || 0, calc.yoc || 0, calc.avgCoC || 0],
             backgroundColor: ['#00BFA5', '#34D399', '#4A8FD4', '#A78BFA', '#F59E0B'],
           }],
         },
@@ -3315,7 +3363,25 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     placeholder="Additional flat adj"
                   />
                 </div>
-                <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Tenant Improvements</div>
+                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Tenant Improvements / LC</span>
+                  <button
+                    onClick={() => setP(prev => ({ ...prev, showTILC: !prev.showTILC }))}
+                    style={{
+                      fontSize: '10px',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      background: p.showTILC !== false ? 'var(--blue)' : 'var(--surface)',
+                      color: p.showTILC !== false ? '#fff' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                    }}
+                  >
+                    {p.showTILC !== false ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                {p.showTILC !== false && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <V2Inp
                     label="TI New /SF"
@@ -3332,6 +3398,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     prefix="$"
                   />
                 </div>
+                )}
+                {p.showTILC !== false && (<>
                 <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Leasing Commissions</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <V2Inp
@@ -3349,6 +3417,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     suffix="%"
                   />
                 </div>
+                </>)}
               </V2Sect>
               )}
 
@@ -4224,7 +4293,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card label="Total NOI" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.noi, 0))} />
                 <V2Card label="Total Debt Service" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.annDS, 0))} />
                 <V2Card label="Total CapEx" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + (y.capexRes + y.specCapex), 0))} />
-                <V2Card label="Total TI/LC" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.tiLC, 0))} />
+                {p.showTILC !== false && <V2Card label="Total TI/LC" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.tiLC, 0))} />}
                 <V2Card label="Total Net CF" value={fmtM((calc.holdYears || calc.years).reduce((s, y) => s + y.levCF, 0))} />
               </div>
             </V2Sect>
@@ -4322,7 +4391,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     {/* Below NOI */}
                     {plRow('Debt Service', y => y.annDS, { color: 'var(--red)', indent: true, neg: true })}
                     {plRow('CapEx & Reserves', y => y.capexRes + y.specCapex, { indent: true, neg: true, color: 'var(--slate)' })}
-                    {plRow('TI / LC', y => y.tiLC, { indent: true, neg: true, color: 'var(--slate)' })}
+                    {p.showTILC !== false && plRow('TI / LC', y => y.tiLC, { indent: true, neg: true, color: 'var(--slate)' })}
                     {periods.some(y => y.vaInc > 0) && plRow('Value-Add Income', y => y.vaInc, { indent: true, color: 'var(--teal)' })}
                     {periods.some(y => y.vaCost > 0) && plRow('Value-Add Cost', y => y.vaCost, { indent: true, neg: true, color: 'var(--red)' })}
 
@@ -4394,8 +4463,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
                       <th style={{ padding: '6px' }}>PP × Cap</th>
                       {[-20, -10, 0, 10, 20].map(pct => (
-                        <th key={pct} style={{ textAlign: 'center', padding: '6px', color: 'var(--text-secondary)' }}>
-                          {pct > 0 ? '+' : ''}{pct}%
+                        <th key={pct} style={{ textAlign: 'center', padding: '6px', color: pct === 0 ? 'var(--blue)' : 'var(--text-secondary)' }}>
+                          {fmtM(p.purchasePrice * (1 + pct / 100))}
                         </th>
                       ))}
                     </tr>
@@ -4403,8 +4472,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   <tbody>
                     {[-1, -0.5, 0, 0.5, 1].map((capAdj, ri) => (
                       <tr key={ri} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '6px', color: 'var(--text-secondary)' }}>
-                          {capAdj > 0 ? '+' : ''}{capAdj}%
+                        <td style={{ padding: '6px', color: capAdj === 0 ? 'var(--blue)' : 'var(--text-secondary)' }}>
+                          {(p.exitCap + capAdj).toFixed(1)}%
                         </td>
                         {[-20, -10, 0, 10, 20].map((ppPct, ci) => {
                           const pp2 = p.purchasePrice * (1 + ppPct / 100);
@@ -4449,8 +4518,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
                       <th style={{ padding: '6px' }}>LTV × Rate</th>
                       {[-0.5, -0.25, 0, 0.25, 0.5].map(rAdj => (
-                        <th key={rAdj} style={{ textAlign: 'center', padding: '6px', color: 'var(--text-secondary)' }}>
-                          {rAdj > 0 ? '+' : ''}{rAdj}%
+                        <th key={rAdj} style={{ textAlign: 'center', padding: '6px', color: rAdj === 0 ? 'var(--blue)' : 'var(--text-secondary)' }}>
+                          {(p.rate + rAdj).toFixed(2)}%
                         </th>
                       ))}
                     </tr>
@@ -4622,12 +4691,12 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         { label: 'Total Cost', field: 'totalCost', fmt: fmtM },
                         { label: 'Loan Amount', field: 'loan', fmt: fmtM },
                         { label: 'Equity Required', field: 'equity', fmt: fmtM },
-                        { label: 'Going-in Cap', field: 'goingCap', fmt: v => fmtP(isN(v) ? v * 100 : v), section: 'Returns' },
-                        { label: 'Yield on Cost', field: 'yoc', fmt: v => fmtP(isN(v) ? v * 100 : v) },
+                        { label: 'Going-in Cap', field: 'goingCap', fmt: fmtP, section: 'Returns' },
+                        { label: 'Yield on Cost', field: 'yoc', fmt: fmtP },
                         { label: 'Levered IRR', field: 'levIRR', fmt: fmtP, highlight: true },
                         { label: 'Unlevered IRR', field: 'unlevIRR', fmt: fmtP },
                         { label: 'Equity Multiple', field: 'em', fmt: fmtX, highlight: true },
-                        { label: 'Avg Cash-on-Cash', field: 'avgCoC', fmt: v => fmtP(isN(v) ? v * 100 : v) },
+                        { label: 'Avg Cash-on-Cash', field: 'avgCoC', fmt: fmtP },
                         { label: 'DSCR', field: 'dscr', fmt: fmtX, section: 'Risk' },
                         { label: 'Exit Value', field: 'exitVal', fmt: fmtM, section: 'Exit' },
                         { label: 'Exit NOI', field: 'exitNOI', fmt: fmtM },
