@@ -1,0 +1,472 @@
+"""Billing routes — signup, Stripe Checkout, webhook, portal."""
+
+import uuid
+import time
+import threading
+from typing import Optional
+
+import stripe
+from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.database import SessionLocal
+from app.models.user import User
+from app.routes.admin import hash_password
+
+router = APIRouter(tags=["billing"])
+
+# ═══════════════════════════════════════════════════════════════
+# PENDING SIGNUP STORE (in-memory, 1-hour TTL)
+# ═══════════════════════════════════════════════════════════════
+
+_pending_signups: dict = {}
+_SIGNUP_TTL = 3600  # 1 hour
+
+
+def _cleanup_expired():
+    """Remove expired pending signups."""
+    now = time.time()
+    expired = [k for k, v in _pending_signups.items() if now - v["created_at"] > _SIGNUP_TTL]
+    for k in expired:
+        del _pending_signups[k]
+
+
+# ═══════════════════════════════════════════════════════════════
+# TIER CONFIG
+# ═══════════════════════════════════════════════════════════════
+
+TIER_LIMITS = {
+    "starter": 5,
+    "pro": 25,
+    "enterprise": 999,
+    "admin": 999,
+    "free": 25,
+}
+
+
+def get_deal_limit_for_user(user: User) -> int:
+    """Return the deal limit for a user based on their subscription."""
+    if not user or not user.stripe_customer_id:
+        return 999  # Admin-created users = unlimited
+    if user.subscription_status not in ("active", "trialing"):
+        return 0  # Expired = no new uploads
+    return TIER_LIMITS.get(user.subscription_tier, 0)
+
+
+# ═══════════════════════════════════════════════════════════════
+# SIGNUP PAGE HTML
+# ═══════════════════════════════════════════════════════════════
+
+SIGNUP_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRE Lytic — Sign Up</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAABiUlEQVRYhe2WPy9DURiHn/e0FIn/qUi0FQwkTZlIfAJDTWInfAI7A7Gz2YTdavEhEFeCgXBaQRfSgV6peyxC5V6izW1ruL/tvHnP+zz33HuSK3wklpzsEopLgpkFBoAI/sYGrgyyJ6qwoS3rEUAABpITY2+87YP0+Qz9KVlHnHT29PBEEqlUJ06jVUP4pwTKHg11RBPLIOkawwHajGl4DRuYqcb09YUUw7FWV/1c51nZOQVAMDMKGKyGgBccYCTRVrocUvj/tZeTJlVHOACBQCBQd4FwJZumFueJxmOuek5nONjeLWtWRSfgBQfoScTLnlX3VxAIBAKua9gb6yfS1OxqtF+eub/Vvgu4TsALDhBpbvEd7ilQ6wQC/0LAriO/oICr0or98uzdWVLP6YxnT+7m65qe67xnz9n3+qXEk+Nrgln5m7DPEVaVqMIG4P1I1U1GhYubSlvWoyPONJCtJdxRJn19fPwUAsjn7h7ae7t3MCEbiIK0UuHf0i8pABcIW6qhOKdPjjTAO0ACbHMMH2tvAAAAAElFTkSuQmCC">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2744 50%, #0d1f3c 100%);
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            color: #e2e8f0;
+        }
+        .card {
+            background: rgba(255,255,255,0.06); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+            padding: 40px; width: 480px; max-width: 95vw;
+        }
+        .logo { text-align: center; margin-bottom: 8px; }
+        .logo img { height: 32px; }
+        h1 { text-align: center; font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+        .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+        .error { display: none; background: #ef444433; border: 1px solid #ef4444; color: #fca5a5;
+                 padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+        .error.show { display: block; }
+        .success { display: none; background: #22c55e33; border: 1px solid #22c55e; color: #86efac;
+                   padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+        .success.show { display: block; }
+        label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; margin-top: 14px; }
+        input[type="text"], input[type="email"], input[type="password"] {
+            width: 100%; padding: 10px 14px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05);
+            color: #e2e8f0; font-size: 14px; outline: none; transition: border 0.2s;
+        }
+        input:focus { border-color: #60a5fa; }
+        .tiers { display: flex; gap: 10px; margin-top: 8px; }
+        .tier-card {
+            flex: 1; padding: 14px; border-radius: 10px; cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03);
+            text-align: center; transition: all 0.2s;
+        }
+        .tier-card:hover { border-color: rgba(96,165,250,0.4); }
+        .tier-card.selected { border-color: #60a5fa; background: rgba(96,165,250,0.1); }
+        .tier-card input[type="radio"] { display: none; }
+        .tier-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+        .tier-price { color: #94a3b8; font-size: 13px; }
+        .tier-deals { color: #60a5fa; font-size: 12px; margin-top: 4px; }
+        .tier-card.enterprise .tier-price { color: #a78bfa; }
+        button[type="submit"] {
+            width: 100%; padding: 12px; border-radius: 8px; border: none;
+            background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff;
+            font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 20px;
+            transition: opacity 0.2s;
+        }
+        button[type="submit"]:hover { opacity: 0.9; }
+        button[type="submit"]:disabled { opacity: 0.5; cursor: not-allowed; }
+        .login-link { text-align: center; margin-top: 16px; font-size: 13px; color: #94a3b8; }
+        .login-link a { color: #60a5fa; text-decoration: none; }
+        .contact-note { display: none; text-align: center; color: #a78bfa; font-size: 13px;
+                        margin-top: 16px; padding: 12px; border-radius: 8px;
+                        background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2); }
+        .contact-note.show { display: block; }
+        .contact-note a { color: #c4b5fd; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">
+            <svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="none" stroke="#60a5fa" stroke-width="1.5"/><text x="16" y="21" text-anchor="middle" fill="#60a5fa" font-size="14" font-weight="700" font-family="sans-serif">C</text></svg>
+        </div>
+        <h1>Create Your Account</h1>
+        <p class="subtitle">Start analyzing CRE deals in minutes</p>
+        <div class="error {error_class}" id="err">{error_msg}</div>
+        <div class="success {success_class}" id="suc">{success_msg}</div>
+        <form method="POST" action="/engine/signup" id="signupForm">
+            <label>Full Name</label>
+            <input type="text" name="name" placeholder="Jane Smith" required value="{name_val}" />
+            <label>Company</label>
+            <input type="text" name="company" placeholder="Acme Capital" required value="{company_val}" />
+            <label>Email</label>
+            <input type="email" name="email" placeholder="jane@acme.com" required value="{email_val}" />
+            <label>Password</label>
+            <input type="password" name="password" placeholder="Min 8 characters" required minlength="8" />
+            <label>Confirm Password</label>
+            <input type="password" name="password_confirm" placeholder="Confirm password" required minlength="8" />
+            <label>Select Plan</label>
+            <div class="tiers">
+                <label class="tier-card {starter_sel}" onclick="selectTier(this,'starter')">
+                    <input type="radio" name="tier" value="starter" {starter_chk} />
+                    <div class="tier-name">Starter</div>
+                    <div class="tier-price">$6.99/mo</div>
+                    <div class="tier-deals">5 deals</div>
+                </label>
+                <label class="tier-card {pro_sel}" onclick="selectTier(this,'pro')">
+                    <input type="radio" name="tier" value="pro" {pro_chk} />
+                    <div class="tier-name">Pro</div>
+                    <div class="tier-price">$11.99/mo</div>
+                    <div class="tier-deals">25 deals</div>
+                </label>
+                <label class="tier-card enterprise {ent_sel}" onclick="selectTier(this,'enterprise')">
+                    <input type="radio" name="tier" value="enterprise" {ent_chk} />
+                    <div class="tier-name">Enterprise</div>
+                    <div class="tier-price">Custom</div>
+                    <div class="tier-deals">Unlimited</div>
+                </label>
+            </div>
+            <div class="contact-note" id="contactNote">
+                Enterprise plans are custom-priced. <a href="mailto:jonathan_sorenson@losttree.com">Contact us</a> to get started.
+            </div>
+            <button type="submit" id="submitBtn">Continue to Payment</button>
+        </form>
+        <div class="login-link">Already have an account? <a href="/engine/login">Sign in</a></div>
+    </div>
+    <script>
+        function selectTier(el, tier) {
+            document.querySelectorAll('.tier-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            el.querySelector('input[type=radio]').checked = true;
+            const btn = document.getElementById('submitBtn');
+            const note = document.getElementById('contactNote');
+            if (tier === 'enterprise') {
+                btn.disabled = true;
+                btn.textContent = 'Contact Us for Enterprise';
+                note.classList.add('show');
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Continue to Payment';
+                note.classList.remove('show');
+            }
+        }
+        // Validate passwords match on submit
+        document.getElementById('signupForm').addEventListener('submit', function(e) {
+            const pw = this.querySelector('input[name=password]').value;
+            const pw2 = this.querySelector('input[name=password_confirm]').value;
+            if (pw !== pw2) {
+                e.preventDefault();
+                document.getElementById('err').textContent = 'Passwords do not match.';
+                document.getElementById('err').classList.add('show');
+            }
+        });
+    </script>
+</body>
+</html>"""
+
+
+# ═══════════════════════════════════════════════════════════════
+# ROUTES
+# ═══════════════════════════════════════════════════════════════
+
+def _render_signup(error: str = "", success: str = "", name: str = "",
+                   company: str = "", email: str = "", tier: str = "starter") -> str:
+    """Render the signup page HTML with optional error/success messages."""
+    html = SIGNUP_HTML
+    html = html.replace("{error_class}", "show" if error else "")
+    html = html.replace("{error_msg}", error)
+    html = html.replace("{success_class}", "show" if success else "")
+    html = html.replace("{success_msg}", success)
+    html = html.replace("{name_val}", name)
+    html = html.replace("{company_val}", company)
+    html = html.replace("{email_val}", email)
+    html = html.replace("{starter_sel}", "selected" if tier == "starter" else "")
+    html = html.replace("{pro_sel}", "selected" if tier == "pro" else "")
+    html = html.replace("{ent_sel}", "selected" if tier == "enterprise" else "")
+    html = html.replace("{starter_chk}", "checked" if tier == "starter" else "")
+    html = html.replace("{pro_chk}", "checked" if tier == "pro" else "")
+    html = html.replace("{ent_chk}", "checked" if tier == "enterprise" else "")
+    return html
+
+
+@router.get("/engine/signup", response_class=HTMLResponse)
+async def signup_page(request: Request):
+    """Serve the signup form."""
+    canceled = request.query_params.get("canceled")
+    error = "Payment was canceled. Please try again." if canceled else ""
+    return HTMLResponse(content=_render_signup(error=error))
+
+
+@router.post("/engine/signup")
+async def signup_submit(request: Request):
+    """Validate signup form, create Stripe Checkout session, redirect to Stripe."""
+    form = await request.form()
+    name = (form.get("name", "") or "").strip()
+    company = (form.get("company", "") or "").strip()
+    email = (form.get("email", "") or "").lower().strip()
+    password = form.get("password", "") or ""
+    password_confirm = form.get("password_confirm", "") or ""
+    tier = form.get("tier", "starter") or "starter"
+
+    # Validate
+    if not all([name, company, email, password]):
+        return HTMLResponse(content=_render_signup(
+            error="All fields are required.", name=name, company=company, email=email, tier=tier
+        ), status_code=400)
+
+    if password != password_confirm:
+        return HTMLResponse(content=_render_signup(
+            error="Passwords do not match.", name=name, company=company, email=email, tier=tier
+        ), status_code=400)
+
+    if len(password) < 8:
+        return HTMLResponse(content=_render_signup(
+            error="Password must be at least 8 characters.", name=name, company=company, email=email, tier=tier
+        ), status_code=400)
+
+    if tier not in ("starter", "pro"):
+        return HTMLResponse(content=_render_signup(
+            error="Please select Starter or Pro plan.", name=name, company=company, email=email, tier=tier
+        ), status_code=400)
+
+    # Check email not taken
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            return HTMLResponse(content=_render_signup(
+                error="An account with this email already exists.",
+                name=name, company=company, email=email, tier=tier
+            ), status_code=400)
+    finally:
+        db.close()
+
+    # Check Stripe config
+    if not settings.stripe_secret_key:
+        return HTMLResponse(content=_render_signup(
+            error="Payment system is not configured. Please contact support.",
+            name=name, company=company, email=email, tier=tier
+        ), status_code=500)
+
+    # Store pending signup
+    _cleanup_expired()
+    token = str(uuid.uuid4())
+    _pending_signups[token] = {
+        "name": name,
+        "company": company,
+        "email": email,
+        "hashed_password": hash_password(password),
+        "tier": tier,
+        "created_at": time.time(),
+    }
+
+    # Create Stripe Checkout Session
+    stripe.api_key = settings.stripe_secret_key
+    price_id = settings.stripe_starter_price_id if tier == "starter" else settings.stripe_pro_price_id
+
+    try:
+        base_url = str(request.base_url).rstrip("/")
+        # Use X-Forwarded headers if behind proxy
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+        if forwarded_host:
+            base_url = f"{forwarded_proto or 'https'}://{forwarded_host}"
+
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            mode="subscription",
+            line_items=[{"price": price_id, "quantity": 1}],
+            customer_email=email,
+            metadata={"signup_token": token},
+            success_url=f"{base_url}/engine/login?signup=success",
+            cancel_url=f"{base_url}/engine/signup?canceled=true",
+        )
+        return RedirectResponse(url=checkout_session.url, status_code=303)
+    except stripe.error.StripeError as e:
+        return HTMLResponse(content=_render_signup(
+            error=f"Payment error: {str(e)}", name=name, company=company, email=email, tier=tier
+        ), status_code=500)
+
+
+# ═══════════════════════════════════════════════════════════════
+# STRIPE WEBHOOK
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/engine/api/v1/billing/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events."""
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+
+    if not settings.stripe_webhook_secret:
+        return JSONResponse({"error": "Webhook not configured"}, status_code=500)
+
+    stripe.api_key = settings.stripe_secret_key
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, settings.stripe_webhook_secret)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return JSONResponse({"error": "Invalid signature"}, status_code=400)
+
+    event_type = event["type"]
+    data = event["data"]["object"]
+
+    if event_type == "checkout.session.completed":
+        _handle_checkout_completed(data)
+    elif event_type == "customer.subscription.updated":
+        _handle_subscription_updated(data)
+    elif event_type == "customer.subscription.deleted":
+        _handle_subscription_deleted(data)
+
+    return JSONResponse({"status": "ok"})
+
+
+def _handle_checkout_completed(session: dict):
+    """Create user account after successful checkout."""
+    token = session.get("metadata", {}).get("signup_token")
+    if not token or token not in _pending_signups:
+        print(f"Webhook: No pending signup for token {token}")
+        return
+
+    signup = _pending_signups.pop(token)
+    customer_id = session.get("customer", "")
+    subscription_id = session.get("subscription", "")
+
+    db = SessionLocal()
+    try:
+        # Double-check email not taken (race condition guard)
+        existing = db.query(User).filter(User.email == signup["email"]).first()
+        if existing:
+            print(f"Webhook: User {signup['email']} already exists, skipping")
+            return
+
+        user = User(
+            email=signup["email"],
+            hashed_password=signup["hashed_password"],
+            name=signup["name"],
+            company_name=signup["company"],
+            role="analyst",
+            fund_id=signup["email"],
+            subscription_tier=signup["tier"],
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=subscription_id,
+            subscription_status="active",
+        )
+        db.add(user)
+        db.commit()
+        print(f"Webhook: Created user {signup['email']} (tier={signup['tier']})")
+    except Exception as e:
+        print(f"Webhook: Error creating user: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _handle_subscription_updated(subscription: dict):
+    """Update subscription status when Stripe notifies us."""
+    customer_id = subscription.get("customer", "")
+    status = subscription.get("status", "")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.stripe_customer_id == customer_id).first()
+        if user:
+            user.subscription_status = status
+            db.commit()
+            print(f"Webhook: Updated {user.email} subscription_status={status}")
+    except Exception as e:
+        print(f"Webhook: Error updating subscription: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _handle_subscription_deleted(subscription: dict):
+    """Mark subscription as canceled."""
+    customer_id = subscription.get("customer", "")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.stripe_customer_id == customer_id).first()
+        if user:
+            user.subscription_status = "canceled"
+            db.commit()
+            print(f"Webhook: Canceled subscription for {user.email}")
+    except Exception as e:
+        print(f"Webhook: Error canceling subscription: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# ═══════════════════════════════════════════════════════════════
+# BILLING PORTAL
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/engine/api/v1/billing/portal")
+async def billing_portal(request: Request):
+    """Create a Stripe Customer Portal session for subscription management."""
+    email = getattr(request.state, "user_email", None)
+    if not email:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user or not user.stripe_customer_id:
+            return JSONResponse({"detail": "No subscription found"}, status_code=404)
+
+        stripe.api_key = settings.stripe_secret_key
+        base_url = str(request.base_url).rstrip("/")
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+        if forwarded_host:
+            proto = request.headers.get("x-forwarded-proto", "https")
+            base_url = f"{proto}://{forwarded_host}"
+
+        portal = stripe.billing_portal.Session.create(
+            customer=user.stripe_customer_id,
+            return_url=f"{base_url}/engine",
+        )
+        return JSONResponse({"url": portal.url})
+    finally:
+        db.close()

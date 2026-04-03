@@ -45,5 +45,26 @@ def init_db():
                     else:
                         conn.execute(text("ALTER TABLE deals ADD COLUMN v2_state JSONB"))
                     print("Migrated: added 'v2_state' column to deals")
+
+        # Migrate users table: add subscription columns
+        if "users" in insp.get_table_names():
+            user_cols = {c["name"] for c in insp.get_columns("users")}
+            with engine.begin() as conn:
+                for col_name, col_def in [
+                    ("company_name", "VARCHAR(255)"),
+                    ("subscription_tier", "VARCHAR(50)"),
+                    ("stripe_customer_id", "VARCHAR(255)"),
+                    ("stripe_subscription_id", "VARCHAR(255)"),
+                    ("subscription_status", "VARCHAR(50)"),
+                ]:
+                    if col_name not in user_cols:
+                        conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"))
+                        print(f"Migrated: added '{col_name}' column to users")
+
+                # Set existing users (no stripe_customer_id) to admin tier
+                conn.execute(text(
+                    "UPDATE users SET subscription_tier = 'admin' "
+                    "WHERE stripe_customer_id IS NULL AND subscription_tier IS NULL"
+                ))
     except Exception as e:
         print(f"Migration check warning: {e}")

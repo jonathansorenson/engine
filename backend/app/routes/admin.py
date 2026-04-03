@@ -20,6 +20,7 @@ class UserCreate(PydanticBaseModel):
     password: str
     name: Optional[str] = None
     role: str = "analyst"
+    subscription_tier: Optional[str] = "admin"  # admin, free, starter, pro, enterprise
 
 
 class UserUpdate(PydanticBaseModel):
@@ -35,6 +36,7 @@ class UserResponse(PydanticBaseModel):
     name: Optional[str]
     role: str
     is_active: bool
+    subscription_tier: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -70,12 +72,19 @@ async def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
     if user_data.role not in ("admin", "analyst", "viewer"):
         raise HTTPException(status_code=400, detail="Role must be: admin, analyst, or viewer")
 
+    valid_tiers = ("admin", "free", "starter", "pro", "enterprise")
+    tier = user_data.subscription_tier or "admin"
+    if tier not in valid_tiers:
+        raise HTTPException(status_code=400, detail=f"subscription_tier must be one of: {', '.join(valid_tiers)}")
+
     user = User(
         email=user_data.email.lower().strip(),
         hashed_password=hash_password(user_data.password),
         name=user_data.name,
         role=user_data.role,
         fund_id=user_data.email.lower().strip(),  # Use email as fund_id for isolation
+        subscription_tier=tier,
+        subscription_status="active" if tier == "free" else None,
     )
     db.add(user)
     db.commit()

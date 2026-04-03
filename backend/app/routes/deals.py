@@ -16,10 +16,10 @@ from app.schemas.deal import (
 from app.services.pipeline import parse_offering_memorandum
 from app.services.argus_parser import is_argus_file, parse_argus_file
 from app.config import settings
+from app.models.user import User
+from app.routes.billing import get_deal_limit_for_user
 
 router = APIRouter(prefix="/api/v1/deals", tags=["deals"])
-
-DEAL_LIMIT = 10
 
 
 def get_upload_dir():
@@ -40,8 +40,10 @@ async def get_deal_count(
 ):
     """Get the current deal count and limit for the user's fund."""
     fund_id = request.state.fund_id
+    user = db.query(User).filter(User.email == fund_id).first()
+    limit = get_deal_limit_for_user(user)
     count = _get_deal_count(db, fund_id)
-    return DealCountResponse(count=count, limit=DEAL_LIMIT, can_upload=count < DEAL_LIMIT)
+    return DealCountResponse(count=count, limit=limit, can_upload=count < limit)
 
 
 @router.post("", response_model=DealResponse)
@@ -62,12 +64,19 @@ async def upload_and_parse_deal(
 
     fund_id = request.state.fund_id
 
-    # Enforce deal limit
+    # Enforce deal limit based on subscription tier
+    user = db.query(User).filter(User.email == fund_id).first()
+    deal_limit = get_deal_limit_for_user(user)
     count = _get_deal_count(db, fund_id)
-    if count >= DEAL_LIMIT:
+    if count >= deal_limit:
+        if deal_limit == 0:
+            raise HTTPException(
+                status_code=403,
+                detail="Your subscription has expired. Please renew to upload new deals.",
+            )
         raise HTTPException(
             status_code=403,
-            detail=f"Deal limit reached ({DEAL_LIMIT} deals max). Delete an existing deal to upload a new one.",
+            detail=f"Deal limit reached ({deal_limit} deals max). Upgrade your plan or delete an existing deal.",
         )
 
     # Create deal record with initial status

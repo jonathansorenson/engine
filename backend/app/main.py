@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import init_db, SessionLocal
 from app.models.user import User
-from app.routes import deals_router, chat_router, admin_router, export_router
+from app.routes import deals_router, chat_router, admin_router, export_router, billing_router
 from app.routes.admin import hash_password, verify_password
 
 # Path to frontend — check Docker path first, then relative (local dev)
@@ -68,7 +68,7 @@ def _get_user_from_cookie(cookie_value: str):
 class AuthMiddleware(BaseHTTPMiddleware):
     """User authentication for /engine/* routes. Admin check for /engine/api/v1/admin/*."""
 
-    PUBLIC_PATHS = {"/health", "/engine/login", "/", "/docs", "/openapi.json", "/redoc"}
+    PUBLIC_PATHS = {"/health", "/engine/login", "/engine/signup", "/engine/api/v1/billing/webhook", "/", "/docs", "/openapi.json", "/redoc"}
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
@@ -155,6 +155,9 @@ LOGIN_HTML = """<!DOCTYPE html>
             <input type="password" name="password" placeholder="Password" required />
             <button type="submit">Sign In</button>
         </form>
+        <div style="text-align:center;margin-top:16px;font-size:13px;color:#94a3b8;">
+            Don't have an account? <a href="/engine/signup" style="color:#60a5fa;text-decoration:none;">Sign up</a>
+        </div>
     </div>
 </body>
 </html>"""
@@ -237,6 +240,7 @@ app.include_router(deals_router, prefix="/engine")
 app.include_router(chat_router, prefix="/engine")
 app.include_router(admin_router, prefix="/engine")
 app.include_router(export_router, prefix="/engine")
+app.include_router(billing_router)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -256,9 +260,15 @@ async def root():
 
 
 @app.get("/engine/login", response_class=HTMLResponse)
-async def login_page():
+async def login_page(request: Request):
     """Serve the email/password login form."""
     html = LOGIN_HTML.replace("{error_class}", "").replace("{error_msg}", "")
+    # Show success message after signup
+    if request.query_params.get("signup") == "success":
+        html = html.replace(
+            '<div class="error " id="err"></div>',
+            '<div style="background:#22c55e33;border:1px solid #22c55e;color:#86efac;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;">Account created! Please sign in with your email and password.</div>'
+        )
     return HTMLResponse(content=html)
 
 
@@ -312,11 +322,25 @@ async def logout():
 @app.get("/engine/me")
 async def get_current_user(request: Request):
     """Return current user info (for frontend header)."""
-    return {
-        "email": getattr(request.state, "user_email", "unknown"),
+    email = getattr(request.state, "user_email", "unknown")
+    result = {
+        "email": email,
         "name": getattr(request.state, "user_name", ""),
         "role": getattr(request.state, "user_role", "analyst"),
+        "subscription_tier": None,
+        "subscription_status": None,
+        "has_stripe": False,
     }
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            result["subscription_tier"] = user.subscription_tier
+            result["subscription_status"] = user.subscription_status
+            result["has_stripe"] = bool(user.stripe_customer_id)
+    finally:
+        db.close()
+    return result
 
 
 @app.get("/engine", response_class=HTMLResponse)

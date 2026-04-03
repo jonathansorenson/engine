@@ -968,7 +968,8 @@
         };
 
         // Components
-        const Header = ({ currentPage, dealName, userName, userRole, onAdminClick, onHomeClick }) => (
+        const TIER_COLORS = { starter: '#22c55e', pro: '#3b82f6', enterprise: '#a78bfa', admin: '#f59e0b' };
+        const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onHomeClick }) => (
             <div className="header">
                 <div className="header-left">
                     <div className="breadcrumb" onClick={onHomeClick} style={{ cursor: 'pointer' }}>
@@ -977,7 +978,9 @@
                 </div>
                 <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     {DEMO_MODE && <span style={{ fontSize: '0.75rem', opacity: 0.6, border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '2px 8px' }}>DEMO</span>}
+                    {subscriptionTier && <span style={{ fontSize: '0.7rem', color: TIER_COLORS[subscriptionTier] || '#94a3b8', border: `1px solid ${TIER_COLORS[subscriptionTier] || '#94a3b8'}`, borderRadius: '4px', padding: '2px 8px', textTransform: 'uppercase', fontWeight: 600 }}>{subscriptionTier}</span>}
                     {userName && <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{userName}</span>}
+                    {hasStripe && <a href="#" onClick={async (e) => { e.preventDefault(); const r = await fetch(`${API_URL}/billing/portal`, {method:'POST'}); const d = await r.json(); if(d.url) window.location.href=d.url; }} style={{ fontSize: '0.7rem', color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '5px' }}>Manage Plan</a>}
                     {userRole === 'admin' && (
                         <button onClick={onAdminClick} style={{
                             fontSize: '0.75rem', color: '#00BFA5', background: 'transparent', border: '1px solid #00BFA5',
@@ -5997,6 +6000,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             const [deal, setDeal] = useState(null);
             const [userName, setUserName] = useState('');
             const [userRole, setUserRole] = useState('');
+            const [subscriptionTier, setSubscriptionTier] = useState(null);
+            const [subscriptionStatus, setSubscriptionStatus] = useState(null);
+            const [hasStripe, setHasStripe] = useState(false);
 
             // Fetch current user info on mount
             useEffect(() => {
@@ -6007,6 +6013,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                             if (data) {
                                 setUserName(data.name || data.email || '');
                                 setUserRole(data.role || '');
+                                setSubscriptionTier(data.subscription_tier || null);
+                                setSubscriptionStatus(data.subscription_status || null);
+                                setHasStripe(data.has_stripe || false);
                             }
                         })
                         .catch(() => {});
@@ -6034,11 +6043,18 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
             return (
                 <>
+                    {hasStripe && subscriptionStatus && subscriptionStatus !== 'active' && subscriptionStatus !== 'trialing' && (
+                        <div style={{ background: '#ef444433', borderBottom: '1px solid #ef4444', color: '#fca5a5', padding: '8px 16px', fontSize: '13px', textAlign: 'center' }}>
+                            Your subscription has expired. <a href="#" onClick={async (e) => { e.preventDefault(); const r = await fetch(`${API_URL}/billing/portal`, {method:'POST'}); const d = await r.json(); if(d.url) window.location.href=d.url; }} style={{ color: '#60a5fa', textDecoration: 'underline' }}>Manage billing</a>
+                        </div>
+                    )}
                     <Header
                         currentPage={currentView}
                         dealName={deal?.property_name}
                         userName={userName}
                         userRole={userRole}
+                        subscriptionTier={subscriptionTier}
+                        hasStripe={hasStripe}
                         onAdminClick={() => setCurrentView(currentView === 'admin' ? 'list' : 'admin')}
                         onHomeClick={() => { setCurrentView('list'); setSelectedDealId(null); setDeal(null); }}
                     />

@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     admin_email: str = "jonathan_sorenson@losttree.com"
     admin_password: str = "crelytic2026"
 
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_starter_price_id: str = ""
+    stripe_pro_price_id: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = False
