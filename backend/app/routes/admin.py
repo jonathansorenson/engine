@@ -84,12 +84,18 @@ async def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
         role=user_data.role,
         fund_id=user_data.email.lower().strip(),  # Use email as fund_id for isolation
         subscription_tier=tier,
-        subscription_status="active" if tier == "free" else None,
+        subscription_status="active" if tier in ("free", "starter", "pro") else None,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return UserResponse.model_validate(user)
+    print(f"Creating user: email={user.email}, tier={tier}, status={user.subscription_status}")
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return UserResponse.model_validate(user)
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
