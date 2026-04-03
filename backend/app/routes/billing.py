@@ -429,15 +429,41 @@ async def stripe_webhook(request: Request):
 
 
 def _handle_checkout_completed(session: dict):
-    """Create user account after successful checkout."""
-    token = session.get("metadata", {}).get("signup_token")
+    """Create user account or upgrade existing user after successful checkout."""
+    metadata = session.get("metadata", {})
+    customer_id = session.get("customer", "")
+    subscription_id = session.get("subscription", "")
+
+    # Case 1: Existing user upgrading from free/admin tier
+    upgrade_email = metadata.get("upgrade_user_email")
+    if upgrade_email:
+        tier = metadata.get("tier", "pro")
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.email == upgrade_email).first()
+            if user:
+                user.stripe_customer_id = customer_id
+                user.stripe_subscription_id = subscription_id
+                user.subscription_tier = tier
+                user.subscription_status = "active"
+                db.commit()
+                print(f"Webhook: Upgraded {upgrade_email} to {tier}")
+            else:
+                print(f"Webhook: Upgrade user {upgrade_email} not found")
+        except Exception as e:
+            print(f"Webhook: Error upgrading user: {e}")
+            db.rollback()
+        finally:
+            db.close()
+        return
+
+    # Case 2: New user signup
+    token = metadata.get("signup_token")
     if not token or token not in _pending_signups:
         print(f"Webhook: No pending signup for token {token}")
         return
 
     signup = _pending_signups.pop(token)
-    customer_id = session.get("customer", "")
-    subscription_id = session.get("subscription", "")
 
     db = SessionLocal()
     try:
@@ -535,5 +561,58 @@ async def billing_portal(request: Request):
             return_url=f"{base_url}/engine",
         )
         return JSONResponse({"url": portal.url})
+    finally:
+        db.close()
+
+
+@router.post("/engine/api/v1/billing/upgrade")
+async def upgrade_plan(request: Request):
+    """Smart upgrade: Stripe users → portal, free/admin users → new checkout session."""
+    email = getattr(request.state, "user_email", None)
+    if not email:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    target_tier = body.get("tier", "pro")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return JSONResponse({"detail": "User not found"}, status_code=404)
+
+        stripe.api_key = settings.stripe_secret_key
+        base_url = str(request.base_url).rstrip("/")
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+        if forwarded_host:
+            proto = request.headers.get("x-forwarded-proto", "https")
+            base_url = f"{proto}://{forwarded_host}"
+
+        # If user already has Stripe → send to portal to upgrade
+        if user.stripe_customer_id:
+            portal = stripe.billing_portal.Session.create(
+                customer=user.stripe_customer_id,
+                return_url=f"{base_url}/engine",
+            )
+            return JSONResponse({"url": portal.url, "method": "portal"})
+
+        # Free/admin user without Stripe → create checkout session
+        price_id = settings.stripe_starter_price_id if target_tier == "starter" else settings.stripe_pro_price_id
+
+        # Create a Stripe customer first
+        customer = stripe.Customer.create(email=user.email, name=user.name or "")
+
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            mode="subscription",
+            customer=customer.id,
+            line_items=[{"price": price_id, "quantity": 1}],
+            metadata={"upgrade_user_email": user.email, "tier": target_tier},
+            success_url=f"{base_url}/engine?upgraded=true",
+            cancel_url=f"{base_url}/engine?upgrade_canceled=true",
+        )
+        return JSONResponse({"url": checkout_session.url, "method": "checkout"})
+    except stripe.error.StripeError as e:
+        return JSONResponse({"detail": f"Stripe error: {str(e)}"}, status_code=500)
     finally:
         db.close()

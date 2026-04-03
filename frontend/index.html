@@ -1063,7 +1063,7 @@
             }
         };
 
-        const DealListView = ({ onSelectDeal, onUpload }) => {
+        const DealListView = ({ onSelectDeal, onUpload, onUpgrade }) => {
             const [deals, setDeals] = useState([]);
             const [loading, setLoading] = useState(true);
             const [dealCount, setDealCount] = useState({ monthly_used: 0, monthly_limit: 10, total_count: 0, total_limit: 50, can_upload: true, resets_at: null });
@@ -1144,17 +1144,17 @@
                                                 <div style={{ width: `${tPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${tColor}88, ${tColor})`, transition: 'width 0.5s ease' }} />
                                             </div>
                                         </div>
-                                        {atLimit && (
-                                            <a href="/engine/signup" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', transition: 'opacity 0.2s' }}
+                                        {atLimit && onUpgrade && (
+                                            <button onClick={() => onUpgrade('pro')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontSize: '0.8rem', fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'opacity 0.2s' }}
                                                 onMouseOver={e => e.currentTarget.style.opacity = '0.85'} onMouseOut={e => e.currentTarget.style.opacity = '1'}>
                                                 ⚡ Upgrade Plan
-                                            </a>
+                                            </button>
                                         )}
                                     </div>
-                                    {mPct >= 80 && !atLimit && (
+                                    {mPct >= 80 && !atLimit && onUpgrade && (
                                         <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span style={{ fontSize: '0.75rem', color: '#f59e0b' }}>You're approaching your monthly limit. Need more uploads?</span>
-                                            <a href="/engine/signup" style={{ fontSize: '0.75rem', color: '#8b5cf6', fontWeight: 600, textDecoration: 'none' }}>Upgrade →</a>
+                                            <button onClick={() => onUpgrade('pro')} style={{ fontSize: '0.75rem', color: '#8b5cf6', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Upgrade →</button>
                                         </div>
                                     )}
                                 </div>
@@ -6108,11 +6108,25 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 setDeal(null);
             };
 
+            const handleUpgrade = async (tier = 'pro') => {
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/billing/upgrade`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tier }),
+                    });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                } catch (e) {
+                    console.error('Upgrade error:', e);
+                }
+            };
+
             return (
                 <>
                     {hasStripe && subscriptionStatus && subscriptionStatus !== 'active' && subscriptionStatus !== 'trialing' && (
                         <div style={{ background: '#ef444433', borderBottom: '1px solid #ef4444', color: '#fca5a5', padding: '8px 16px', fontSize: '13px', textAlign: 'center' }}>
-                            Your subscription has expired. <a href="#" onClick={async (e) => { e.preventDefault(); const r = await fetch(`${API_URL}/billing/portal`, {method:'POST'}); const d = await r.json(); if(d.url) window.location.href=d.url; }} style={{ color: '#60a5fa', textDecoration: 'underline' }}>Manage billing</a>
+                            Your subscription has expired. <a href="#" onClick={async (e) => { e.preventDefault(); await handleUpgrade(); }} style={{ color: '#60a5fa', textDecoration: 'underline' }}>Renew subscription</a>
                         </div>
                     )}
                     <Header
@@ -6130,6 +6144,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         <DealListView
                             onSelectDeal={handleSelectDeal}
                             onUpload={() => setCurrentView('upload')}
+                            onUpgrade={handleUpgrade}
                         />
                     )}
 
