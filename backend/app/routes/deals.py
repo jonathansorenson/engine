@@ -17,7 +17,7 @@ from app.services.pipeline import parse_offering_memorandum
 from app.services.argus_parser import is_argus_file, parse_argus_file
 from app.config import settings
 from app.models.user import User
-from app.routes.billing import get_deal_limit_for_user
+from app.routes.billing import get_monthly_limit, get_total_limit, get_monthly_used, _get_billing_cycle_reset
 
 router = APIRouter(prefix="/api/v1/deals", tags=["deals"])
 
@@ -38,12 +38,26 @@ async def get_deal_count(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Get the current deal count and limit for the user's fund."""
+    """Get the current deal count, monthly usage, and limits for the user's fund."""
     fund_id = request.state.fund_id
     user = db.query(User).filter(User.email == fund_id).first()
-    limit = get_deal_limit_for_user(user)
-    count = _get_deal_count(db, fund_id)
-    return DealCountResponse(count=count, limit=limit, can_upload=count < limit)
+
+    monthly_limit = get_monthly_limit(user)
+    total_limit = get_total_limit(user)
+    monthly_used = get_monthly_used(db, user) if user else 0
+    total_count = _get_deal_count(db, fund_id)
+
+    can_upload = monthly_used < monthly_limit and total_count < total_limit
+    resets_at = _get_billing_cycle_reset(user).isoformat() if user else None
+
+    return DealCountResponse(
+        monthly_used=monthly_used,
+        monthly_limit=monthly_limit,
+        total_count=total_count,
+        total_limit=total_limit,
+        can_upload=can_upload,
+        resets_at=resets_at,
+    )
 
 
 @router.post("", response_model=DealResponse)
@@ -64,19 +78,28 @@ async def upload_and_parse_deal(
 
     fund_id = request.state.fund_id
 
-    # Enforce deal limit based on subscription tier
+    # Enforce deal limits based on subscription tier
     user = db.query(User).filter(User.email == fund_id).first()
-    deal_limit = get_deal_limit_for_user(user)
-    count = _get_deal_count(db, fund_id)
-    if count >= deal_limit:
-        if deal_limit == 0:
-            raise HTTPException(
-                status_code=403,
-                detail="Your subscription has expired. Please renew to upload new deals.",
-            )
+    monthly_limit = get_monthly_limit(user)
+    total_limit = get_total_limit(user)
+    monthly_used = get_monthly_used(db, user) if user else 0
+    total_count = _get_deal_count(db, fund_id)
+
+    if monthly_limit == 0 or total_limit == 0:
         raise HTTPException(
             status_code=403,
-            detail=f"Deal limit reached ({deal_limit} deals max). Upgrade your plan or delete an existing deal.",
+            detail="Your subscription has expired. Please renew to upload new deals.",
+        )
+    if monthly_used >= monthly_limit:
+        resets_at = _get_billing_cycle_reset(user).strftime("%B %d") if user else "next month"
+        raise HTTPException(
+            status_code=403,
+            detail=f"Monthly upload limit reached ({monthly_used}/{monthly_limit}). Resets on {resets_at}. Upgrade your plan for more uploads.",
+        )
+    if total_count >= total_limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Storage limit reached ({total_count}/{total_limit} deals). Delete old deals or upgrade your plan.",
         )
 
     # Create deal record with initial status

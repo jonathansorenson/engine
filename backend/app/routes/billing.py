@@ -37,22 +37,89 @@ def _cleanup_expired():
 # TIER CONFIG
 # ═══════════════════════════════════════════════════════════════
 
-TIER_LIMITS = {
+from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta
+from sqlalchemy import func
+from app.models.deal import Deal
+
+# Monthly upload limits (how many new deals per billing month)
+MONTHLY_LIMITS = {
     "starter": 5,
     "pro": 25,
+    "free": 25,
     "enterprise": 999,
     "admin": 999,
-    "free": 25,
+}
+
+# Total deal storage caps (max deals a user can keep at once)
+TOTAL_LIMITS = {
+    "starter": 50,
+    "pro": 200,
+    "free": 200,
+    "enterprise": 9999,
+    "admin": 9999,
 }
 
 
+def _get_billing_cycle_start(user: User) -> datetime:
+    """Get the start of the user's current billing month.
+    Uses the user's created_at day-of-month as the anchor."""
+    now = datetime.now(timezone.utc)
+    anchor_day = min(user.created_at.day, 28)  # Cap at 28 to avoid month-length issues
+
+    # Start of current billing cycle
+    cycle_start = now.replace(day=anchor_day, hour=0, minute=0, second=0, microsecond=0)
+    if cycle_start > now:
+        cycle_start = cycle_start - relativedelta(months=1)
+    return cycle_start
+
+
+def _get_billing_cycle_reset(user: User) -> datetime:
+    """Get the reset date (start of next billing month)."""
+    cycle_start = _get_billing_cycle_start(user)
+    return cycle_start + relativedelta(months=1)
+
+
+def get_monthly_limit(user: User) -> int:
+    """Return monthly upload limit for a user."""
+    if not user:
+        return 0
+    tier = user.subscription_tier or "admin"
+    # Admin-created users without stripe = unlimited
+    if not user.stripe_customer_id and tier in ("admin",):
+        return 999
+    if user.stripe_customer_id and user.subscription_status not in ("active", "trialing"):
+        return 0  # Expired subscription
+    return MONTHLY_LIMITS.get(tier, 0)
+
+
+def get_total_limit(user: User) -> int:
+    """Return total deal storage cap for a user."""
+    if not user:
+        return 0
+    tier = user.subscription_tier or "admin"
+    if not user.stripe_customer_id and tier in ("admin",):
+        return 9999
+    if user.stripe_customer_id and user.subscription_status not in ("active", "trialing"):
+        return 0
+    return TOTAL_LIMITS.get(tier, 0)
+
+
+def get_monthly_used(db, user: User) -> int:
+    """Count deals created by this user in the current billing month."""
+    if not user:
+        return 0
+    cycle_start = _get_billing_cycle_start(user)
+    return db.query(func.count(Deal.id)).filter(
+        Deal.fund_id == user.email,
+        Deal.created_at >= cycle_start,
+    ).scalar() or 0
+
+
+# Legacy compatibility wrapper
 def get_deal_limit_for_user(user: User) -> int:
-    """Return the deal limit for a user based on their subscription."""
-    if not user or not user.stripe_customer_id:
-        return 999  # Admin-created users = unlimited
-    if user.subscription_status not in ("active", "trialing"):
-        return 0  # Expired = no new uploads
-    return TIER_LIMITS.get(user.subscription_tier, 0)
+    """Return the monthly upload limit (legacy compat)."""
+    return get_monthly_limit(user)
 
 
 # ═══════════════════════════════════════════════════════════════

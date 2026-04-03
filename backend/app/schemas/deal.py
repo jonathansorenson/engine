@@ -60,6 +60,9 @@ class DealResponse(BaseModel):
 
 class DealCountResponse(BaseModel):
     """Response for deal count endpoint."""
-    count: int
-    limit: int = 10
+    monthly_used: int
+    monthly_limit: int
+    total_count: int
+    total_limit: int
     can_upload: bool
+    resets_at: Optional[str] = None  # ISO timestamp of next billing cycle reset
