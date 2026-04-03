@@ -1118,43 +1118,86 @@
                             const mColor = mPct >= 100 ? '#ef4444' : mPct >= 80 ? '#f59e0b' : mPct >= 50 ? '#3b82f6' : '#22c55e';
                             const tColor = tPct >= 100 ? '#ef4444' : tPct >= 80 ? '#f59e0b' : tPct >= 50 ? '#3b82f6' : '#22c55e';
                             const atLimit = !dealCount.can_upload;
+                            const isStarter = dealCount.monthly_limit <= 5;
+                            const showUpgradeCard = onUpgrade && (isStarter || atLimit || mPct >= 50);
                             return (
-                                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px 20px' }}>
-                                    <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Monthly Uploads</span>
-                                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: mColor }}>{dealCount.monthly_used} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.monthly_limit}</span></span>
+                                <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
+                                    {/* Usage meters */}
+                                    <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px 20px' }}>
+                                        <div style={{ display: 'flex', gap: '32px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Monthly Uploads</span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: mColor }}>{dealCount.monthly_used} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.monthly_limit}</span></span>
+                                                </div>
+                                                <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                                                    <div style={{ width: `${mPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${mColor}88, ${mColor})`, transition: 'width 0.5s ease' }} />
+                                                </div>
+                                                {dealCount.resets_at && (
+                                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '4px', display: 'block' }}>
+                                                        Resets {new Date(dealCount.resets_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                                                <div style={{ width: `${mPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${mColor}88, ${mColor})`, transition: 'width 0.5s ease' }} />
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deals Stored</span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: tColor }}>{dealCount.total_count} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.total_limit}</span></span>
+                                                </div>
+                                                <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                                                    <div style={{ width: `${tPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${tColor}88, ${tColor})`, transition: 'width 0.5s ease' }} />
+                                                </div>
                                             </div>
-                                            {dealCount.resets_at && (
-                                                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '4px', display: 'block' }}>
-                                                    Resets {new Date(dealCount.resets_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                </span>
-                                            )}
                                         </div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deals Stored</span>
-                                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: tColor }}>{dealCount.total_count} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.total_limit}</span></span>
-                                            </div>
-                                            <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                                                <div style={{ width: `${tPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${tColor}88, ${tColor})`, transition: 'width 0.5s ease' }} />
-                                            </div>
-                                        </div>
-                                        {atLimit && onUpgrade && (
-                                            <button onClick={() => onUpgrade('pro')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontSize: '0.8rem', fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'opacity 0.2s' }}
-                                                onMouseOver={e => e.currentTarget.style.opacity = '0.85'} onMouseOut={e => e.currentTarget.style.opacity = '1'}>
-                                                ⚡ Upgrade Plan
-                                            </button>
-                                        )}
                                     </div>
-                                    {mPct >= 80 && !atLimit && onUpgrade && (
-                                        <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '0.75rem', color: '#f59e0b' }}>You're approaching your monthly limit. Need more uploads?</span>
-                                            <button onClick={() => onUpgrade('pro')} style={{ fontSize: '0.75rem', color: '#8b5cf6', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Upgrade →</button>
+                                    {/* Upgrade card — always visible for starter, or when approaching limits */}
+                                    {showUpgradeCard && (
+                                        <div style={{
+                                            width: '280px', borderRadius: '12px', padding: '16px 20px',
+                                            background: atLimit
+                                                ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(139,92,246,0.12))'
+                                                : 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08))',
+                                            border: atLimit
+                                                ? '1px solid rgba(239,68,68,0.25)'
+                                                : '1px solid rgba(139,92,246,0.2)',
+                                            display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '8px',
+                                        }}>
+                                            {atLimit ? (
+                                                <>
+                                                    <span style={{ fontSize: '1.2rem' }}>🔒</span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fca5a5' }}>Limit Reached</span>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                                                        Upgrade to Pro for <strong style={{ color: '#c4b5fd' }}>25 uploads/mo</strong> and <strong style={{ color: '#c4b5fd' }}>200 deals</strong>
+                                                    </span>
+                                                </>
+                                            ) : isStarter ? (
+                                                <>
+                                                    <span style={{ fontSize: '1.2rem' }}>⚡</span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#c4b5fd' }}>Unlock More Power</span>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                                                        Go Pro: <strong style={{ color: '#93c5fd' }}>5x more uploads</strong>, <strong style={{ color: '#93c5fd' }}>4x storage</strong> — just $11.99/mo
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span style={{ fontSize: '1rem' }}>📈</span>
+                                                    <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>Running low on uploads</span>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                                                        Need more capacity? Upgrade anytime.
+                                                    </span>
+                                                </>
+                                            )}
+                                            <button onClick={() => onUpgrade('pro')} style={{
+                                                marginTop: '4px', padding: '8px 24px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                                                background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff',
+                                                fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.02em',
+                                                boxShadow: '0 2px 12px rgba(139,92,246,0.3)',
+                                                transition: 'transform 0.15s, box-shadow 0.15s',
+                                            }}
+                                                onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(139,92,246,0.45)'; }}
+                                                onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(139,92,246,0.3)'; }}>
+                                                {atLimit ? 'Upgrade Now' : 'Upgrade to Pro'}
+                                            </button>
                                         </div>
                                     )}
                                 </div>
