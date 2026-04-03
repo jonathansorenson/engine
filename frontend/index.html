@@ -5748,7 +5748,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             const [users, setUsers] = useState([]);
             const [loading, setLoading] = useState(true);
             const [showCreate, setShowCreate] = useState(false);
-            const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'analyst' });
+            const [newUser, setNewUser] = useState({ email: '', password: '', name: '', role: 'analyst', subscription_tier: 'free' });
             const [editingId, setEditingId] = useState(null);
             const [editData, setEditData] = useState({});
             const [error, setError] = useState('');
@@ -5781,7 +5781,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         const err = await res.json();
                         throw new Error(err.detail || 'Failed to create user');
                     }
-                    setNewUser({ email: '', password: '', name: '', role: 'analyst' });
+                    setNewUser({ email: '', password: '', name: '', role: 'analyst', subscription_tier: 'free' });
                     setShowCreate(false);
                     await loadUsers();
                 } catch (e) {
@@ -5893,6 +5893,16 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                                             <option value="admin">Admin</option>
                                         </select>
                                     </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Plan</label>
+                                        <select style={inputStyle} value={newUser.subscription_tier}
+                                            onChange={e => setNewUser(p => ({ ...p, subscription_tier: e.target.value }))}>
+                                            <option value="free">Free (25 deals)</option>
+                                            <option value="starter">Starter (5 deals)</option>
+                                            <option value="pro">Pro (25 deals)</option>
+                                            <option value="admin">Admin (unlimited)</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     <button type="submit" className="btn btn-primary" style={{ fontSize: '0.85rem' }}>Create User</button>
@@ -5909,6 +5919,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Role</th>
+                                    <th>Plan</th>
                                     <th>Status</th>
                                     <th style={{ textAlign: 'right' }}>Actions</th>
                                 </tr>
@@ -5936,6 +5947,15 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                                             ) : (
                                                 <span style={roleBadge(user.role)}>{user.role}</span>
                                             )}
+                                        </td>
+                                        <td>
+                                            <span style={{
+                                                padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+                                                background: user.subscription_tier === 'pro' ? 'rgba(59,130,246,0.15)' : user.subscription_tier === 'starter' ? 'rgba(34,197,94,0.15)' : user.subscription_tier === 'free' ? 'rgba(167,139,250,0.15)' : 'rgba(251,191,36,0.15)',
+                                                color: user.subscription_tier === 'pro' ? '#3b82f6' : user.subscription_tier === 'starter' ? '#22c55e' : user.subscription_tier === 'free' ? '#a78bfa' : '#fbbf24',
+                                            }}>
+                                                {user.subscription_tier || 'admin'}
+                                            </span>
                                         </td>
                                         <td>
                                             <span style={{
@@ -5980,7 +6000,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                                     </tr>
                                 ))}
                                 {users.length === 0 && (
-                                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No users found</td></tr>
+                                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No users found</td></tr>
                                 )}
                             </tbody>
                         </table>
