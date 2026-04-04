@@ -22,6 +22,18 @@ try:
 except ImportError:
     HAS_DOCX = False
 
+try:
+    from openpyxl.drawing.image import Image as XlImage
+    HAS_PILLOW = True
+except ImportError:
+    HAS_PILLOW = False
+
+from app.branding import (
+    BRAND_NAME, GENERATED_BY, CONFIDENTIALITY, DISCLAIMER,
+    get_logo_tempfile, cleanup_logo_tempfile, get_logo_base64_data_uri,
+    COLOR_NAVY, COLOR_TEAL, PRODUCT_URL, TAGLINE, COMPANY_NAME
+)
+
 router = APIRouter(prefix="/api/v1/export", tags=["export"])
 
 
@@ -186,6 +198,24 @@ def _section_header(ws, row, title, cols=2):
         ws.cell(row=row, column=c).fill = SUBHEADER_FILL
         ws.cell(row=row, column=c).border = THIN_BORDER
     return row + 1
+
+
+def _apply_branding(wb, ws_list, prop_name):
+    """Apply CRELYTIC branding headers/footers and page setup to all sheets."""
+    generated_date = datetime.now().strftime('%Y-%m-%d')
+    for ws in ws_list:
+        # Print headers
+        ws.oddHeader.left.text = prop_name
+        ws.oddHeader.right.text = BRAND_NAME
+        # Print footers
+        ws.oddFooter.left.text = CONFIDENTIALITY
+        ws.oddFooter.center.text = "&P of &N"
+        ws.oddFooter.right.text = f"Generated {generated_date}"
+        # Page setup
+        ws.page_setup.orientation = 'landscape'
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 
 # ═══════════════════════════════════════════════════════════
@@ -658,6 +688,9 @@ async def export_deal_to_excel(data: ExportRequest):
         ws6.cell(row=sr + 3, column=1, value="Weighted Avg Rent/SF").font = LABEL_FONT
         ws6.cell(row=sr + 3, column=2, value=wa_rent).number_format = CURRENCY_CENTS_FMT
 
+    # ── Apply branding to all V1 sheets ──
+    _apply_branding(wb, wb.worksheets, data.property_name)
+
     # ── Write to buffer ──
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -765,10 +798,73 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     tenant_analytics = _v2_build_tenant_analytics(tenants, total_sf)
 
     # ══════════════════════════════════════════
+    # Cover Sheet
+    # ══════════════════════════════════════════
+    ws_cover = wb.active
+    ws_cover.title = "Cover"
+    ws_cover.column_dimensions["A"].width = 5
+    ws_cover.column_dimensions["B"].width = 35
+    ws_cover.column_dimensions["C"].width = 25
+
+    # Logo
+    logo_path = None
+    if HAS_PILLOW:
+        try:
+            logo_path = get_logo_tempfile()
+            img = XlImage(logo_path)
+            img.width = 64
+            img.height = 64
+            ws_cover.add_image(img, "B2")
+        except Exception:
+            pass
+
+    # Brand name
+    ws_cover.cell(row=2, column=3, value=BRAND_NAME).font = Font(name="Calibri", bold=True, size=20, color=COLOR_NAVY)
+    ws_cover.cell(row=3, column=3, value=TAGLINE).font = Font(name="Calibri", size=10, color="8A9BB0")
+
+    # Property name
+    ws_cover.cell(row=6, column=2, value=prop_name).font = Font(name="Calibri", bold=True, size=16, color=COLOR_NAVY)
+    address = p.get("address", "")
+    asset_type = p.get("assetType", "")
+    sf = p.get("sf", 0)
+    ws_cover.cell(row=7, column=2, value=f"{address}").font = Font(name="Calibri", size=11, color="666666")
+    ws_cover.cell(row=8, column=2, value=f"{asset_type} | {sf:,.0f} SF" if sf else asset_type).font = Font(name="Calibri", size=11, color="666666")
+
+    # Date
+    ws_cover.cell(row=10, column=2, value=f"Generated: {datetime.now().strftime('%B %d, %Y')}").font = Font(name="Calibri", size=10, color="999999")
+
+    # Key metrics summary
+    row_c = 12
+    purchase_price_val = p.get("purchasePrice", calc.get("pp", 0)) or 0
+    noi_val = calc.get("y1NOI", 0) or p.get("year1NOI", 0) or 0
+    irr_val = calc.get("levIRR", 0) or 0
+    cap_val = calc.get("goingCap", 0) or 0
+
+    metrics = [
+        ("Purchase Price", purchase_price_val, CURRENCY_FMT),
+        ("Year 1 NOI", noi_val, CURRENCY_FMT),
+        ("Going-in Cap Rate", cap_val / 100 if cap_val > 1 else cap_val, PERCENT_FMT),
+        ("Levered IRR", irr_val / 100 if irr_val > 1 else irr_val, PERCENT_FMT),
+    ]
+    for label, val, fmt in metrics:
+        ws_cover.cell(row=row_c, column=2, value=label).font = LABEL_FONT
+        c = ws_cover.cell(row=row_c, column=3, value=val)
+        c.font = Font(name="Calibri", bold=True, size=12, color=COLOR_NAVY)
+        c.number_format = fmt
+        row_c += 1
+
+    # Confidentiality
+    row_c += 2
+    ws_cover.cell(row=row_c, column=2, value=CONFIDENTIALITY).font = Font(name="Calibri", italic=True, size=9, color="999999")
+    row_c += 1
+    ws_cover.cell(row=row_c, column=2, value=DISCLAIMER).font = Font(name="Calibri", italic=True, size=8, color="BBBBBB")
+    row_c += 2
+    ws_cover.cell(row=row_c, column=2, value=GENERATED_BY).font = Font(name="Calibri", size=9, color="999999")
+
+    # ══════════════════════════════════════════
     # Sheet 1: Assumptions (with named ranges)
     # ══════════════════════════════════════════
-    ws = wb.active
-    ws.title = "Assumptions"
+    ws = wb.create_sheet("Assumptions")
     ws.column_dimensions["A"].width = 32
     ws.column_dimensions["B"].width = 20
 
@@ -1662,6 +1758,13 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
 
             ws_charts.add_chart(chart3, f"A{exp_end + 3}")
 
+    # ── Apply branding to all sheets ──
+    _apply_branding(wb, wb.worksheets, prop_name)
+
+    # Clean up logo temp file
+    if logo_path:
+        cleanup_logo_tempfile(logo_path)
+
     # ── Write to buffer ──
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -1733,6 +1836,14 @@ async def export_v2_memo_html(data: V2ExportRequest):
 </style>
 </head>
 <body>
+<div style="display: flex; align-items: center; gap: 18px; margin-bottom: 10px;">
+  <img src="{get_logo_base64_data_uri()}" alt="{BRAND_NAME}" style="height: 44px;" />
+  <div>
+    <span style="font-size: 22px; font-weight: 700; color: {COLOR_NAVY}; letter-spacing: 2px;">{BRAND_NAME}</span>
+    <br/>
+    <span style="font-size: 11px; color: {COLOR_TEAL}; letter-spacing: 1px;">{PRODUCT_URL}</span>
+  </div>
+</div>
 <h1>{prop_name}</h1>
 <p style="color: #6b7280; margin-top: -10px;">Investment Memo &mdash; Generated {datetime.now().strftime('%B %d, %Y')}</p>
 """)
@@ -1814,8 +1925,9 @@ Key considerations include {lease_note} and {expiry_note}.
 
     html_parts.append(f"""
 <div class="footer">
-  <p>Generated by CRE Lytic &mdash; {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-  <p>This memo is for informational purposes only and does not constitute investment advice.</p>
+  <p>{GENERATED_BY} &mdash; {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+  <p style="margin-top: 4px;">{CONFIDENTIALITY}</p>
+  <p style="margin-top: 4px;">{DISCLAIMER}</p>
 </div>
 </body></html>""")
 
@@ -1869,6 +1981,21 @@ async def export_v2_memo_docx(data: V2ExportRequest):
     tenant_analytics = _v2_build_tenant_analytics(tenants, total_sf)
 
     doc = Document()
+
+    # Add logo
+    logo_path = None
+    try:
+        logo_path = get_logo_tempfile()
+        doc.add_picture(logo_path, width=Inches(1.2))
+    except Exception:
+        pass
+
+    # Running header
+    section = doc.sections[0]
+    header_para = section.header.paragraphs[0]
+    header_para.text = f"{BRAND_NAME}  |  {prop_name}"
+    header_para.style.font.size = Pt(8)
+    header_para.style.font.color.rgb = None
 
     # Styles
     style = doc.styles['Normal']
@@ -2038,8 +2165,7 @@ async def export_v2_memo_docx(data: V2ExportRequest):
     # Footer
     doc.add_paragraph("")
     footer = doc.add_paragraph()
-    footer_run = footer.add_run(f"Generated by CRE Lytic — {datetime.now().strftime('%Y-%m-%d %H:%M')}. "
-                                "This memo is for informational purposes only.")
+    footer_run = footer.add_run(f"{GENERATED_BY}. {CONFIDENTIALITY} {DISCLAIMER}")
     footer_run.font.size = Pt(8)
     footer_run.italic = True
 
@@ -2047,6 +2173,9 @@ async def export_v2_memo_docx(data: V2ExportRequest):
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
+
+    if logo_path:
+        cleanup_logo_tempfile(logo_path)
 
     safe_name = prop_name.replace(" ", "_").replace("/", "-")
     safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]
