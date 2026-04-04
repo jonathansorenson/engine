@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Anthropic API
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-sonnet-20241022"
-    anthropic_extraction_model: str = "claude-sonnet-4-20250514"  # Best model for financial extraction
+    anthropic_extraction_model: str = "claude-opus-4-20250514"  # Best model for financial extraction
 
     # Auth
     secret_key: str = "change-me-to-a-random-32-char-string-in-production"
