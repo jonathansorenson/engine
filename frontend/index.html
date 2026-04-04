@@ -2927,6 +2927,8 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
   const [t12St, setT12St] = useState('idle');
   const [t12Msg, setT12Msg] = useState('');
   const [t12Data, setT12Data] = useState(null);
+  const [expenseBreakdown, setExpenseBreakdown] = useState(null); // AI-extracted expense breakdown
+  const [opexMeta, setOpexMeta] = useState({ source: null, confidence: null, yearType: null, yearLabel: null });
   // MLA profiles: per-space-type market leasing assumptions (Argus-style)
   const [mlaProfiles, setMlaProfiles] = useState([
     { id: 1, spaceType: 'Office', marketRentPSF: 25, rentEscalPct: 3, termYears: 5, renewalProb: 75, vacantMonths: 6, freeRentMonths: 2, tiNewPSF: 15, tiRenewalPSF: 10, lcNewPct: 6, lcRenewalPct: 4 },
@@ -2934,6 +2936,20 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
   // Hydrate on mount — pull from saved v2_state first, then fall back to parsed OM data
   useEffect(() => {
+    // Always try to load expense breakdown from parsed_data (it's set by the backend pipeline)
+    if (initialDeal.parsed_data) {
+      const fin = initialDeal.parsed_data.financials || {};
+      if (fin.expense_breakdown) setExpenseBreakdown(fin.expense_breakdown);
+      if (fin.opex_source || fin.opex_confidence) {
+        setOpexMeta({
+          source: fin.opex_source || null,
+          confidence: fin.opex_confidence || null,
+          yearType: fin.financial_year_type || null,
+          yearLabel: fin.financial_year_label || null,
+        });
+      }
+    }
+
     if (initialDeal.v2_state) {
       setP(initialDeal.v2_state.assumptions || V2_DEFAULTS);
       setWf(initialDeal.v2_state.waterfall || V2_WF_DEFAULTS);
@@ -2999,6 +3015,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           setP(prev => ({ ...prev, useRentRoll: true }));
         }
       }
+
     }
   }, []);
 
@@ -3672,6 +3689,66 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   </>
                 )}
               </V2Sect>
+
+              {/* AI-Extracted Expense Breakdown */}
+              {expenseBreakdown && Object.keys(expenseBreakdown).length > 0 && (
+                <V2Sect title={`Operating Expenses ${opexMeta.source === 'claude' ? '(AI-Extracted)' : opexMeta.source === 'regex' ? '(Parsed)' : ''}`}>
+                  <div style={{ fontSize: '11px' }}>
+                    {opexMeta.confidence && (
+                      <div style={{ marginBottom: '8px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span style={{
+                          padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700,
+                          backgroundColor: opexMeta.confidence === 'high' ? 'rgba(52,211,153,0.15)' : opexMeta.confidence === 'medium' ? 'rgba(251,191,36,0.15)' : 'rgba(239,68,68,0.15)',
+                          color: opexMeta.confidence === 'high' ? 'var(--green)' : opexMeta.confidence === 'medium' ? '#f59e0b' : 'var(--red)',
+                        }}>{opexMeta.confidence} confidence</span>
+                        {opexMeta.yearLabel && <span style={{ color: 'var(--text-secondary)', fontSize: '10px' }}>{opexMeta.yearLabel}</span>}
+                      </div>
+                    )}
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        {[
+                          ['Management Fee', expenseBreakdown.management_fee],
+                          ['Insurance', expenseBreakdown.insurance],
+                          ['Taxes', expenseBreakdown.taxes],
+                          ['Repairs & Maintenance', expenseBreakdown.repairs_maintenance],
+                          ['Utilities', expenseBreakdown.utilities],
+                          ['Payroll', expenseBreakdown.payroll],
+                          ['General & Admin', expenseBreakdown.general_admin],
+                          ['Marketing', expenseBreakdown.marketing],
+                          ['Contract Services', expenseBreakdown.contract_services],
+                          ['Other OpEx', expenseBreakdown.other_opex],
+                        ].filter(([, v]) => v != null && v > 0).map(([label, val]) => {
+                          const total = expenseBreakdown.total_operating_expenses || Object.values(expenseBreakdown).filter(v => v != null && typeof v === 'number').reduce((s, v) => s + v, 0);
+                          const pct = total > 0 ? (val / total * 100).toFixed(1) : '—';
+                          return (
+                            <tr key={label} style={{ borderBottom: '1px solid var(--border)' }}>
+                              <td style={{ padding: '4px 0', color: 'var(--text-secondary)' }}>{label}</td>
+                              <td style={{ textAlign: 'right', padding: '4px 0', fontFamily: "'JetBrains Mono', monospace" }}>{fmtK(val)}</td>
+                              <td style={{ textAlign: 'right', padding: '4px 0', color: 'var(--text-secondary)', width: '50px' }}>{pct}%</td>
+                            </tr>
+                          );
+                        })}
+                        {expenseBreakdown.total_operating_expenses > 0 && (
+                          <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
+                            <td style={{ padding: '6px 0' }}>Total OpEx</td>
+                            <td style={{ textAlign: 'right', padding: '6px 0', fontFamily: "'JetBrains Mono', monospace" }}>{fmtK(expenseBreakdown.total_operating_expenses)}</td>
+                            <td style={{ textAlign: 'right', padding: '6px 0' }}>100%</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </V2Sect>
+              )}
+              {!expenseBreakdown && (
+                <div style={{
+                  padding: '10px 12px', marginBottom: '12px', borderRadius: '6px',
+                  backgroundColor: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)',
+                  fontSize: '11px', color: '#f59e0b', lineHeight: '1.4',
+                }}>
+                  ⚠ Operating expenses were not detected. NOI shown may be overstated. Upload a T12 operating statement for more accurate underwriting.
+                </div>
+              )}
 
               {p.useRentRoll && (
               <V2Sect title="Market Leasing Assumptions">
@@ -5272,6 +5349,35 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <V2Card label="Debt Yield (Y1)" value={fmtP(calc.loan > 0 ? (calc.years[0]?.noi || 0) / calc.loan * 100 : 0)} />
               </div>
             </V2Sect>
+
+            {/* OpEx Summary — only show if AI-extracted */}
+            {expenseBreakdown && expenseBreakdown.total_operating_expenses > 0 && (
+              <V2Sect title="Operating Expense Summary">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                  <V2Card label="Total OpEx" value={fmtK(expenseBreakdown.total_operating_expenses)}
+                    sub={opexMeta.source === 'claude' ? 'AI-Extracted' : opexMeta.source === 'regex' ? 'Parsed' : ''} />
+                  <V2Card label="Expense Ratio" value={fmtP(
+                    (() => {
+                      const rev = expenseBreakdown._revenue || (p.year1NOI + expenseBreakdown.total_operating_expenses);
+                      return rev > 0 ? (expenseBreakdown.total_operating_expenses / rev * 100) : null;
+                    })()
+                  )} sub="OpEx / Revenue" />
+                  <V2Card label="OpEx / SF" value={fmtK(p.sf > 0 ? expenseBreakdown.total_operating_expenses / p.sf : 0)} sub="Per square foot" />
+                  <V2Card label="NOI (Implied)" value={fmtK(
+                    (expenseBreakdown._revenue || (p.year1NOI + expenseBreakdown.total_operating_expenses)) - expenseBreakdown.total_operating_expenses
+                  )} sub="Revenue - OpEx" />
+                </div>
+              </V2Sect>
+            )}
+            {!expenseBreakdown && (
+              <div style={{
+                padding: '10px 12px', marginBottom: '16px', borderRadius: '6px',
+                backgroundColor: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)',
+                fontSize: '12px', color: '#f59e0b', lineHeight: '1.4',
+              }}>
+                ⚠ No operating expenses detected — NOI may be overstated. Upload a T12 for better accuracy.
+              </div>
+            )}
 
             <V2Sect title="Return Attribution">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>

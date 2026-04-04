@@ -1,10 +1,12 @@
 import re
 import json
+import traceback
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 from difflib import SequenceMatcher
 import pdfplumber
 from openpyxl import load_workbook
+from app.config import settings
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -864,6 +866,343 @@ def extract_rent_roll_from_pdf_tables(tables: List[Dict[str, Any]]) -> List[Dict
 
 
 # ═══════════════════════════════════════════════════════════════
+# AI-POWERED FINANCIAL EXTRACTION & VERIFICATION
+# ═══════════════════════════════════════════════════════════════
+
+# Canonical expense categories (matches T12 parser taxonomy)
+EXPENSE_CATEGORIES = [
+    "management_fee", "insurance", "taxes", "repairs_maintenance",
+    "utilities", "payroll", "general_admin", "marketing",
+    "contract_services", "other_opex",
+]
+
+
+def enhance_financials_with_claude(pdf_path: str, regex_financials: dict) -> Optional[dict]:
+    """
+    Send PDF to Claude for comprehensive financial extraction.
+    Returns parsed financial dict or None on failure.
+    """
+    try:
+        from app.services.claude_ai import extract_om_financials
+
+        with open(pdf_path, "rb") as f:
+            file_bytes = f.read()
+
+        result = extract_om_financials(file_bytes, "application/pdf")
+        print(f"Claude financial extraction succeeded: {json.dumps({k: v for k, v in result.items() if k != 'notes'}, default=str)}")
+        return result
+    except Exception as e:
+        print(f"Claude financial extraction failed: {e}")
+        traceback.print_exc()
+        return None
+
+
+def merge_financial_results(regex_results: dict, claude_results: dict) -> Tuple[dict, List[str]]:
+    """
+    Merge regex-extracted financials with Claude-extracted financials.
+    Claude results are preferred when available (richer detail).
+    Returns (merged_financials, warnings).
+    """
+    merged = dict(regex_results)  # Start with regex as base
+    warnings = []
+
+    if not claude_results:
+        return merged, warnings
+
+    # ── Extract Claude values ──
+    claude_opex_obj = claude_results.get("operating_expenses") or {}
+    claude_total_opex = claude_opex_obj.get("total_operating_expenses")
+    claude_noi = claude_results.get("noi")
+    claude_revenue = None
+    claude_rev_obj = claude_results.get("revenue") or {}
+    claude_egi = claude_rev_obj.get("effective_gross_income")
+
+    regex_opex = regex_results.get("operating_expenses")
+    regex_noi = regex_results.get("noi")
+    regex_revenue = regex_results.get("annual_revenue")
+
+    # ── Merge OPEX ──
+    if claude_total_opex and claude_total_opex > 0:
+        if regex_opex and regex_opex > 0:
+            # Both found — check agreement
+            pct_diff = abs(claude_total_opex - regex_opex) / max(regex_opex, 1) * 100
+            if pct_diff > 15:
+                warnings.append(
+                    f"OPEX divergence: regex=${regex_opex:,.0f} vs AI=${claude_total_opex:,.0f} ({pct_diff:.0f}% diff). Using AI extraction."
+                )
+            merged["opex_source"] = "both"
+        else:
+            merged["opex_source"] = "claude"
+            warnings.append(f"AI extracted operating expenses: ${claude_total_opex:,.0f} (regex missed this)")
+
+        merged["operating_expenses"] = claude_total_opex
+    elif regex_opex and regex_opex > 0:
+        merged["opex_source"] = "regex"
+    else:
+        merged["opex_source"] = "not_found"
+        warnings.append("WARNING: Operating expenses not found in OM. NOI may be overstated.")
+
+    # ── Build expense breakdown ──
+    expense_breakdown = {}
+    for cat in EXPENSE_CATEGORIES:
+        val = claude_opex_obj.get(cat)
+        if val is not None and val > 0:
+            expense_breakdown[cat] = val
+    if expense_breakdown:
+        merged["expense_breakdown"] = expense_breakdown
+
+    # ── Merge revenue ──
+    if claude_egi and claude_egi > 0:
+        if not regex_revenue or regex_revenue == 0:
+            merged["annual_revenue"] = claude_egi
+            warnings.append(f"AI extracted revenue (EGI): ${claude_egi:,.0f}")
+        merged.setdefault("annual_revenue", claude_egi)
+
+    # Populate revenue breakdown
+    rev_breakdown = {}
+    for key in ["gross_potential_rent", "vacancy_loss", "effective_gross_income", "other_income"]:
+        val = claude_rev_obj.get(key)
+        if val is not None:
+            rev_breakdown[key] = val
+    if rev_breakdown:
+        merged["revenue_breakdown"] = rev_breakdown
+
+    # ── Merge NOI ──
+    if claude_noi and claude_noi > 0:
+        if regex_noi and regex_noi > 0:
+            pct_diff = abs(claude_noi - regex_noi) / max(regex_noi, 1) * 100
+            if pct_diff > 10:
+                warnings.append(
+                    f"NOI divergence: regex=${regex_noi:,.0f} vs AI=${claude_noi:,.0f} ({pct_diff:.0f}% diff). Using AI extraction."
+                )
+                merged["noi"] = claude_noi
+        else:
+            merged["noi"] = claude_noi
+
+    # ── Metadata ──
+    merged["opex_confidence"] = claude_results.get("confidence", "medium")
+    merged["financial_year_type"] = claude_results.get("year_type")
+    merged["financial_year_label"] = claude_results.get("year_label")
+
+    if claude_results.get("expense_ratio") and not merged.get("expense_ratio"):
+        merged["expense_ratio"] = claude_results["expense_ratio"]
+
+    if claude_results.get("capex_reserves"):
+        merged["capex_reserves"] = claude_results["capex_reserves"]
+
+    # ── Derive expense ratio if we now have both ──
+    if "expense_ratio" not in merged and merged.get("operating_expenses") and merged.get("annual_revenue"):
+        if merged["annual_revenue"] > 0:
+            merged["expense_ratio"] = round(merged["operating_expenses"] / merged["annual_revenue"] * 100, 1)
+
+    # ── Derive NOI if we now have both revenue and opex but no NOI ──
+    if "noi" not in merged and merged.get("annual_revenue") and merged.get("operating_expenses"):
+        merged["noi"] = merged["annual_revenue"] - merged["operating_expenses"]
+        warnings.append(f"Derived NOI: ${merged['noi']:,.0f} (Revenue - OPEX)")
+
+    return merged, warnings
+
+
+def validate_financials(financials: dict) -> List[str]:
+    """
+    Run sanity checks on extracted financials.
+    Returns list of warning strings.
+    """
+    warnings = []
+    noi = financials.get("noi")
+    opex = financials.get("operating_expenses")
+    revenue = financials.get("annual_revenue")
+    expense_ratio = financials.get("expense_ratio")
+
+    # Check: NOI present without OPEX
+    if noi and noi > 0 and (not opex or opex == 0):
+        warnings.append(
+            "NOI reported without operating expenses — the stated NOI may be inflated. "
+            "Upload a T12 operating statement for more accurate underwriting."
+        )
+
+    # Check: NOI ≈ Revenue - OPEX
+    if noi and revenue and opex and revenue > 0 and opex > 0:
+        expected_noi = revenue - opex
+        if expected_noi > 0:
+            pct_diff = abs(noi - expected_noi) / max(expected_noi, 1) * 100
+            if pct_diff > 15:
+                warnings.append(
+                    f"NOI reconciliation gap: Revenue(${revenue:,.0f}) - OPEX(${opex:,.0f}) = ${expected_noi:,.0f}, "
+                    f"but stated NOI is ${noi:,.0f} ({pct_diff:.0f}% diff)."
+                )
+
+    # Check: Expense ratio range
+    if expense_ratio:
+        if expense_ratio < 10:
+            warnings.append(f"Expense ratio is very low ({expense_ratio:.1f}%). Verify this is a NNN lease structure.")
+        elif expense_ratio > 70:
+            warnings.append(f"Expense ratio is very high ({expense_ratio:.1f}%). Verify operating expenses are correct.")
+
+    # Check: OPEX too low relative to revenue
+    if opex and revenue and revenue > 0:
+        ratio = opex / revenue * 100
+        if ratio < 10:
+            warnings.append(f"Operating expenses are only {ratio:.1f}% of revenue — unusually low. Verify lease structure.")
+
+    # Check: Expense breakdown sum vs total
+    breakdown = financials.get("expense_breakdown")
+    if breakdown and opex and opex > 0:
+        line_item_sum = sum(breakdown.values())
+        if line_item_sum > 0:
+            pct_diff = abs(line_item_sum - opex) / max(opex, 1) * 100
+            if pct_diff > 10:
+                warnings.append(
+                    f"Expense line items sum to ${line_item_sum:,.0f} but total OPEX is ${opex:,.0f} ({pct_diff:.0f}% gap)."
+                )
+
+    return warnings
+
+
+def verify_and_refine_financials(pdf_path: str, financials: dict, raw_text: str) -> Tuple[dict, List[str]]:
+    """
+    Multi-pass verification and auto-refinement.
+    Pass 2: Check for issues in extracted financials.
+    Pass 3: If issues found, re-query Claude with targeted prompt.
+    Returns (refined_financials, warnings).
+    """
+    warnings = []
+    opex = financials.get("operating_expenses")
+    revenue = financials.get("annual_revenue")
+    noi = financials.get("noi")
+    breakdown = financials.get("expense_breakdown")
+    expense_ratio = financials.get("expense_ratio")
+
+    # Determine what issue (if any) needs refinement
+    issue = None
+
+    if not opex or opex == 0:
+        issue = (
+            "Operating expenses were not found in the initial extraction. "
+            "Look harder — check ALL financial summaries, operating statements, pro formas, "
+            "income/expense tables, T12 sections, and appendices. "
+            "If you find an expense ratio, use it with revenue to derive total OPEX. "
+            "If individual expense items are listed (taxes, insurance, maintenance, etc.), sum them."
+        )
+    elif opex and revenue and revenue > 0:
+        ratio = opex / revenue * 100
+        if ratio < 12 or ratio > 75:
+            asset_type = "the property"  # Could be enhanced with actual property type
+            issue = (
+                f"The expense ratio is {ratio:.1f}% which seems {'very low' if ratio < 12 else 'very high'} "
+                f"for {asset_type}. Re-examine the OM. "
+                f"Are you confusing NNN reimbursements with total expenses? "
+                f"Is this a net or gross lease structure? "
+                f"Current values: Revenue=${revenue:,.0f}, OPEX=${opex:,.0f}."
+            )
+    elif opex and noi and revenue:
+        expected_noi = revenue - opex
+        if expected_noi > 0:
+            gap = abs(noi - expected_noi) / max(expected_noi, 1) * 100
+            if gap > 20:
+                issue = (
+                    f"Revenue(${revenue:,.0f}) - OPEX(${opex:,.0f}) = ${expected_noi:,.0f}, "
+                    f"but stated NOI is ${noi:,.0f}. These don't reconcile ({gap:.0f}% gap). "
+                    f"Which is correct? Is there additional income or above-the-line deductions?"
+                )
+
+    # If OPEX found but no line item breakdown, request it
+    if not issue and opex and opex > 0 and (not breakdown or len(breakdown) == 0):
+        issue = (
+            f"Total OPEX is ${opex:,.0f} but no individual expense categories were found. "
+            f"Break this down into: taxes, insurance, repairs/maintenance, utilities, management fee, "
+            f"payroll, G&A, marketing, contract services, and other. "
+            f"Extract from the OM if possible, or estimate based on property type and market norms."
+        )
+
+    if not issue:
+        return financials, warnings
+
+    # Pass 3: Targeted refinement
+    warnings.append(f"Auto-refinement triggered: {issue[:100]}...")
+
+    try:
+        from app.services.claude_ai import refine_om_financials
+
+        with open(pdf_path, "rb") as f:
+            file_bytes = f.read()
+
+        # Build current results for context
+        current = {
+            "revenue": financials.get("revenue_breakdown", {
+                "effective_gross_income": revenue
+            }),
+            "operating_expenses": {},
+            "noi": noi,
+            "expense_ratio": expense_ratio,
+        }
+        if breakdown:
+            current["operating_expenses"] = breakdown
+            current["operating_expenses"]["total_operating_expenses"] = opex
+        elif opex:
+            current["operating_expenses"] = {"total_operating_expenses": opex}
+
+        refined = refine_om_financials(file_bytes, current, issue)
+
+        if refined:
+            # Merge refinement results back
+            ref_opex_obj = refined.get("operating_expenses") or {}
+            ref_total = ref_opex_obj.get("total_operating_expenses")
+
+            if ref_total and ref_total > 0:
+                if not opex or opex == 0:
+                    financials["operating_expenses"] = ref_total
+                    financials["opex_source"] = "claude_refined"
+                    warnings.append(f"Refinement found OPEX: ${ref_total:,.0f}")
+                elif opex and abs(ref_total - opex) / max(opex, 1) > 0.15:
+                    financials["operating_expenses"] = ref_total
+                    warnings.append(f"Refinement corrected OPEX: ${opex:,.0f} → ${ref_total:,.0f}")
+
+            # Update expense breakdown
+            new_breakdown = {}
+            for cat in EXPENSE_CATEGORIES:
+                val = ref_opex_obj.get(cat)
+                if val is not None and val > 0:
+                    new_breakdown[cat] = val
+            if new_breakdown:
+                financials["expense_breakdown"] = new_breakdown
+                warnings.append(f"Refinement added {len(new_breakdown)} expense categories")
+
+            # Update revenue if newly found
+            ref_rev = refined.get("revenue", {})
+            ref_egi = ref_rev.get("effective_gross_income")
+            if ref_egi and ref_egi > 0 and (not revenue or revenue == 0):
+                financials["annual_revenue"] = ref_egi
+                warnings.append(f"Refinement found revenue: ${ref_egi:,.0f}")
+
+            # Update NOI if refined
+            ref_noi = refined.get("noi")
+            if ref_noi and ref_noi > 0:
+                financials["noi"] = ref_noi
+
+            # Update confidence
+            financials["opex_confidence"] = refined.get("confidence", financials.get("opex_confidence", "medium"))
+
+            # Re-derive expense ratio
+            new_opex = financials.get("operating_expenses", 0)
+            new_rev = financials.get("annual_revenue", 0)
+            if new_opex > 0 and new_rev > 0:
+                financials["expense_ratio"] = round(new_opex / new_rev * 100, 1)
+
+            # Re-derive NOI if possible
+            if new_opex > 0 and new_rev > 0 and not financials.get("noi"):
+                financials["noi"] = new_rev - new_opex
+
+            print(f"Claude refinement succeeded: opex=${financials.get('operating_expenses', 0):,.0f}")
+    except Exception as e:
+        warnings.append(f"Auto-refinement failed: {str(e)}")
+        print(f"Claude refinement failed: {e}")
+        traceback.print_exc()
+
+    return financials, warnings
+
+
+# ═══════════════════════════════════════════════════════════════
 # MAIN PARSE FUNCTION
 # ═══════════════════════════════════════════════════════════════
 
@@ -942,6 +1281,31 @@ def parse_offering_memorandum(
             import traceback
             traceback.print_exc()
 
+    # ── AI-powered financial enrichment (Pass 1 + 2 + 3) ──
+    if pdf_path and settings.anthropic_api_key:
+        try:
+            # Pass 1: Claude extraction
+            claude_financials = enhance_financials_with_claude(pdf_path, result["financials"])
+            if claude_financials:
+                merged, merge_warnings = merge_financial_results(result["financials"], claude_financials)
+                result["financials"] = merged
+                warnings.extend(merge_warnings)
+
+            # Pass 2+3: Verify and auto-refine
+            refined, refine_warnings = verify_and_refine_financials(
+                pdf_path, result["financials"], result.get("raw_text", "")
+            )
+            result["financials"] = refined
+            warnings.extend(refine_warnings)
+        except Exception as e:
+            warnings.append(f"AI financial enrichment failed: {str(e)}")
+            print(f"AI enrichment error: {e}")
+            traceback.print_exc()
+
+    # Final validation pass
+    validation_warnings = validate_financials(result["financials"])
+    warnings.extend(validation_warnings)
+
     # Smart defaults for assumptions
     cap_rate = result["financials"].get("cap_rate")
     if cap_rate:
@@ -967,6 +1331,8 @@ def parse_offering_memorandum(
             "errors": errors,
             "warnings": warnings,
             "quality_score": calculate_quality_score(result),
+            "opex_source": result.get("financials", {}).get("opex_source", "not_found"),
+            "opex_confidence": result.get("financials", {}).get("opex_confidence", "none"),
         },
     }
 
@@ -976,16 +1342,18 @@ def calculate_quality_score(parsed_data: Dict[str, Any]) -> float:
     score = 0.0
 
     weights = {
-        "property_name": 10,
+        "property_name": 8,
         "property_type": 5,
-        "address": 10,
-        "total_sf": 10,
-        "asking_price": 15,
-        "noi": 15,
-        "cap_rate": 10,
-        "rent_roll": 15,
+        "address": 8,
+        "total_sf": 8,
+        "asking_price": 12,
+        "noi": 12,
+        "cap_rate": 8,
+        "rent_roll": 12,
         "occupancy": 5,
-        "revenue": 5,
+        "revenue": 7,
+        "operating_expenses": 10,
+        "expense_breakdown": 5,
     }
 
     checks = {
@@ -999,6 +1367,8 @@ def calculate_quality_score(parsed_data: Dict[str, Any]) -> float:
         "rent_roll": bool(parsed_data.get("rent_roll")),
         "occupancy": bool(parsed_data.get("financials", {}).get("occupancy_rate")),
         "revenue": bool(parsed_data.get("financials", {}).get("annual_revenue")),
+        "operating_expenses": bool(parsed_data.get("financials", {}).get("operating_expenses")),
+        "expense_breakdown": bool(parsed_data.get("financials", {}).get("expense_breakdown")),
     }
 
     for field, weight in weights.items():

@@ -135,6 +135,169 @@ def extract_om_fields(file_bytes: bytes, media_type: str) -> dict:
     return json.loads(cleaned)
 
 
+def extract_om_financials(file_bytes: bytes, media_type: str = "application/pdf") -> dict:
+    """
+    Extract comprehensive financial data from an OM PDF using Claude.
+    Returns revenue breakdown, operating expense line items, NOI, and metadata.
+    This is the primary AI-powered financial extraction used in the main parsing pipeline.
+    """
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
+
+    if media_type.startswith("image/"):
+        file_block = {
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": b64},
+        }
+    else:
+        file_block = {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+        }
+
+    system_prompt = """You are an expert CRE (Commercial Real Estate) financial analyst. Extract ALL financial operating data from this Offering Memorandum.
+
+CRITICAL INSTRUCTIONS:
+1. Look for income statements, operating statements, pro formas, T12/trailing twelve month financials, and financial summaries.
+2. PREFER actual/historical/T12 numbers over pro forma projections when both are available.
+3. All dollar amounts must be ANNUAL totals. If you find monthly figures, multiply by 12.
+4. Extract individual operating expense line items whenever possible — do NOT just give a total.
+5. If the OM only shows a total operating expense number without line items, still report it as total_operating_expenses.
+6. If you can find an expense ratio (OpEx/Revenue), use it to cross-check or derive total OPEX.
+7. Look carefully in ALL sections — financial summaries, property descriptions, investment highlights, appendices, and tables. OMs often bury operating data in different sections.
+
+EXPENSE RATIO BENCHMARKS (flag if outside these ranges):
+- Multifamily: 35-55%
+- Office: 35-55%
+- Retail (NNN): 10-25% (low because tenants pay most expenses)
+- Retail (Gross): 30-50%
+- Industrial: 15-30%
+- Mixed-Use: 30-50%
+
+Return ONLY valid JSON with this exact structure (use null for fields not found, 0 for expense categories confirmed as zero):
+
+{
+  "revenue": {
+    "gross_potential_rent": null,
+    "vacancy_loss": null,
+    "effective_gross_income": null,
+    "other_income": null
+  },
+  "operating_expenses": {
+    "management_fee": null,
+    "insurance": null,
+    "taxes": null,
+    "repairs_maintenance": null,
+    "utilities": null,
+    "payroll": null,
+    "general_admin": null,
+    "marketing": null,
+    "contract_services": null,
+    "other_opex": null,
+    "total_operating_expenses": null
+  },
+  "noi": null,
+  "expense_ratio": null,
+  "capex_reserves": null,
+  "year_type": "actual|pro_forma|projected|budget",
+  "year_label": "e.g. 2024 T12, Year 1 Pro Forma, 2023 Actual",
+  "confidence": "high|medium|low",
+  "notes": "Any discrepancies, assumptions made, or important context about the financials"
+}"""
+
+    extraction_model = settings.anthropic_extraction_model or settings.anthropic_model
+    response = client.messages.create(
+        model=extraction_model,
+        max_tokens=4000,
+        system=system_prompt,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    file_block,
+                    {"type": "text", "text": "Extract all financial operating data as JSON. Focus especially on operating expenses, revenue, and NOI. Look in every section of the document."},
+                ],
+            }
+        ],
+    )
+
+    text = ""
+    for block in response.content:
+        if block.type == "text":
+            text = block.text
+            break
+
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+    return json.loads(cleaned)
+
+
+def refine_om_financials(file_bytes: bytes, current_results: dict, issue: str, media_type: str = "application/pdf") -> dict:
+    """
+    Targeted refinement call to Claude when the initial extraction has issues.
+    Sends the PDF again with the current results and a specific issue to resolve.
+    """
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
+
+    if media_type.startswith("image/"):
+        file_block = {
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": b64},
+        }
+    else:
+        file_block = {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+        }
+
+    system_prompt = f"""You are an expert CRE financial analyst. We previously extracted financial data from this OM but found an issue that needs correction.
+
+CURRENT EXTRACTION RESULTS:
+{json.dumps(current_results, indent=2)}
+
+ISSUE TO RESOLVE:
+{issue}
+
+Re-examine the document carefully and return corrected JSON in the SAME format as the current results. Only change the fields that need correction. Use the same structure:
+
+{{
+  "revenue": {{"gross_potential_rent":null,"vacancy_loss":null,"effective_gross_income":null,"other_income":null}},
+  "operating_expenses": {{"management_fee":null,"insurance":null,"taxes":null,"repairs_maintenance":null,"utilities":null,"payroll":null,"general_admin":null,"marketing":null,"contract_services":null,"other_opex":null,"total_operating_expenses":null}},
+  "noi": null,
+  "expense_ratio": null,
+  "capex_reserves": null,
+  "year_type": "actual|pro_forma|projected|budget",
+  "year_label": "string",
+  "confidence": "high|medium|low",
+  "notes": "Explain what was corrected and why"
+}}"""
+
+    extraction_model = settings.anthropic_extraction_model or settings.anthropic_model
+    response = client.messages.create(
+        model=extraction_model,
+        max_tokens=2000,
+        system=system_prompt,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    file_block,
+                    {"type": "text", "text": f"Please re-examine the document and fix: {issue}"},
+                ],
+            }
+        ],
+    )
+
+    text = ""
+    for block in response.content:
+        if block.type == "text":
+            text = block.text
+            break
+
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+    return json.loads(cleaned)
+
+
 def extract_debt_terms(file_bytes: bytes, media_type: str) -> dict:
     """
     Extract loan/debt term sheet fields from a PDF or image using Claude.
