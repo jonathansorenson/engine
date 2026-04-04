@@ -46,6 +46,7 @@ from app.models.deal import Deal
 MONTHLY_LIMITS = {
     "starter": 5,
     "pro": 25,
+    "unlimited": 999,
     "free": 25,
     "enterprise": 999,
     "admin": 999,
@@ -55,6 +56,7 @@ MONTHLY_LIMITS = {
 TOTAL_LIMITS = {
     "starter": 50,
     "pro": 200,
+    "unlimited": 9999,
     "free": 200,
     "enterprise": 9999,
     "admin": 9999,
@@ -227,6 +229,13 @@ SIGNUP_HTML = """<!DOCTYPE html>
                     <div class="tier-price">$11.99/mo</div>
                     <div class="tier-deals">25 deals</div>
                 </label>
+                <label class="tier-card {unlimited_sel}" onclick="selectTier(this,'unlimited')" style="border-color: rgba(244,114,182,0.3); position: relative;">
+                    <input type="radio" name="tier" value="unlimited" {unlimited_chk} />
+                    <div class="tier-name" style="color: #f472b6;">Unlimited</div>
+                    <div class="tier-price">$20/mo</div>
+                    <div class="tier-deals" style="color: #f472b6;">Unlimited deals</div>
+                    <div style="position: absolute; top: -8px; right: -8px; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Popular</div>
+                </label>
                 <label class="tier-card enterprise {ent_sel}" onclick="selectTier(this,'enterprise')">
                     <input type="radio" name="tier" value="enterprise" {ent_chk} />
                     <div class="tier-name">Enterprise</div>
@@ -290,9 +299,11 @@ def _render_signup(error: str = "", success: str = "", name: str = "",
     html = html.replace("{email_val}", email)
     html = html.replace("{starter_sel}", "selected" if tier == "starter" else "")
     html = html.replace("{pro_sel}", "selected" if tier == "pro" else "")
+    html = html.replace("{unlimited_sel}", "selected" if tier == "unlimited" else "")
     html = html.replace("{ent_sel}", "selected" if tier == "enterprise" else "")
     html = html.replace("{starter_chk}", "checked" if tier == "starter" else "")
     html = html.replace("{pro_chk}", "checked" if tier == "pro" else "")
+    html = html.replace("{unlimited_chk}", "checked" if tier == "unlimited" else "")
     html = html.replace("{ent_chk}", "checked" if tier == "enterprise" else "")
     return html
 
@@ -332,9 +343,9 @@ async def signup_submit(request: Request):
             error="Password must be at least 8 characters.", name=name, company=company, email=email, tier=tier
         ), status_code=400)
 
-    if tier not in ("starter", "pro"):
+    if tier not in ("starter", "pro", "unlimited"):
         return HTMLResponse(content=_render_signup(
-            error="Please select Starter or Pro plan.", name=name, company=company, email=email, tier=tier
+            error="Please select a plan.", name=name, company=company, email=email, tier=tier
         ), status_code=400)
 
     # Check email not taken
@@ -370,7 +381,12 @@ async def signup_submit(request: Request):
 
     # Create Stripe Checkout Session
     stripe.api_key = settings.stripe_secret_key
-    price_id = settings.stripe_starter_price_id if tier == "starter" else settings.stripe_pro_price_id
+    _price_ids = {
+        "starter": settings.stripe_starter_price_id,
+        "pro": settings.stripe_pro_price_id,
+        "unlimited": settings.stripe_unlimited_price_id,
+    }
+    price_id = _price_ids.get(tier, settings.stripe_pro_price_id)
 
     try:
         base_url = str(request.base_url).rstrip("/")
@@ -597,7 +613,12 @@ async def upgrade_plan(request: Request):
             return JSONResponse({"url": portal.url, "method": "portal"})
 
         # Free/admin user without Stripe → create checkout session
-        price_id = settings.stripe_starter_price_id if target_tier == "starter" else settings.stripe_pro_price_id
+        _price_ids = {
+            "starter": settings.stripe_starter_price_id,
+            "pro": settings.stripe_pro_price_id,
+            "unlimited": settings.stripe_unlimited_price_id,
+        }
+        price_id = _price_ids.get(target_tier, settings.stripe_pro_price_id)
 
         # Create a Stripe customer first
         customer = stripe.Customer.create(email=user.email, name=user.name or "")

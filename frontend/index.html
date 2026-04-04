@@ -968,7 +968,7 @@
         };
 
         // Components
-        const TIER_COLORS = { starter: '#22c55e', pro: '#3b82f6', enterprise: '#a78bfa', admin: '#f59e0b' };
+        const TIER_COLORS = { starter: '#22c55e', pro: '#3b82f6', unlimited: '#f472b6', enterprise: '#a78bfa', admin: '#f59e0b' };
         const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onHomeClick }) => (
             <div className="header">
                 <div className="header-left">
@@ -1107,10 +1107,16 @@
                     <div style={{ marginBottom: '2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                             <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Underwriting Pipeline</h1>
-                            <button className="btn btn-primary" onClick={onUpload} disabled={!dealCount.can_upload}
-                                style={!dealCount.can_upload ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                                {dealCount.can_upload ? '➕ Upload New Deal' : dealCount.monthly_used >= dealCount.monthly_limit ? 'Monthly Limit Reached' : 'Storage Limit Reached'}
-                            </button>
+                            {dealCount.can_upload ? (
+                                <button className="btn btn-primary" onClick={onUpload}>
+                                    ➕ Upload New Deal
+                                </button>
+                            ) : (
+                                <button className="btn btn-primary" onClick={() => onUpgrade && onUpgrade('unlimited')}
+                                    style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', cursor: 'pointer' }}>
+                                    🔓 Upgrade to Unlimited
+                                </button>
+                            )}
                         </div>
                         {dealCount.monthly_limit < 999 && (() => {
                             const mPct = dealCount.monthly_limit > 0 ? Math.min(100, (dealCount.monthly_used / dealCount.monthly_limit) * 100) : 0;
@@ -1119,7 +1125,8 @@
                             const tColor = tPct >= 100 ? '#ef4444' : tPct >= 80 ? '#f59e0b' : tPct >= 50 ? '#3b82f6' : '#22c55e';
                             const atLimit = !dealCount.can_upload;
                             const isStarter = dealCount.monthly_limit <= 5;
-                            const showUpgradeCard = onUpgrade && (isStarter || atLimit || mPct >= 50);
+                            const isPro = dealCount.monthly_limit > 5 && dealCount.monthly_limit <= 25;
+                            const showUpgradeCard = onUpgrade && (isStarter || isPro || atLimit || mPct >= 50);
                             return (
                                 <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
                                     {/* Usage meters */}
@@ -1149,17 +1156,27 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        {(mPct >= 80 || tPct >= 80) && onUpgrade && (
+                                            <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                                                <a href="#" onClick={(e) => { e.preventDefault(); onUpgrade('unlimited'); }}
+                                                    style={{ fontSize: '0.7rem', color: '#f472b6', textDecoration: 'none', fontWeight: 600, transition: 'opacity 0.15s' }}
+                                                    onMouseOver={e => e.currentTarget.style.opacity = '0.8'}
+                                                    onMouseOut={e => e.currentTarget.style.opacity = '1'}>
+                                                    Running low? Go Unlimited — $20/mo →
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
-                                    {/* Upgrade card — always visible for starter, or when approaching limits */}
+                                    {/* Upgrade card — always visible for non-unlimited users */}
                                     {showUpgradeCard && (
                                         <div style={{
-                                            width: '280px', borderRadius: '12px', padding: '16px 20px',
+                                            width: '320px', borderRadius: '12px', padding: '16px 20px',
                                             background: atLimit
-                                                ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(139,92,246,0.12))'
-                                                : 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08))',
+                                                ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(244,114,182,0.12))'
+                                                : 'linear-gradient(135deg, rgba(244,114,182,0.06), rgba(139,92,246,0.08))',
                                             border: atLimit
                                                 ? '1px solid rgba(239,68,68,0.25)'
-                                                : '1px solid rgba(139,92,246,0.2)',
+                                                : '1px solid rgba(244,114,182,0.2)',
                                             display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '8px',
                                         }}>
                                             {atLimit ? (
@@ -1167,37 +1184,48 @@
                                                     <span style={{ fontSize: '1.2rem' }}>🔒</span>
                                                     <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fca5a5' }}>Limit Reached</span>
                                                     <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                                                        Upgrade to Pro for <strong style={{ color: '#c4b5fd' }}>25 uploads/mo</strong> and <strong style={{ color: '#c4b5fd' }}>200 deals</strong>
+                                                        Go Unlimited for <strong style={{ color: '#f9a8d4' }}>unlimited uploads</strong> and <strong style={{ color: '#f9a8d4' }}>unlimited storage</strong> — just $20/mo
                                                     </span>
                                                 </>
                                             ) : isStarter ? (
                                                 <>
-                                                    <span style={{ fontSize: '1.2rem' }}>⚡</span>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#c4b5fd' }}>Unlock More Power</span>
+                                                    <span style={{ fontSize: '1.2rem' }}>🚀</span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f9a8d4' }}>Unlock Your Full Potential</span>
                                                     <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                                                        Go Pro: <strong style={{ color: '#93c5fd' }}>5x more uploads</strong>, <strong style={{ color: '#93c5fd' }}>4x storage</strong> — just $11.99/mo
+                                                        No caps. No limits. Underwrite every deal that crosses your desk.
                                                     </span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <span style={{ fontSize: '1rem' }}>📈</span>
-                                                    <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>Running low on uploads</span>
+                                                    <span style={{ fontSize: '1.2rem' }}>⚡</span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f9a8d4' }}>Never Hit a Limit Again</span>
                                                     <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                                                        Need more capacity? Upgrade anytime.
+                                                        Unlimited uploads. Unlimited storage. $20/mo.
                                                     </span>
                                                 </>
                                             )}
-                                            <button onClick={() => onUpgrade('pro')} style={{
-                                                marginTop: '4px', padding: '8px 24px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                                                background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff',
-                                                fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.02em',
-                                                boxShadow: '0 2px 12px rgba(139,92,246,0.3)',
+                                            <button onClick={() => onUpgrade('unlimited')} style={{
+                                                marginTop: '4px', padding: '10px 28px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                                                background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', color: '#fff',
+                                                fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.02em',
+                                                boxShadow: '0 2px 16px rgba(236,72,153,0.35)',
                                                 transition: 'transform 0.15s, box-shadow 0.15s',
                                             }}
-                                                onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(139,92,246,0.45)'; }}
-                                                onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(139,92,246,0.3)'; }}>
-                                                {atLimit ? 'Upgrade Now' : 'Upgrade to Pro'}
+                                                onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(236,72,153,0.5)'; }}
+                                                onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 16px rgba(236,72,153,0.35)'; }}>
+                                                Go Unlimited — $20/mo
                                             </button>
+                                            {isStarter && (
+                                                <button onClick={() => onUpgrade('pro')} style={{
+                                                    marginTop: '2px', padding: '6px 16px', borderRadius: '6px', cursor: 'pointer',
+                                                    background: 'transparent', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.12)',
+                                                    fontSize: '0.7rem', fontWeight: 500, transition: 'color 0.15s',
+                                                }}
+                                                    onMouseOver={e => { e.currentTarget.style.color = '#c4b5fd'; e.currentTarget.style.borderColor = 'rgba(196,181,253,0.3)'; }}
+                                                    onMouseOut={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}>
+                                                    or upgrade to Pro — $11.99/mo
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -1211,6 +1239,13 @@
                                 <div className="empty-state-icon">📋</div>
                                 <div className="empty-state-title">No deals yet</div>
                                 <p>Upload your first deal to get started</p>
+                                {dealCount.monthly_limit < 999 && onUpgrade && (
+                                    <p style={{ marginTop: '12px', fontSize: '0.75rem', color: '#f472b6', opacity: 0.8 }}>
+                                        💡 <a href="#" onClick={(e) => { e.preventDefault(); onUpgrade('unlimited'); }}
+                                            style={{ color: '#f472b6', textDecoration: 'underline' }}>
+                                            Unlimited plan</a> — unlimited uploads & storage for $20/mo
+                                    </p>
+                                )}
                             </div>
                         </div>
                     ) : (

@@ -72,7 +72,7 @@ async def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
     if user_data.role not in ("admin", "analyst", "viewer"):
         raise HTTPException(status_code=400, detail="Role must be: admin, analyst, or viewer")
 
-    valid_tiers = ("admin", "free", "starter", "pro", "enterprise")
+    valid_tiers = ("admin", "free", "starter", "pro", "unlimited", "enterprise")
     tier = user_data.subscription_tier or "admin"
     if tier not in valid_tiers:
         raise HTTPException(status_code=400, detail=f"subscription_tier must be one of: {', '.join(valid_tiers)}")

@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_starter_price_id: str = ""
     stripe_pro_price_id: str = ""
+    stripe_unlimited_price_id: str = ""
 
     class Config:
         env_file = ".env"
