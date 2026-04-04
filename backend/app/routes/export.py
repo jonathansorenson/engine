@@ -1265,6 +1265,62 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     ws2.cell(row=row, column=total_col).fill = METRIC_FILL
     row += 1
 
+    # ── IRR Helper Section (for live Excel IRR formulas) ──
+    irr_start_row = row + 2
+    ws2.cell(row=irr_start_row, column=1, value="IRR Helper (do not modify)").font = Font(name="Calibri", bold=True, size=9, color="999999")
+
+    # Levered IRR cash flows: Year 0 = -Equity, Year 1..N = Net CF, Year N += Net Sale Proceeds
+    irr_lev_row = irr_start_row + 1
+    ws2.cell(row=irr_lev_row, column=1, value="Levered CF for IRR").font = Font(name="Calibri", size=9, color="999999")
+    # Year 0: negative equity
+    ws2.cell(row=irr_lev_row, column=2, value="=-Equity")
+    ws2.cell(row=irr_lev_row, column=2).number_format = CURRENCY_FMT
+    ws2.cell(row=irr_lev_row, column=2).font = Font(name="Calibri", size=9)
+    # Years 1..N: Net Cash Flow; final year adds net sale proceeds (Exit Value - Loan Payoff)
+    last_yr_col = num_years + 2  # column for the last hold year (shifted by 1 for Year 0 in col 2)
+    for i in range(num_years):
+        col = i + 3  # col 3 = Year 1 (col 2 = Year 0)
+        src_col_letter = get_column_letter(i + 2)  # original CF column for this year
+        if i == num_years - 1:
+            # Final year: NCF + (Exit Value - Loan Payoff at exit)
+            # Exit Value = ExitNOI / ExitCap; Loan Payoff = last year loan balance
+            exit_bal_letter = get_column_letter(num_years + 1)  # last year column on lb_row
+            cell = ws2.cell(row=irr_lev_row, column=col,
+                            value=f"={src_col_letter}{ncf_row}+(Y1NOI*(1+RentGrowth)^(HoldPeriod-1)/ExitCap)-{exit_bal_letter}{lb_row}")
+        else:
+            cell = ws2.cell(row=irr_lev_row, column=col,
+                            value=f"={src_col_letter}{ncf_row}")
+        cell.number_format = CURRENCY_FMT
+        cell.font = Font(name="Calibri", size=9)
+
+    # Unlevered IRR cash flows: Year 0 = -PurchasePrice, Year 1..N = NOI, Year N += Exit Value
+    irr_unlev_row = irr_start_row + 2
+    ws2.cell(row=irr_unlev_row, column=1, value="Unlevered CF for IRR").font = Font(name="Calibri", size=9, color="999999")
+    # Year 0: negative purchase price
+    ws2.cell(row=irr_unlev_row, column=2, value="=-PurchasePrice")
+    ws2.cell(row=irr_unlev_row, column=2).number_format = CURRENCY_FMT
+    ws2.cell(row=irr_unlev_row, column=2).font = Font(name="Calibri", size=9)
+    for i in range(num_years):
+        col = i + 3
+        src_col_letter = get_column_letter(i + 2)
+        if i == num_years - 1:
+            # Final year: NOI + Exit Value
+            cell = ws2.cell(row=irr_unlev_row, column=col,
+                            value=f"={src_col_letter}{noi_row}+(Y1NOI*(1+RentGrowth)^(HoldPeriod-1)/ExitCap)")
+        else:
+            cell = ws2.cell(row=irr_unlev_row, column=col,
+                            value=f"={src_col_letter}{noi_row}")
+        cell.number_format = CURRENCY_FMT
+        cell.font = Font(name="Calibri", size=9)
+
+    # Hide the IRR helper rows (optional visual cleanup)
+    for r in range(irr_start_row, irr_unlev_row + 1):
+        ws2.row_dimensions[r].hidden = True
+
+    # Column letter references for IRR range
+    irr_first_col = get_column_letter(2)  # Year 0
+    irr_last_col = get_column_letter(num_years + 2)  # Last year
+
     # ══════════════════════════════════════════
     # Sheet 3: Returns (with formulas + Deal Summary)
     # ══════════════════════════════════════════
@@ -1278,23 +1334,94 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
     row = 3
     row = _section_header(ws3, row, "Core Metrics", 2)
 
-    row = _add_kv_row(ws3, row, "Levered IRR", calc.get("levIRR", 0) / 100 if calc.get("levIRR") else 0, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Unlevered IRR", calc.get("unlevIRR", 0) / 100 if calc.get("unlevIRR") else 0, PERCENT_FMT)
-    row = _add_kv_row(ws3, row, "Equity Multiple", calc.get("em", 0), RATIO_FMT)
+    # Fallback values for IFERROR
+    lev_irr_fb = (calc.get("levIRR", 0) or 0) / 100 if (calc.get("levIRR", 0) or 0) > 1 else (calc.get("levIRR", 0) or 0)
+    unlev_irr_fb = (calc.get("unlevIRR", 0) or 0) / 100 if (calc.get("unlevIRR", 0) or 0) > 1 else (calc.get("unlevIRR", 0) or 0)
+    em_fb = calc.get("em", 0) or 0
+
+    # Levered IRR (live formula referencing IRR helper on Cash Flows sheet)
+    ws3.cell(row=row, column=1, value="Levered IRR").font = LABEL_FONT
+    ws3.cell(row=row, column=1).border = THIN_BORDER
+    irr_lev_formula = f"=IFERROR(IRR('Cash Flows'!{irr_first_col}{irr_lev_row}:{irr_last_col}{irr_lev_row}),{lev_irr_fb})"
+    ws3.cell(row=row, column=2, value=irr_lev_formula).font = VALUE_FONT
+    ws3.cell(row=row, column=2).number_format = PERCENT_FMT
+    ws3.cell(row=row, column=2).border = THIN_BORDER
+    row += 1
+
+    # Unlevered IRR (live formula referencing IRR helper on Cash Flows sheet)
+    ws3.cell(row=row, column=1, value="Unlevered IRR").font = LABEL_FONT
+    ws3.cell(row=row, column=1).border = THIN_BORDER
+    irr_unlev_formula = f"=IFERROR(IRR('Cash Flows'!{irr_first_col}{irr_unlev_row}:{irr_last_col}{irr_unlev_row}),{unlev_irr_fb})"
+    ws3.cell(row=row, column=2, value=irr_unlev_formula).font = VALUE_FONT
+    ws3.cell(row=row, column=2).number_format = PERCENT_FMT
+    ws3.cell(row=row, column=2).border = THIN_BORDER
+    row += 1
+
+    # Equity Multiple (live formula: (Total NCF + Net Sale Proceeds) / Equity)
+    # Total NCF from Cash Flows sheet total column + exit proceeds / Equity
+    ncf_total_col_letter = get_column_letter(total_col)
+    last_yr_cf_col = get_column_letter(num_years + 1)
+    ws3.cell(row=row, column=1, value="Equity Multiple").font = LABEL_FONT
+    ws3.cell(row=row, column=1).border = THIN_BORDER
+    em_formula = (
+        f"=IFERROR(('Cash Flows'!{ncf_total_col_letter}{ncf_row}"
+        f"+(Y1NOI*(1+RentGrowth)^(HoldPeriod-1)/ExitCap)"
+        f"-'Cash Flows'!{last_yr_cf_col}{lb_row})/Equity,{em_fb})"
+    )
+    ws3.cell(row=row, column=2, value=em_formula).font = VALUE_FONT
+    ws3.cell(row=row, column=2).number_format = RATIO_FMT
+    ws3.cell(row=row, column=2).border = THIN_BORDER
+    row += 1
+
     row = _add_kv_row(ws3, row, "Average CoC", calc.get("avgCoC", 0) / 100 if calc.get("avgCoC") else 0, PERCENT_FMT)
     row = _add_kv_row(ws3, row, "DSCR (Year 1)", calc.get("dscr", 0), RATIO_FMT)
 
     row += 1
     row = _section_header(ws3, row, "Capital Efficiency", 2)
-    row = _add_kv_row(ws3, row, "Going-in Cap Rate", calc.get("goingCap", 0) / 100 if calc.get("goingCap") else 0, PERCENT_FMT)
+
+    # Going-in Cap Rate (live formula: Y1NOI / PurchasePrice)
+    cap_fb = (calc.get("goingCap", 0) or 0) / 100 if (calc.get("goingCap", 0) or 0) > 1 else (calc.get("goingCap", 0) or 0)
+    ws3.cell(row=row, column=1, value="Going-in Cap Rate").font = LABEL_FONT
+    ws3.cell(row=row, column=1).border = THIN_BORDER
+    ws3.cell(row=row, column=2, value=f"=IFERROR(Y1NOI/PurchasePrice,{cap_fb})").font = VALUE_FONT
+    ws3.cell(row=row, column=2).number_format = PERCENT_FMT
+    ws3.cell(row=row, column=2).border = THIN_BORDER
+    row += 1
+
     row = _add_kv_row(ws3, row, "Yield on Cost", calc.get("yoc", 0) / 100 if calc.get("yoc") else 0, PERCENT_FMT)
 
     row += 1
     row = _section_header(ws3, row, "Exit Analysis", 2)
-    row = _add_kv_row(ws3, row, "Exit NOI", calc.get("exitNOI", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws3, row, "Exit Value", calc.get("exitVal", 0), CURRENCY_FMT)
+
+    # Exit NOI (live formula: Y1NOI grown by RentGrowth for HoldPeriod-1 years)
+    exit_noi_fb = calc.get("exitNOI", 0) or 0
+    ws3.cell(row=row, column=1, value="Exit NOI").font = LABEL_FONT
+    ws3.cell(row=row, column=1).border = THIN_BORDER
+    ws3.cell(row=row, column=2, value=f"=IFERROR(Y1NOI*(1+RentGrowth)^(HoldPeriod-1),{exit_noi_fb})").font = VALUE_FONT
+    ws3.cell(row=row, column=2).number_format = CURRENCY_FMT
+    ws3.cell(row=row, column=2).border = THIN_BORDER
+    row += 1
+
+    # Exit Value (live formula: Exit NOI / Exit Cap)
+    exit_val_fb = calc.get("exitVal", 0) or 0
+    ws3.cell(row=row, column=1, value="Exit Value").font = LABEL_FONT
+    ws3.cell(row=row, column=1).border = THIN_BORDER
+    ws3.cell(row=row, column=2, value=f"=IFERROR(Y1NOI*(1+RentGrowth)^(HoldPeriod-1)/ExitCap,{exit_val_fb})").font = VALUE_FONT
+    ws3.cell(row=row, column=2).number_format = CURRENCY_FMT
+    ws3.cell(row=row, column=2).border = THIN_BORDER
+    row += 1
+
     row = _add_kv_row(ws3, row, "Loan Payoff", calc.get("exitBal", 0), CURRENCY_FMT)
-    row = _add_kv_row(ws3, row, "Net Sale Proceeds", calc.get("saleNet", 0), CURRENCY_FMT)
+    # Net Sale Proceeds (live formula: Exit Value - Loan Payoff)
+    sale_net_fb = calc.get("saleNet", 0) or 0
+    ws3.cell(row=row, column=1, value="Net Sale Proceeds").font = LABEL_FONT
+    ws3.cell(row=row, column=1).border = THIN_BORDER
+    last_yr_lb_ref = f"'Cash Flows'!{last_yr_cf_col}{lb_row}"
+    ws3.cell(row=row, column=2,
+             value=f"=IFERROR(Y1NOI*(1+RentGrowth)^(HoldPeriod-1)/ExitCap-{last_yr_lb_ref},{sale_net_fb})").font = VALUE_FONT
+    ws3.cell(row=row, column=2).number_format = CURRENCY_FMT
+    ws3.cell(row=row, column=2).border = THIN_BORDER
+    row += 1
 
     row += 1
     row = _section_header(ws3, row, "Investment Decision", 2)
