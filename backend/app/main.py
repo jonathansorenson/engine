@@ -163,7 +163,7 @@ LOGIN_HTML = """<!DOCTYPE html>
         .cta-sub { font-size: 0.95rem; color: #94a3b8; margin-bottom: 1.5rem; line-height: 1.5; }
         .features { list-style: none; margin-bottom: 1.5rem; text-align: left; }
         .features li { padding: 0.4rem 0; font-size: 0.92rem; color: #cbd5e1; }
-        .features li::before { content: "\2713\0020"; color: #00BFA5; font-weight: 700; margin-right: 0.5rem; }
+        .features li::before { content: "\\2713\\0020"; color: #00BFA5; font-weight: 700; margin-right: 0.5rem; }
         .pricing-note { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.25rem; }
         .pricing-note strong { color: #e2e8f0; font-size: 1.05rem; }
         @media (max-width: 768px) {

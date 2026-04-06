@@ -2886,7 +2886,7 @@ const exportMemoPDF = async (deal, calc, p, wf, tenants) => {
       v2_state: { assumptions: p, waterfall: wf, tenants, valueAddEvents: [], capexItems: [] },
       calc,
     };
-    const res = await fetch(`${API_URL}/api/v1/export/v2/memo/html`, {
+    const res = await fetch(`${API_URL}/api/v1/export/v2/memo/pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -2896,7 +2896,7 @@ const exportMemoPDF = async (deal, calc, p, wf, tenants) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${deal.name || p.name || 'deal'}_memo.html`;
+      a.download = `${deal.name || p.name || 'deal'}_memo.pdf`;
       a.click();
     }
   } catch (e) { console.error('PDF export failed:', e); }
@@ -3327,30 +3327,18 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           }}>
             {calc.goGreen ? 'GO' : 'NO-GO'}
           </div>
-          <button onClick={() => printMemoV2(initialDeal, calc, p, tenants)} style={{
-            backgroundColor: 'var(--blue)', border: 'none', color: '#fff',
-            padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
-          }}>Memo</button>
-          <button onClick={() => exportMemoWord(initialDeal, calc, p, wf, tenants)} style={{
-            backgroundColor: '#5B5FC7', border: 'none', color: '#fff',
-            padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
-          }}>Word</button>
           <button onClick={() => exportMemoPDF(initialDeal, calc, p, wf, tenants)} style={{
             backgroundColor: '#D97706', border: 'none', color: '#fff',
             padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
-          }}>PDF</button>
+          }}>PDF Memo</button>
+          <button onClick={() => exportMemoWord(initialDeal, calc, p, wf, tenants)} style={{
+            backgroundColor: '#5B5FC7', border: 'none', color: '#fff',
+            padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
+          }}>Word Memo</button>
           <button onClick={() => exportV2Excel(initialDeal, calc, p, wf, tenants, events, capItems)} style={{
-            backgroundColor: 'var(--teal)',
-            border: 'none',
-            color: '#fff',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: '600',
-          }}>
-            Export
-          </button>
+            backgroundColor: 'var(--teal)', border: 'none', color: '#fff',
+            padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
+          }}>Excel</button>
         </div>
       </div>
 

@@ -28,6 +28,12 @@ try:
 except ImportError:
     HAS_PILLOW = False
 
+try:
+    from weasyprint import HTML as WeasyHTML
+    HAS_WEASYPRINT = True
+except ImportError:
+    HAS_WEASYPRINT = False
+
 from app.branding import (
     BRAND_NAME, GENERATED_BY, CONFIDENTIALITY, DISCLAIMER,
     get_logo_tempfile, cleanup_logo_tempfile, get_logo_base64_data_uri,
@@ -1912,9 +1918,8 @@ async def export_v2_deal_to_excel(data: V2ExportRequest):
 # V2 MEMO HTML EXPORT
 # ═══════════════════════════════════════════════════════════
 
-@router.post("/v2/memo/html")
-async def export_v2_memo_html(data: V2ExportRequest):
-    """Generate a styled HTML memo for the deal — can be printed to PDF via browser."""
+def _build_memo_html(data: V2ExportRequest) -> tuple:
+    """Build HTML memo content from V2 export data. Returns (html_content, prop_name)."""
     state = data.v2_state or {}
     calc = data.calc or {}
     p = state.get("assumptions", {})
@@ -2058,7 +2063,13 @@ Key considerations include {lease_note} and {expiry_note}.
 </div>
 </body></html>""")
 
-    html_content = "".join(html_parts)
+    return "".join(html_parts), prop_name
+
+
+@router.post("/v2/memo/html")
+async def export_v2_memo_html(data: V2ExportRequest):
+    """Generate a styled HTML memo for the deal — can be printed to PDF via browser."""
+    html_content, prop_name = _build_memo_html(data)
 
     safe_name = prop_name.replace(" ", "_").replace("/", "-")
     safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]
@@ -2067,6 +2078,30 @@ Key considerations include {lease_note} and {expiry_note}.
     return StreamingResponse(
         io.BytesIO(html_content.encode("utf-8")),
         media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/v2/memo/pdf")
+async def export_v2_memo_pdf(data: V2ExportRequest):
+    """Generate a real PDF memo from V2 deal data using weasyprint."""
+    if not HAS_WEASYPRINT:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=501,
+            content={"detail": "PDF export requires weasyprint. Install with: pip install weasyprint"},
+        )
+
+    html_content, prop_name = _build_memo_html(data)
+    pdf_bytes = WeasyHTML(string=html_content).write_pdf()
+
+    safe_name = prop_name.replace(" ", "_").replace("/", "-")
+    safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]
+    filename = f"{safe_name}_Memo.pdf"
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
