@@ -227,6 +227,11 @@ Return ONLY valid JSON with this exact structure (use null for fields not found,
             text = block.text
             break
 
+    print(f"[Claude extract_om_financials] model={extraction_model} stop_reason={response.stop_reason} usage={response.usage} text_len={len(text)}")
+    if not text.strip():
+        print(f"[Claude extract_om_financials] WARNING: Empty response. Full content blocks: {[b.type for b in response.content]}")
+        raise ValueError(f"Claude returned empty response (stop_reason={response.stop_reason})")
+
     cleaned = text.replace("```json", "").replace("```", "").strip()
     return json.loads(cleaned)
 
@@ -293,6 +298,10 @@ Re-examine the document carefully and return corrected JSON in the SAME format a
         if block.type == "text":
             text = block.text
             break
+
+    print(f"[Claude refine_om_financials] model={extraction_model} stop_reason={response.stop_reason} text_len={len(text)}")
+    if not text.strip():
+        raise ValueError(f"Claude returned empty response (stop_reason={response.stop_reason})")
 
     cleaned = text.replace("```json", "").replace("```", "").strip()
     return json.loads(cleaned)
