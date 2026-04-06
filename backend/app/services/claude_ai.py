@@ -1,9 +1,36 @@
 import json
+import re
 import base64
 from typing import AsyncGenerator, List, Tuple, Optional
 from anthropic import Anthropic, APIError
 from app.config import settings
 from app.models import Deal
+
+
+def _extract_json(text: str) -> dict:
+    """Robustly extract JSON from Claude's response, handling markdown fences and preamble text."""
+    # Strip markdown fences
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+
+    # Try direct parse first
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # Find the first { and last } to extract JSON object
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(cleaned[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    # Log what we got for debugging
+    preview = cleaned[:200] if len(cleaned) > 200 else cleaned
+    print(f"[_extract_json] Failed to parse. Preview: {preview!r}")
+    raise ValueError(f"Could not extract JSON from Claude response (length={len(cleaned)})")
 
 
 def build_deal_context(deal: Deal) -> str:
@@ -131,8 +158,7 @@ def extract_om_fields(file_bytes: bytes, media_type: str) -> dict:
             break
 
     # Parse the JSON from Claude's response
-    cleaned = text.replace("```json", "").replace("```", "").strip()
-    return json.loads(cleaned)
+    return _extract_json(text)
 
 
 def extract_om_financials(file_bytes: bytes, media_type: str = "application/pdf") -> dict:
@@ -232,8 +258,7 @@ Return ONLY valid JSON with this exact structure (use null for fields not found,
         print(f"[Claude extract_om_financials] WARNING: Empty response. Full content blocks: {[b.type for b in response.content]}")
         raise ValueError(f"Claude returned empty response (stop_reason={response.stop_reason})")
 
-    cleaned = text.replace("```json", "").replace("```", "").strip()
-    return json.loads(cleaned)
+    return _extract_json(text)
 
 
 def refine_om_financials(file_bytes: bytes, current_results: dict, issue: str, media_type: str = "application/pdf") -> dict:
@@ -303,8 +328,7 @@ Re-examine the document carefully and return corrected JSON in the SAME format a
     if not text.strip():
         raise ValueError(f"Claude returned empty response (stop_reason={response.stop_reason})")
 
-    cleaned = text.replace("```json", "").replace("```", "").strip()
-    return json.loads(cleaned)
+    return _extract_json(text)
 
 
 def extract_debt_terms(file_bytes: bytes, media_type: str) -> dict:
@@ -352,5 +376,4 @@ def extract_debt_terms(file_bytes: bytes, media_type: str) -> dict:
             text = block.text
             break
 
-    cleaned = text.replace("```json", "").replace("```", "").strip()
-    return json.loads(cleaned)
+    return _extract_json(text)
