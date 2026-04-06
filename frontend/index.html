@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRE Lytic — Deal Underwriting</title>
+    <title>CRELYTIC Engine — AI-Powered CRE Underwriting</title>
     <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAABiUlEQVRYhe2WPy9DURiHn/e0FIn/qUi0FQwkTZlIfAJDTWInfAI7A7Gz2YTdavEhEFeCgXBaQRfSgV6peyxC5V6izW1ruL/tvHnP+zz33HuSK3wklpzsEopLgpkFBoAI/sYGrgyyJ6qwoS3rEUAABpITY2+87YP0+Qz9KVlHnHT29PBEEqlUJ06jVUP4pwTKHg11RBPLIOkawwHajGl4DRuYqcb09YUUw7FWV/1c51nZOQVAMDMKGKyGgBccYCTRVrocUvj/tZeTJlVHOACBQCBQd4FwJZumFueJxmOuek5nONjeLWtWRSfgBQfoScTLnlX3VxAIBAKua9gb6yfS1OxqtF+eub/Vvgu4TsALDhBpbvEd7ilQ6wQC/0LAriO/oICr0or98uzdWVLP6YxnT+7m65qe67xnz9n3+qXEk+Nrgln5m7DPEVaVqMIG4P1I1U1GhYubSlvWoyPONJCtJdxRJn19fPwUAsjn7h7ae7t3MCEbiIK0UuHf0i8pABcIW6qhOKdPjjTAO0ACbHMMH2tvAAAAAElFTkSuQmCC">
     <link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,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">
-    <meta property="og:title" content="CRE Lytic — Deal Underwriting Engine">
-    <meta property="og:description" content="Institutional-grade CRE deal underwriting with DCF modeling, sensitivity analysis, and LP/GP waterfall.">
+    <meta property="og:title" content="CRELYTIC Engine — AI-Powered CRE Underwriting">
+    <meta property="og:description" content="Upload an OM, get a full DCF, waterfall, and investment memo in minutes. AI-powered commercial real estate underwriting.">
     <meta property="og:type" content="website">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -6257,6 +6257,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             const [subscriptionTier, setSubscriptionTier] = useState(null);
             const [subscriptionStatus, setSubscriptionStatus] = useState(null);
             const [hasStripe, setHasStripe] = useState(false);
+            const [showUpgradeBanner, setShowUpgradeBanner] = useState(true);
 
             // Fetch current user info on mount
             useEffect(() => {
@@ -6327,6 +6328,33 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         onHomeClick={() => { setCurrentView('list'); setSelectedDealId(null); setDeal(null); }}
                     />
 
+                    {showUpgradeBanner && currentView === 'list' && (!subscriptionTier || subscriptionTier === 'free') && (
+                        <div style={{
+                            margin: '1rem auto', maxWidth: '900px', padding: '1.25rem 1.5rem',
+                            background: 'linear-gradient(135deg, rgba(0,191,165,0.08), rgba(59,130,246,0.08))',
+                            border: '1px solid rgba(0,191,165,0.2)', borderRadius: '12px',
+                            display: 'flex', alignItems: 'center', gap: '1.5rem', position: 'relative',
+                        }}>
+                            <button onClick={() => setShowUpgradeBanner(false)} style={{
+                                position: 'absolute', top: '8px', right: '10px', background: 'none',
+                                border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '16px', lineHeight: 1,
+                            }}>&times;</button>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#e2e8f0', marginBottom: '4px' }}>
+                                    Unlock the full CRELYTIC Engine
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.5 }}>
+                                    Unlimited OM uploads &bull; Full DCF &amp; sensitivity analysis &bull; LP/GP waterfall &bull; Excel, Word &amp; PDF exports
+                                </div>
+                            </div>
+                            <button onClick={() => handleUpgrade('starter')} style={{
+                                background: 'linear-gradient(135deg, #00BFA5, #00897B)', color: 'white',
+                                border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem',
+                                fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}>Upgrade &mdash; from $6.99/mo</button>
+                        </div>
+                    )}
+
                     {currentView === 'list' && (
                         <DealListView
                             onSelectDeal={handleSelectDeal}
@@ -6360,7 +6388,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '6px' }}>
                             <img src={CRELYTIC_ICON_B64} alt="" style={{ height: '16px', opacity: 0.5 }} />
-                            <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 600, letterSpacing: '0.5px', fontFamily: "'DM Sans', system-ui, sans-serif" }}>CRE<span style={{ color: '#00897B' }}>lytic</span></span>
+                            <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 600, letterSpacing: '0.5px', fontFamily: "'DM Sans', system-ui, sans-serif" }}>CRELYTIC</span>
                         </div>
                         <div style={{ fontSize: '0.6rem', color: '#334155', letterSpacing: '0.3px' }}>
                             Institutional-Grade Deal Underwriting Engine &bull; Rising Tide CRE
