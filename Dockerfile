@@ -5,9 +5,9 @@ WORKDIR /app
 # System dependencies for pdfplumber + weasyprint
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpoppler-cpp-dev \
-    libpango-1.0-0 \
+    libpango1.0-0 \
     libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
+    libgdk-pixbuf-2.0-0 \
     libffi-dev \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/*
