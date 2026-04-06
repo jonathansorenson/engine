@@ -250,6 +250,9 @@ async def lifespan(app: FastAPI):
     seed_admin_user()
     os.makedirs(settings.upload_dir, exist_ok=True)
     print(f"Application started. Upload directory: {settings.upload_dir}")
+    print(f"Anthropic API key: {'SET (' + settings.anthropic_api_key[:10] + '...)' if settings.anthropic_api_key else 'NOT SET'}")
+    print(f"Anthropic model: {settings.anthropic_model}")
+    print(f"Anthropic extraction model: {settings.anthropic_extraction_model}")
     print(f"Engine at: http://localhost:8000/engine")
     print(f"Login at:  http://localhost:8000/engine/login")
     yield
