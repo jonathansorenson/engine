@@ -1283,6 +1283,7 @@ def parse_offering_memorandum(
 
     # ── AI-powered financial enrichment (Pass 1 + 2 + 3) ──
     if pdf_path and settings.anthropic_api_key:
+        print(f"[Pipeline] Starting AI enrichment with model={settings.anthropic_extraction_model or settings.anthropic_model}")
         try:
             # Pass 1: Claude extraction
             claude_financials = enhance_financials_with_claude(pdf_path, result["financials"])
@@ -1299,7 +1300,7 @@ def parse_offering_memorandum(
             warnings.extend(refine_warnings)
         except Exception as e:
             warnings.append(f"AI financial enrichment failed: {str(e)}")
-            print(f"AI enrichment error: {e}")
+            print(f"[Pipeline] AI enrichment FAILED: {type(e).__name__}: {e}")
             traceback.print_exc()
 
     # Final validation pass
