@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import json
 import time
+import base64
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -33,19 +34,23 @@ COOKIE_MAX_AGE = 86400 * 7  # 7 days
 # ═══════════════════════════════════════════════════════════════
 
 def _sign(value: str) -> str:
-    """Create HMAC signature for a value."""
-    sig = hmac.new(settings.secret_key.encode(), value.encode(), hashlib.sha256).hexdigest()[:16]
-    return f"{value}.{sig}"
+    """Create HMAC signature for a base64-encoded value."""
+    b64 = base64.urlsafe_b64encode(value.encode()).decode()
+    sig = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{b64}.{sig}"
 
 
 def _verify(signed: str):
-    """Verify a signed cookie value. Returns the payload if valid, None otherwise."""
+    """Verify a signed cookie value. Returns the decoded payload if valid, None otherwise."""
     if not signed or "." not in signed:
         return None
-    value, sig = signed.rsplit(".", 1)
-    expected = hmac.new(settings.secret_key.encode(), value.encode(), hashlib.sha256).hexdigest()[:16]
+    b64, sig = signed.rsplit(".", 1)
+    expected = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()[:16]
     if hmac.compare_digest(sig, expected):
-        return value
+        try:
+            return base64.urlsafe_b64decode(b64.encode()).decode()
+        except Exception:
+            return None
     return None
 
 
@@ -78,8 +83,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Check session cookie
-        session = request.cookies.get(COOKIE_NAME, "")
-        user_data = _get_user_from_cookie(session)
+        try:
+            session = request.cookies.get(COOKIE_NAME, "")
+            user_data = _get_user_from_cookie(session)
+        except Exception:
+            user_data = None
 
         if not user_data:
             if "/api/" in path:
