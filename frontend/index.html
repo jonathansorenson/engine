@@ -5335,7 +5335,19 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         )}
 
         {/* RETURNS TAB */}
-        {tab === 'returns' && (
+        {tab === 'returns' && (() => {
+          const bearP = { ...p, rentGrowth: Math.max(0, (p.rentGrowth || 3) - 2), exitCap: (p.exitCap || 6.5) + 1.0, vacancy: Math.min(30, (p.vacancy || 7) + 5) };
+          const consP = { ...p, rentGrowth: Math.max(0, (p.rentGrowth || 3) - 0.5), exitCap: (p.exitCap || 6.5) + 0.25, vacancy: Math.min(30, (p.vacancy || 7) + 1.5) };
+          const bullP = { ...p, rentGrowth: (p.rentGrowth || 3) + 1, exitCap: Math.max(3, (p.exitCap || 6.5) - 0.5), vacancy: Math.max(0, (p.vacancy || 7) - 2) };
+          const bearCalc = runModelV2(bearP, tenants, events, capItems, wf);
+          const consCalc = runModelV2(consP, tenants, events, capItems, wf);
+          const bullCalc = runModelV2(bullP, tenants, events, capItems, wf);
+          const scenarios = [
+            { name: 'Bull', emoji: '\u{1F402}', calc: bullCalc, p: bullP, color: '#22c55e', bg: 'rgba(34,197,94,0.08)' },
+            { name: 'Conservative', emoji: '\u{1F6E1}\uFE0F', calc: consCalc, p: consP, color: '#3b82f6', bg: 'rgba(59,130,246,0.08)' },
+            { name: 'Bear', emoji: '\u{1F43B}', calc: bearCalc, p: bearP, color: '#ef4444', bg: 'rgba(239,68,68,0.08)' },
+          ];
+          return (
           <div>
             <V2Sect title="Investment Returns" style={{}}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
@@ -5426,21 +5438,23 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
               </div>
             </V2Sect>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-              <V2Sect title="Exit Analysis">
+            <V2Sect title="Exit Analysis">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                 <V2Card label={`Exit Year NOI (Y${(p.holdPeriod || 5) + 1})`} value={fmtM(calc.exitNOI)} />
                 <V2Card label="Exit Cap Rate" value={fmtP(p.exitCap)} />
                 <V2Card label="Gross Sale Price" value={fmtM(calc.exitVal)} />
                 <V2Card label="Net Proceeds" value={fmtM(calc.saleNet)} good={true} />
-              </V2Sect>
+              </div>
+            </V2Sect>
 
               <V2Sect title="Investment Decision">
                 <div style={{
-                  padding: '24px',
+                  padding: '20px 24px',
                   textAlign: 'center',
                   borderRadius: '8px',
                   border: `2px solid ${calc.goGreen ? 'var(--green)' : 'var(--red)'}`,
                   backgroundColor: calc.goGreen ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)',
+                  marginBottom: '20px',
                 }}>
                   <div style={{ fontSize: '28px', fontWeight: '700', color: calc.goGreen ? 'var(--green)' : 'var(--red)' }}>
                     {calc.goGreen ? 'GO' : 'NO-GO'}
@@ -5449,10 +5463,42 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     Hurdles: {p.hurdleTier1 || p.hurdleIRR}% IRR / {p.hurdleEM}x EM
                   </div>
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  {scenarios.map(sc => (
+                    <div key={sc.name} style={{
+                      padding: '14px', borderRadius: '8px',
+                      border: `1.5px solid ${sc.color}`,
+                      backgroundColor: sc.bg,
+                    }}>
+                      <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: sc.color }}>
+                          {sc.emoji} {sc.name}
+                        </div>
+                        <div style={{
+                          display: 'inline-block', marginTop: '5px', padding: '2px 10px',
+                          borderRadius: '4px', fontSize: '14px', fontWeight: 700,
+                          color: sc.calc.goGreen ? 'var(--green)' : 'var(--red)',
+                          backgroundColor: sc.calc.goGreen ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)',
+                        }}>
+                          {sc.calc.goGreen ? 'GO' : 'NO-GO'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px' }}>
+                        <div><span style={{ color: 'var(--text-secondary)' }}>IRR</span><br/><b style={{ color: sc.calc.levIRR >= (p.hurdleTier1 || p.hurdleIRR) ? 'var(--green)' : 'var(--red)' }}>{fmtP(sc.calc.levIRR)}</b></div>
+                        <div><span style={{ color: 'var(--text-secondary)' }}>EM</span><br/><b style={{ color: sc.calc.em >= p.hurdleEM ? 'var(--green)' : 'var(--red)' }}>{fmtX(sc.calc.em)}</b></div>
+                        <div><span style={{ color: 'var(--text-secondary)' }}>Cash-on-Cash</span><br/><b>{fmtP(sc.calc.avgCoC)}</b></div>
+                        <div><span style={{ color: 'var(--text-secondary)' }}>DSCR</span><br/><b style={{ color: sc.calc.dscr >= 1.25 ? 'var(--green)' : sc.calc.dscr < 1 ? 'var(--red)' : 'var(--amber)' }}>{fmtX(sc.calc.dscr)}</b></div>
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--border)', marginTop: '8px', paddingTop: '6px', fontSize: '10px', color: 'var(--text-secondary)' }}>
+                        Rent: {sc.p.rentGrowth.toFixed(1)}% &bull; Exit: {sc.p.exitCap.toFixed(2)}% &bull; Vac: {sc.p.vacancy.toFixed(1)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </V2Sect>
-            </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* COMPARE TAB */}
         {tab === 'compare' && (
