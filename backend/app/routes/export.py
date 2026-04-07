@@ -29,10 +29,10 @@ except ImportError:
     HAS_PILLOW = False
 
 try:
-    from weasyprint import HTML as WeasyHTML
-    HAS_WEASYPRINT = True
+    from xhtml2pdf import pisa
+    HAS_XHTML2PDF = True
 except ImportError:
-    HAS_WEASYPRINT = False
+    HAS_XHTML2PDF = False
 
 from app.branding import (
     BRAND_NAME, GENERATED_BY, CONFIDENTIALITY, DISCLAIMER,
@@ -2084,16 +2084,18 @@ async def export_v2_memo_html(data: V2ExportRequest):
 
 @router.post("/v2/memo/pdf")
 async def export_v2_memo_pdf(data: V2ExportRequest):
-    """Generate a real PDF memo from V2 deal data using weasyprint."""
-    if not HAS_WEASYPRINT:
+    """Generate a real PDF memo from V2 deal data using xhtml2pdf."""
+    if not HAS_XHTML2PDF:
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=501,
-            content={"detail": "PDF export requires weasyprint. Install with: pip install weasyprint"},
+            content={"detail": "PDF export requires xhtml2pdf. Install with: pip install xhtml2pdf"},
         )
 
     html_content, prop_name = _build_memo_html(data)
-    pdf_bytes = WeasyHTML(string=html_content).write_pdf()
+    pdf_buffer = io.BytesIO()
+    pisa.CreatePDF(io.StringIO(html_content), dest=pdf_buffer)
+    pdf_bytes = pdf_buffer.getvalue()
 
     safe_name = prop_name.replace(" ", "_").replace("/", "-")
     safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]

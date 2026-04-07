@@ -2,14 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System dependencies for pdfplumber + weasyprint
+# System dependencies for pdfplumber
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpoppler-cpp-dev \
-    libpango1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf-2.0-0 \
-    libffi-dev \
-    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies
