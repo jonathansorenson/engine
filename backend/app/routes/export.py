@@ -784,7 +784,15 @@ def _v2_build_tenant_analytics(tenants: list, total_sf: float):
 @router.post("/v2")
 async def export_v2_deal_to_excel(data: V2ExportRequest):
     """Generate institutional-grade V2 Excel workbook with formulas, charts and analytics."""
+    import traceback
+    try:
+      return await _export_v2_excel_inner(data)
+    except Exception as e:
+      print(f"[Excel Export] ERROR: {traceback.format_exc()}")
+      from fastapi.responses import JSONResponse
+      return JSONResponse(status_code=500, content={"detail": str(e), "traceback": traceback.format_exc()})
 
+async def _export_v2_excel_inner(data: V2ExportRequest):
     wb = Workbook()
 
     state = data.v2_state or {}
