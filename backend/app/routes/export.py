@@ -1902,14 +1902,14 @@ async def _export_v2_excel_inner(data: V2ExportRequest):
     # ── Apply branding to all sheets ──
     _apply_branding(wb, wb.worksheets, prop_name)
 
-    # Clean up logo temp file
-    if logo_path:
-        cleanup_logo_tempfile(logo_path)
-
     # ── Write to buffer ──
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
+
+    # Clean up logo temp file (after save, since openpyxl reads it during save)
+    if logo_path:
+        cleanup_logo_tempfile(logo_path)
 
     safe_name = prop_name.replace(" ", "_").replace("/", "-")
     safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]
@@ -2093,6 +2093,15 @@ async def export_v2_memo_html(data: V2ExportRequest):
 @router.post("/v2/memo/pdf")
 async def export_v2_memo_pdf(data: V2ExportRequest):
     """Generate a real PDF memo from V2 deal data using fpdf2."""
+    import traceback
+    try:
+        return await _export_v2_memo_pdf_inner(data)
+    except Exception as e:
+        print(f"[PDF Export] ERROR: {traceback.format_exc()}")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=500, content={"detail": str(e), "traceback": traceback.format_exc()})
+
+async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
     if not HAS_FPDF:
         from fastapi.responses import JSONResponse
         return JSONResponse(
