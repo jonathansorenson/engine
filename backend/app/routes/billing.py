@@ -512,17 +512,31 @@ def _handle_checkout_completed(session: dict):
 
 
 def _handle_subscription_updated(subscription: dict):
-    """Update subscription status when Stripe notifies us."""
+    """Update subscription status and tier when Stripe notifies us."""
     customer_id = subscription.get("customer", "")
     status = subscription.get("status", "")
+
+    # Extract the new tier from the subscription's current price
+    items = subscription.get("items", {}).get("data", [])
+    new_price_id = items[0]["price"]["id"] if items else None
+    _price_to_tier = {
+        settings.stripe_starter_price_id: "starter",
+        settings.stripe_pro_price_id: "pro",
+        settings.stripe_unlimited_price_id: "unlimited",
+    }
+    new_tier = _price_to_tier.get(new_price_id) if new_price_id else None
 
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.stripe_customer_id == customer_id).first()
         if user:
             user.subscription_status = status
+            if new_tier:
+                user.subscription_tier = new_tier
+                print(f"Webhook: Updated {user.email} subscription_tier={new_tier} subscription_status={status}")
+            else:
+                print(f"Webhook: Updated {user.email} subscription_status={status}")
             db.commit()
-            print(f"Webhook: Updated {user.email} subscription_status={status}")
     except Exception as e:
         print(f"Webhook: Error updating subscription: {e}")
         db.rollback()
@@ -604,20 +618,46 @@ async def upgrade_plan(request: Request):
             proto = request.headers.get("x-forwarded-proto", "https")
             base_url = f"{proto}://{forwarded_host}"
 
-        # If user already has Stripe → send to portal to upgrade
-        if user.stripe_customer_id:
-            portal = stripe.billing_portal.Session.create(
-                customer=user.stripe_customer_id,
-                return_url=f"{base_url}/engine",
-            )
-            return JSONResponse({"url": portal.url, "method": "portal"})
-
-        # Free/admin user without Stripe → create checkout session
         _price_ids = {
             "starter": settings.stripe_starter_price_id,
             "pro": settings.stripe_pro_price_id,
             "unlimited": settings.stripe_unlimited_price_id,
         }
+
+        # If user already has Stripe → targeted plan-switch via portal
+        if user.stripe_customer_id:
+            target_price_id = _price_ids.get(target_tier, settings.stripe_pro_price_id)
+            if user.stripe_subscription_id:
+                try:
+                    sub = stripe.Subscription.retrieve(user.stripe_subscription_id)
+                    item_id = sub["items"]["data"][0]["id"]
+                    portal = stripe.billing_portal.Session.create(
+                        customer=user.stripe_customer_id,
+                        return_url=f"{base_url}/engine?upgraded=true",
+                        flow_data={
+                            "type": "subscription_update_confirm",
+                            "subscription_update_confirm": {
+                                "subscription": user.stripe_subscription_id,
+                                "items": [{"id": item_id, "price": target_price_id}],
+                            },
+                        },
+                    )
+                    return JSONResponse({"url": portal.url, "method": "portal"})
+                except stripe.error.StripeError:
+                    # Fallback to generic portal if flow_data fails
+                    portal = stripe.billing_portal.Session.create(
+                        customer=user.stripe_customer_id,
+                        return_url=f"{base_url}/engine",
+                    )
+                    return JSONResponse({"url": portal.url, "method": "portal"})
+            else:
+                portal = stripe.billing_portal.Session.create(
+                    customer=user.stripe_customer_id,
+                    return_url=f"{base_url}/engine",
+                )
+                return JSONResponse({"url": portal.url, "method": "portal"})
+
+        # Free/admin user without Stripe → create checkout session
         price_id = _price_ids.get(target_tier, settings.stripe_pro_price_id)
 
         # Create a Stripe customer first

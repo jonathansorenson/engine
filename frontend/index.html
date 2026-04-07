@@ -980,7 +980,7 @@
                     {DEMO_MODE && <span style={{ fontSize: '0.75rem', opacity: 0.6, border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', padding: '2px 8px' }}>DEMO</span>}
                     {subscriptionTier && <span style={{ fontSize: '0.7rem', color: TIER_COLORS[subscriptionTier] || '#94a3b8', border: `1px solid ${TIER_COLORS[subscriptionTier] || '#94a3b8'}`, borderRadius: '4px', padding: '2px 8px', textTransform: 'uppercase', fontWeight: 600 }}>{subscriptionTier}</span>}
                     {userName && <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{userName}</span>}
-                    {hasStripe && <a href="#" onClick={async (e) => { e.preventDefault(); const r = await fetch(`${API_URL}/billing/portal`, {method:'POST'}); const d = await r.json(); if(d.url) window.location.href=d.url; }} style={{ fontSize: '0.7rem', color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '5px' }}>Manage Plan</a>}
+                    {hasStripe && <a href="#" onClick={async (e) => { e.preventDefault(); try { const r = await fetch(`${API_URL}/api/v1/billing/portal`, {method:'POST'}); const d = await r.json(); if(d.url) window.location.href=d.url; else alert(d.detail || 'Unable to open billing portal.'); } catch(err) { alert('Unable to open billing portal. Please try again.'); } }} style={{ fontSize: '0.7rem', color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '5px' }}>Manage Plan</a>}
                     {userRole === 'admin' && (
                         <button onClick={onAdminClick} style={{
                             fontSize: '0.75rem', color: '#00BFA5', background: 'transparent', border: '1px solid #00BFA5',
@@ -6307,8 +6307,10 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                     });
                     const data = await res.json();
                     if (data.url) window.location.href = data.url;
+                    else alert(data.detail || 'Unable to start upgrade. Please try again.');
                 } catch (e) {
                     console.error('Upgrade error:', e);
+                    alert('Something went wrong. Please check your connection and try again.');
                 }
             };
 
@@ -6316,7 +6318,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                 <>
                     {hasStripe && subscriptionStatus && subscriptionStatus !== 'active' && subscriptionStatus !== 'trialing' && (
                         <div style={{ background: '#ef444433', borderBottom: '1px solid #ef4444', color: '#fca5a5', padding: '8px 16px', fontSize: '13px', textAlign: 'center' }}>
-                            Your subscription has expired. <a href="#" onClick={async (e) => { e.preventDefault(); await handleUpgrade(); }} style={{ color: '#60a5fa', textDecoration: 'underline' }}>Renew subscription</a>
+                            Your subscription has expired. <a href="#" onClick={async (e) => { e.preventDefault(); await handleUpgrade(subscriptionTier || 'pro'); }} style={{ color: '#60a5fa', textDecoration: 'underline' }}>Renew subscription</a>
                         </div>
                     )}
                     <Header
@@ -6349,11 +6351,11 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                                     Unlimited OM uploads &bull; Full DCF &amp; sensitivity analysis &bull; LP/GP waterfall &bull; Excel, Word &amp; PDF exports
                                 </div>
                             </div>
-                            <button onClick={() => handleUpgrade('starter')} style={{
+                            <button onClick={() => handleUpgrade('unlimited')} style={{
                                 background: 'linear-gradient(135deg, #00BFA5, #00897B)', color: 'white',
                                 border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem',
                                 fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap',
-                            }}>Upgrade &mdash; from $6.99/mo</button>
+                            }}>Upgrade &mdash; $20/mo</button>
                         </div>
                     )}
 
