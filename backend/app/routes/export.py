@@ -29,10 +29,10 @@ except ImportError:
     HAS_PILLOW = False
 
 try:
-    from xhtml2pdf import pisa
-    HAS_XHTML2PDF = True
+    from fpdf import FPDF
+    HAS_FPDF = True
 except ImportError:
-    HAS_XHTML2PDF = False
+    HAS_FPDF = False
 
 from app.branding import (
     BRAND_NAME, GENERATED_BY, CONFIDENTIALITY, DISCLAIMER,
@@ -2084,18 +2084,206 @@ async def export_v2_memo_html(data: V2ExportRequest):
 
 @router.post("/v2/memo/pdf")
 async def export_v2_memo_pdf(data: V2ExportRequest):
-    """Generate a real PDF memo from V2 deal data using xhtml2pdf."""
-    if not HAS_XHTML2PDF:
+    """Generate a real PDF memo from V2 deal data using fpdf2."""
+    if not HAS_FPDF:
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=501,
-            content={"detail": "PDF export requires xhtml2pdf. Install with: pip install xhtml2pdf"},
+            content={"detail": "PDF export requires fpdf2. Install with: pip install fpdf2"},
         )
 
-    html_content, prop_name = _build_memo_html(data)
-    pdf_buffer = io.BytesIO()
-    pisa.CreatePDF(io.StringIO(html_content), dest=pdf_buffer)
-    pdf_bytes = pdf_buffer.getvalue()
+    state = data.v2_state or {}
+    calc = data.calc or {}
+    p = state.get("assumptions", {})
+    wf = state.get("waterfall", {})
+    tenants = state.get("tenants", [])
+    years = calc.get("years", [])
+
+    prop_name = p.get("name", "Untitled Deal")
+    hold = p.get("holdPeriod", 5)
+    total_sf = p.get("sf", 0) or 0
+    purchase_price = p.get("purchasePrice", calc.get("pp", 0)) or 0
+    ltv_pct = (p.get("ltv", 65) or 65)
+    loan_amount = purchase_price * ltv_pct / 100
+    equity_val = calc.get("totalEq", 0) or calc.get("equity", 0) or (purchase_price - loan_amount)
+    irr_val = calc.get("levIRR", 0) or 0
+    em_val = calc.get("em", 0) or 0
+    going_cap = calc.get("goingCap", 0) or 0
+    y1_noi = calc.get("y1NOI", 0) or p.get("y1NOI", 0) or 0
+    price_psf = purchase_price / total_sf if total_sf > 0 else 0
+
+    tenant_analytics = _v2_build_tenant_analytics(tenants, total_sf)
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    # Colors
+    navy = (10, 22, 40)
+    teal = (0, 191, 165)
+    gray = (100, 116, 139)
+    white = (255, 255, 255)
+    light_bg = (240, 244, 248)
+
+    # Header
+    pdf.set_font("Helvetica", "B", 22)
+    pdf.set_text_color(*navy)
+    pdf.cell(0, 10, BRAND_NAME, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*teal)
+    pdf.cell(0, 5, PRODUCT_URL, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    # Title
+    pdf.set_draw_color(*navy)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(*navy)
+    pdf.cell(0, 10, prop_name, new_x="LMARGIN", new_y="NEXT", border="B")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(*gray)
+    pdf.cell(0, 7, f"Investment Memo - Generated {datetime.now().strftime('%B %d, %Y')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    # Executive Summary
+    lease_note = "diversified tenant base"
+    expiry_note = "lease term analysis pending"
+    if tenant_analytics:
+        top_pct = tenant_analytics.get("top_tenant_pct", 0)
+        walt = tenant_analytics.get("walt", 0)
+        if top_pct > 0.30:
+            top_name = tenant_analytics["tenants_with_rev"][0].get("name", "top tenant") if tenant_analytics.get("tenants_with_rev") else "top tenant"
+            lease_note = f"concentration risk ({top_name} at {top_pct*100:.0f}% of revenue)"
+        if walt > 0:
+            expiry_note = f"WALT of {walt:.1f} years"
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(*navy)
+    pdf.cell(0, 8, "Executive Summary", new_x="LMARGIN", new_y="NEXT", border="B")
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(30, 30, 30)
+    summary = (
+        f"The {prop_name} is a {total_sf:,.0f} SF {p.get('assetType', 'commercial')} property "
+        f"located at {p.get('address', 'N/A')}, offered at {_fmt_currency(purchase_price)} "
+        f"({_fmt_currency(price_psf)}/SF). The going-in cap rate is {going_cap:.2f}% "
+        f"with a projected levered IRR of {irr_val:.2f}% and {em_val:.2f}x equity multiple "
+        f"over a {hold}-year hold period. Year 1 NOI: {_fmt_currency(y1_noi)}. "
+        f"Key considerations include {lease_note} and {expiry_note}."
+    )
+    pdf.multi_cell(0, 5, summary)
+    pdf.ln(4)
+
+    # Key Return Metrics
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(*navy)
+    pdf.cell(0, 8, "Key Return Metrics", new_x="LMARGIN", new_y="NEXT", border="B")
+    pdf.ln(2)
+
+    verdict_text = "GO" if calc.get("goGreen") else "NO-GO"
+    metrics = [
+        ("Levered IRR", f"{irr_val:.2f}%"),
+        ("Equity Multiple", f"{em_val:.2f}x"),
+        ("Avg CoC", f"{(calc.get('avgCoC', 0) or 0):.2f}%"),
+        ("DSCR", f"{(calc.get('dscr', 0) or 0):.2f}x"),
+        ("Going-In Cap", f"{going_cap:.2f}%"),
+        ("Verdict", verdict_text),
+    ]
+    col_w = (pdf.w - 20) / 3
+    for i, (label, value) in enumerate(metrics):
+        x = 10 + (i % 3) * col_w
+        if i % 3 == 0 and i > 0:
+            pdf.ln(16)
+        pdf.set_xy(x, pdf.get_y())
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(*gray)
+        pdf.cell(col_w, 4, label, align="C")
+        pdf.set_xy(x, pdf.get_y() + 4)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(*navy)
+        if label == "Verdict":
+            pdf.set_text_color(22, 101, 52) if calc.get("goGreen") else pdf.set_text_color(153, 27, 27)
+        pdf.cell(col_w, 8, value, align="C")
+    pdf.ln(20)
+
+    # Helper for tables
+    def _pdf_table(headers, rows):
+        col_w = (pdf.w - 20) / len(headers)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(*navy)
+        pdf.set_text_color(*white)
+        for h in headers:
+            pdf.cell(col_w, 7, h, border=1, fill=True, align="C")
+        pdf.ln()
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(30, 30, 30)
+        for ri, row in enumerate(rows):
+            if ri % 2 == 1:
+                pdf.set_fill_color(248, 249, 250)
+            else:
+                pdf.set_fill_color(*white)
+            for val in row:
+                pdf.cell(col_w, 6, str(val), border="B", fill=True, align="C")
+            pdf.ln()
+
+    # Capital Structure
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(*navy)
+    pdf.cell(0, 8, "Capital Structure", new_x="LMARGIN", new_y="NEXT", border="B")
+    pdf.ln(2)
+    _pdf_table(
+        ["Item", "Amount", "Per SF"],
+        [
+            ["Purchase Price", _fmt_currency(purchase_price), _fmt_currency(price_psf)],
+            [f"Loan ({ltv_pct:.0f}% LTV)", _fmt_currency(loan_amount), _fmt_currency(loan_amount / total_sf if total_sf > 0 else 0)],
+            ["Equity Required", _fmt_currency(equity_val), _fmt_currency(equity_val / total_sf if total_sf > 0 else 0)],
+        ],
+    )
+    pdf.ln(4)
+
+    # Cash Flow Projection
+    if years:
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.set_text_color(*navy)
+        pdf.cell(0, 8, "Cash Flow Projection", new_x="LMARGIN", new_y="NEXT", border="B")
+        pdf.ln(2)
+        cf_rows = []
+        for y in years:
+            noi_v = y.get("noi", 0) or 0
+            ds_v = y.get("annDS", 0) or 0
+            ncf_v = noi_v - abs(ds_v) - (y.get("capexRes", 0) or 0) - (y.get("specCapex", 0) or 0) - (y.get("tiLC", 0) or 0)
+            cf_rows.append([f"Year {y.get('yr', '')}", _fmt_currency(noi_v), _fmt_currency(abs(ds_v)), _fmt_currency(ncf_v)])
+        _pdf_table(["Year", "NOI", "Debt Service", "Net CF"], cf_rows)
+        pdf.ln(4)
+
+    # Waterfall
+    if wf:
+        lp_out = calc.get("lpOut", 0) or 0
+        gp_out = calc.get("gpOut", 0) or 0
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.set_text_color(*navy)
+        pdf.cell(0, 8, "Waterfall Distribution", new_x="LMARGIN", new_y="NEXT", border="B")
+        pdf.ln(2)
+        _pdf_table(
+            ["Metric", "LP", "GP"],
+            [
+                ["Equity", _fmt_currency(calc.get("lpEq", 0)), _fmt_currency(calc.get("gpEq", 0))],
+                ["Total Distributions", _fmt_currency(lp_out), _fmt_currency(gp_out)],
+                ["IRR", f"{(calc.get('lpIRR', 0) or 0):.2f}%", f"{(calc.get('gpIRR', 0) or 0):.2f}%"],
+                ["GP Promote", "", _fmt_currency(calc.get("gpPromote", 0))],
+            ],
+        )
+        pdf.ln(4)
+
+    # Footer
+    pdf.ln(6)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(10, pdf.get_y(), pdf.w - 10, pdf.get_y())
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(*gray)
+    pdf.multi_cell(0, 3.5, f"{GENERATED_BY} - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n{CONFIDENTIALITY}\n{DISCLAIMER}")
+
+    pdf_bytes = pdf.output()
 
     safe_name = prop_name.replace(" ", "_").replace("/", "-")
     safe_name = safe_name.encode("ascii", "ignore").decode("ascii")[:40]
