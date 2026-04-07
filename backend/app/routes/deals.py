@@ -206,13 +206,22 @@ async def list_deals(
             created_at=deal.created_at,
         )
 
-        # Extract summary fields from parsed_data
+        # Extract summary fields — prefer V2 user-adjusted values over raw OM data
         if deal.parsed_data:
             parsed = deal.parsed_data
             item.property_type = parsed.get("property", {}).get("property_type")
             item.asking_price = parsed.get("property", {}).get("asking_price")
             item.noi = parsed.get("financials", {}).get("noi")
             item.cap_rate = parsed.get("financials", {}).get("cap_rate")
+
+        if deal.v2_state and isinstance(deal.v2_state, dict):
+            v2_assumptions = deal.v2_state.get("assumptions", {})
+            pp = v2_assumptions.get("purchasePrice")
+            if pp and pp > 0:
+                item.asking_price = pp
+            noi = v2_assumptions.get("y1NOI") or item.noi
+            if noi and pp and pp > 0:
+                item.cap_rate = noi / pp
 
         result.append(item)
 
