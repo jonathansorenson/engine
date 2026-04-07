@@ -2845,16 +2845,22 @@ const exportV2Excel = async (deal, calc, p, wf, tenants, events, capItems) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${deal.name || 'deal'}_analysis.xlsx`;
-      a.click();
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('Excel export error:', res.status, errText);
+      alert('Excel export failed: ' + (errText || res.status));
+      return;
     }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${deal.name || p.name || 'deal'}_analysis.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
   } catch (e) {
     console.error('Export failed:', e);
+    alert('Excel export failed: ' + e.message);
   }
 };
 
@@ -2891,15 +2897,23 @@ const exportMemoPDF = async (deal, calc, p, wf, tenants) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${deal.name || p.name || 'deal'}_memo.pdf`;
-      a.click();
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('PDF export error:', res.status, errText);
+      alert('PDF export failed: ' + (errText || res.status));
+      return;
     }
-  } catch (e) { console.error('PDF export failed:', e); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${deal.name || p.name || 'deal'}_memo.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error('PDF export failed:', e);
+    alert('PDF export failed: ' + e.message);
+  }
 };
 
 // Main DashboardV2View Component
