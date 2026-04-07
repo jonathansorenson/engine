@@ -216,6 +216,10 @@ async def list_deals(
 
         if deal.v2_state and isinstance(deal.v2_state, dict):
             v2_assumptions = deal.v2_state.get("assumptions", {})
+            # Prefer user-edited name over OM-parsed name
+            v2_name = v2_assumptions.get("name")
+            if v2_name and v2_name.strip():
+                item.name = v2_name.strip()
             pp = v2_assumptions.get("purchasePrice")
             if pp and pp > 0:
                 item.asking_price = pp
@@ -272,6 +276,11 @@ async def save_v2_state(
     deal.v2_state = state.model_dump(exclude_none=False)
     if not deal.version or deal.version == "1":
         deal.version = "2"
+
+    # Sync user-edited name back to the deal.name column for list display
+    v2_name = (deal.v2_state or {}).get("assumptions", {}).get("name")
+    if v2_name and v2_name.strip():
+        deal.name = v2_name.strip()
 
     db.commit()
     db.refresh(deal)
