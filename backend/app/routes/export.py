@@ -2101,6 +2101,17 @@ async def export_v2_memo_pdf(data: V2ExportRequest):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=500, content={"detail": str(e), "traceback": traceback.format_exc()})
 
+def _pdf_safe(text: str) -> str:
+    """Replace Unicode chars unsupported by fpdf2 core fonts (latin-1 only)."""
+    return (text
+        .replace("\u2014", "-").replace("\u2013", "-")   # em/en dash
+        .replace("\u2018", "'").replace("\u2019", "'")   # smart single quotes
+        .replace("\u201c", '"').replace("\u201d", '"')   # smart double quotes
+        .replace("\u2026", "...")                         # ellipsis
+        .replace("\u2022", "*")                           # bullet
+        .replace("\u00a0", " ")                           # non-breaking space
+    )
+
 async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
     if not HAS_FPDF:
         from fastapi.responses import JSONResponse
@@ -2145,17 +2156,17 @@ async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
     # Header
     pdf.set_font("Helvetica", "B", 22)
     pdf.set_text_color(*navy)
-    pdf.cell(0, 10, BRAND_NAME, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, _pdf_safe(BRAND_NAME), new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*teal)
-    pdf.cell(0, 5, PRODUCT_URL, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, _pdf_safe(PRODUCT_URL), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # Title
     pdf.set_draw_color(*navy)
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(*navy)
-    pdf.cell(0, 10, prop_name, new_x="LMARGIN", new_y="NEXT", border="B")
+    pdf.cell(0, 10, _pdf_safe(prop_name), new_x="LMARGIN", new_y="NEXT", border="B")
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*gray)
     pdf.cell(0, 7, f"Investment Memo - Generated {datetime.now().strftime('%B %d, %Y')}", new_x="LMARGIN", new_y="NEXT")
@@ -2187,7 +2198,7 @@ async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
         f"over a {hold}-year hold period. Year 1 NOI: {_fmt_currency(y1_noi)}. "
         f"Key considerations include {lease_note} and {expiry_note}."
     )
-    pdf.multi_cell(0, 5, summary)
+    pdf.multi_cell(0, 5, _pdf_safe(summary))
     pdf.ln(4)
 
     # Key Return Metrics
@@ -2213,13 +2224,13 @@ async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
         pdf.set_xy(x, pdf.get_y())
         pdf.set_font("Helvetica", "", 8)
         pdf.set_text_color(*gray)
-        pdf.cell(col_w, 4, label, align="C")
+        pdf.cell(col_w, 4, _pdf_safe(label), align="C")
         pdf.set_xy(x, pdf.get_y() + 4)
         pdf.set_font("Helvetica", "B", 14)
         pdf.set_text_color(*navy)
         if label == "Verdict":
             pdf.set_text_color(22, 101, 52) if calc.get("goGreen") else pdf.set_text_color(153, 27, 27)
-        pdf.cell(col_w, 8, value, align="C")
+        pdf.cell(col_w, 8, _pdf_safe(value), align="C")
     pdf.ln(20)
 
     # Helper for tables
@@ -2229,7 +2240,7 @@ async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
         pdf.set_fill_color(*navy)
         pdf.set_text_color(*white)
         for h in headers:
-            pdf.cell(col_w, 7, h, border=1, fill=True, align="C")
+            pdf.cell(col_w, 7, _pdf_safe(h), border=1, fill=True, align="C")
         pdf.ln()
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(30, 30, 30)
@@ -2239,7 +2250,7 @@ async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
             else:
                 pdf.set_fill_color(*white)
             for val in row:
-                pdf.cell(col_w, 6, str(val), border="B", fill=True, align="C")
+                pdf.cell(col_w, 6, _pdf_safe(str(val)), border="B", fill=True, align="C")
             pdf.ln()
 
     # Capital Structure
@@ -2298,7 +2309,7 @@ async def _export_v2_memo_pdf_inner(data: V2ExportRequest):
     pdf.ln(3)
     pdf.set_font("Helvetica", "", 7)
     pdf.set_text_color(*gray)
-    pdf.multi_cell(0, 3.5, f"{GENERATED_BY} - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n{CONFIDENTIALITY}\n{DISCLAIMER}")
+    pdf.multi_cell(0, 3.5, _pdf_safe(f"{GENERATED_BY} - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n{CONFIDENTIALITY}\n{DISCLAIMER}"))
 
     pdf_bytes = pdf.output()
 
