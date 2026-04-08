@@ -576,6 +576,64 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Upload Orbital Animation */
+        .upload-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(11, 17, 32, 0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 9999;
+        }
+        .orbit-container { position: relative; width: 140px; height: 140px; margin-bottom: 32px; }
+        .orbit-ring {
+            position: absolute; border: 2.5px solid transparent; border-radius: 50%;
+        }
+        .orbit-ring-1 {
+            width: 140px; height: 140px; top: 0; left: 0;
+            border-top-color: var(--teal); animation: spin 2s linear infinite;
+        }
+        .orbit-ring-2 {
+            width: 100px; height: 100px; top: 20px; left: 20px;
+            border-right-color: #3b82f6; animation: spin 1.4s linear infinite reverse;
+        }
+        .orbit-ring-3 {
+            width: 60px; height: 60px; top: 40px; left: 40px;
+            border-bottom-color: #f472b6; animation: spin 0.9s linear infinite;
+        }
+        .orbit-icon {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 32px;
+        }
+        .upload-overlay h3 {
+            font-size: 20px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;
+        }
+        .upload-overlay .upload-sub {
+            font-size: 13px; color: #64748b; margin-bottom: 24px;
+        }
+        .upload-progress-track {
+            width: 260px; height: 4px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 24px;
+        }
+        .upload-progress-fill {
+            height: 100%; width: 30%;
+            background: linear-gradient(90deg, var(--teal), #3b82f6);
+            border-radius: 4px;
+            animation: progressSweep 2.5s ease-in-out infinite;
+        }
+        @keyframes progressSweep { 0% { width: 10%; } 50% { width: 80%; } 100% { width: 10%; } }
+        .upload-steps { list-style: none; padding: 0; margin: 0; text-align: left; }
+        .upload-steps li {
+            display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px;
+        }
+        .upload-steps li.done { color: #94a3b8; }
+        .upload-steps li.active { color: #e2e8f0; }
+        .upload-steps li.waiting { color: #334155; }
+        .upload-steps .step-icon { width: 18px; text-align: center; font-size: 12px; }
+        .upload-steps li.done .step-icon { color: var(--teal); }
+        .upload-steps li.active .step-spinner {
+            display: inline-block; width: 12px; height: 12px;
+            border: 2px solid var(--teal); border-top-color: transparent;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+
         /* Property Header */
         .property-header {
             background: var(--card);
@@ -1301,6 +1359,7 @@
             const [files, setFiles] = useState([]);
             const [uploading, setUploading] = useState(false);
             const [dragActive, setDragActive] = useState(false);
+            const [uploadStep, setUploadStep] = useState(0);
 
             const handleDrag = (e) => {
                 e.preventDefault();
@@ -1319,25 +1378,69 @@
             const handleAnalyze = async () => {
                 if (files.length === 0) return;
                 setUploading(true);
+                setUploadStep(0);
+                const stepTimer1 = setTimeout(() => setUploadStep(1), 2000);
+                const stepTimer2 = setTimeout(() => setUploadStep(2), 5000);
+                const stepTimer3 = setTimeout(() => setUploadStep(3), 10000);
                 try {
                     const result = await uploadDeal(files);
+                    clearTimeout(stepTimer1);
+                    clearTimeout(stepTimer2);
+                    clearTimeout(stepTimer3);
                     onSuccess(result.id);
                 } catch (error) {
+                    clearTimeout(stepTimer1);
+                    clearTimeout(stepTimer2);
+                    clearTimeout(stepTimer3);
                     alert('Error uploading deal: ' + error.message);
                     setUploading(false);
+                    setUploadStep(0);
                 }
             };
 
             const getFileIcon = (file) => {
-                if (file.type.includes('pdf')) return '📄';
-                if (file.type.includes('excel') || file.type.includes('spreadsheet')) return '📊';
-                return '📁';
+                if (file.type.includes('pdf')) return '\u{1F4C4}';
+                if (file.type.includes('excel') || file.type.includes('spreadsheet')) return '\u{1F4CA}';
+                return '\u{1F4C1}';
             };
+
+            const uploadSteps = [
+                'Uploading document',
+                'Reading pages',
+                'Extracting financials & rent roll',
+                'Building underwriting model',
+            ];
+
+            if (uploading) {
+                return (
+                    <div className="upload-overlay">
+                        <div className="orbit-container">
+                            <div className="orbit-ring orbit-ring-1"></div>
+                            <div className="orbit-ring orbit-ring-2"></div>
+                            <div className="orbit-ring orbit-ring-3"></div>
+                            <div className="orbit-icon">{'\u{1F3E2}'}</div>
+                        </div>
+                        <h3>Analyzing Your Deal</h3>
+                        <div className="upload-sub">This usually takes 15–30 seconds</div>
+                        <div className="upload-progress-track"><div className="upload-progress-fill"></div></div>
+                        <ul className="upload-steps">
+                            {uploadSteps.map((step, i) => (
+                                <li key={i} className={i < uploadStep ? 'done' : i === uploadStep ? 'active' : 'waiting'}>
+                                    <span className="step-icon">
+                                        {i < uploadStep ? '\u2713' : i === uploadStep ? <span className="step-spinner"></span> : '\u25CB'}
+                                    </span>
+                                    {step}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                );
+            }
 
             return (
                 <div className="container">
                     <button className="btn btn-secondary btn-sm" onClick={onCancel} style={{ marginBottom: '2rem' }}>
-                        ← Back
+                        {'\u2190'} Back
                     </button>
 
                     <div className="upload-container">
@@ -1349,7 +1452,7 @@
                             onDrop={handleDrop}
                             onClick={() => document.getElementById('fileInput').click()}
                         >
-                            <div className="dropzone-icon">📥</div>
+                            <div className="dropzone-icon">{'\u{1F4E5}'}</div>
                             <div className="dropzone-text">Drop files here or click to browse</div>
                             <div className="dropzone-hint">PDF or Excel files (offering memorandum, ARGUS export, financial statements)</div>
                             <input
@@ -1377,7 +1480,7 @@
                                             className="btn btn-sm btn-secondary"
                                             onClick={() => setFiles(files.filter((_, i) => i !== idx))}
                                         >
-                                            ✕
+                                            {'\u2715'}
                                         </button>
                                     </div>
                                 ))}
@@ -1388,13 +1491,7 @@
                                     disabled={uploading}
                                     style={{ marginTop: '1.5rem', width: '100%' }}
                                 >
-                                    {uploading ? (
-                                        <>
-                                            <span className="loading"></span> Analyzing Deal...
-                                        </>
-                                    ) : (
-                                        '🔍 Analyze Deal'
-                                    )}
+                                    {'\u{1F50D}'} Analyze Deal
                                 </button>
                             </div>
                         )}
