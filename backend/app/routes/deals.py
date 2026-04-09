@@ -452,7 +452,7 @@ async def parse_rent_roll_v2(
                 "rentPSF": rent_psf,
                 "camPSF": cam_psf,
                 "type": r.get("lease_type") or "NNN",
-                "escalPct": r.get("escalation") or 3,
+                "escalPct": r.get("escalation") or r.get("annual_escalation") or r.get("escalation_pct") or 3,
                 "start": r.get("lease_start") or "",
                 "end": r.get("lease_end") or r.get("expiry") or "",
                 "tiPSF": 0,

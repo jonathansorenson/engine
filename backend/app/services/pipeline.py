@@ -990,6 +990,12 @@ def merge_financial_results(regex_results: dict, claude_results: dict) -> Tuple[
     if claude_results.get("capex_reserves"):
         merged["capex_reserves"] = claude_results["capex_reserves"]
 
+    # Carry over rent escalation and vacancy from Claude extraction
+    if claude_results.get("rent_escalation_pct") is not None:
+        merged["rent_escalation_pct"] = claude_results["rent_escalation_pct"]
+    if claude_results.get("vacancy_pct") is not None:
+        merged["vacancy_pct"] = claude_results["vacancy_pct"]
+
     # ── Derive expense ratio if we now have both ──
     if "expense_ratio" not in merged and merged.get("operating_expenses") and merged.get("annual_revenue"):
         if merged["annual_revenue"] > 0:
