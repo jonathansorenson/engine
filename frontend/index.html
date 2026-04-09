@@ -1027,7 +1027,7 @@
 
         // Components
         const TIER_COLORS = { starter: '#22c55e', pro: '#3b82f6', unlimited: '#f472b6', enterprise: '#a78bfa', admin: '#f59e0b' };
-        const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onHomeClick }) => (
+        const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onHomeClick, onSettingsClick }) => (
             <div className="header">
                 <div className="header-left">
                     <div className="breadcrumb" onClick={onHomeClick} style={{ cursor: 'pointer' }}>
@@ -1048,6 +1048,7 @@
                         </button>
                     )}
                     <img src="data:image/png;base64,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" alt="CRElytic" style={{ height: '32px', opacity: 0.95 }} />
+                    {!DEMO_MODE && onSettingsClick && <button onClick={onSettingsClick} style={{ fontSize: '0.75rem', color: '#00BFA5', background: 'none', border: '1px solid rgba(0,191,165,0.3)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>Settings</button>}
                     {!DEMO_MODE && <a href="/engine/logout" style={{ fontSize: '0.75rem', color: '#94a3b8', textDecoration: 'none', padding: '4px 10px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px' }}>Sign Out</a>}
                 </div>
             </div>
@@ -2464,7 +2465,11 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
   const gpIRR = calcIRRv2(gpCFs);
   const lpEM = lpEq > 0 ? lpOut / lpEq : 0;
   const gpPromote = Math.max(0, gpOut - gpEq);
-  const goGreen = (levIRR || 0) >= (p.hurdleTier1 || p.hurdleIRR || 9) && em >= (p.hurdleEM || 1.5);
+  const goGreen = (levIRR || 0) >= (p.hurdleTier1 || p.hurdleIRR || 9)
+    && em >= (p.hurdleEM || 1.5)
+    && (p.hurdleCoC ? (avgCoC || 0) >= p.hurdleCoC : true)
+    && (dscr || 0) >= (p.hurdleDSCR || 1.25)
+    && (p.hurdleMaxCap ? goingCap <= p.hurdleMaxCap : true);
 
   const gpTotalDist = gpOut;
   return {
@@ -2509,6 +2514,9 @@ const V2_DEFAULTS = {
   hurdleTier2LP: 80,
   hurdleTier3LP: 70,
   hurdleEM: 1.5,
+  hurdleCoC: 6,
+  hurdleDSCR: 1.25,
+  hurdleMaxCap: 8,
   capexReservePct: 2,
   capexReservePSF: 0.25,
   useCapexPct: true,
@@ -3014,7 +3022,7 @@ const exportMemoPDF = async (deal, calc, p, wf, tenants) => {
 };
 
 // Main DashboardV2View Component
-const DashboardV2View = ({ deal: initialDeal, onBack }) => {
+const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
   const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
   // State
@@ -3084,7 +3092,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       const address = prop.address ? `${prop.address || ''}${prop.city ? ', ' + prop.city : ''}${prop.state ? ' ' + prop.state : ''}`.trim() : '';
 
       const hl = [];
-      const seeded = { ...V2_DEFAULTS };
+      const seeded = { ...V2_DEFAULTS, ...userPrefs };
       if (prop.name) { seeded.name = prop.name; hl.push('name'); }
       if (address) { seeded.address = address; hl.push('address'); }
       if (prop.property_type) { seeded.assetType = prop.property_type; hl.push('assetType'); }
@@ -6433,8 +6441,10 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             const [subscriptionStatus, setSubscriptionStatus] = useState(null);
             const [hasStripe, setHasStripe] = useState(false);
             const [showUpgradeBanner, setShowUpgradeBanner] = useState(true);
+            const [userPrefs, setUserPrefs] = useState({});
+            const [showSettings, setShowSettings] = useState(false);
 
-            // Fetch current user info on mount
+            // Fetch current user info + preferences on mount
             useEffect(() => {
                 if (!DEMO_MODE) {
                     fetch(`${API_URL}/me`)
@@ -6446,6 +6456,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                                 setSubscriptionTier(data.subscription_tier || null);
                                 setSubscriptionStatus(data.subscription_status || null);
                                 setHasStripe(data.has_stripe || false);
+                                if (data.preferences && Object.keys(data.preferences).length > 0) {
+                                    setUserPrefs(data.preferences);
+                                }
                             }
                         })
                         .catch(() => {});
@@ -6494,6 +6507,86 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                             Your subscription has expired. <a href="#" onClick={async (e) => { e.preventDefault(); await handleUpgrade(subscriptionTier || 'pro'); }} style={{ color: '#60a5fa', textDecoration: 'underline' }}>Renew subscription</a>
                         </div>
                     )}
+                    {/* Settings Modal */}
+                    {showSettings && (() => {
+                        const PREF_FIELDS = {
+                            hurdles: [
+                                { key: 'hurdleIRR', label: 'Min IRR', suffix: '%', min: 0, max: 50, step: 0.5, def: 9 },
+                                { key: 'hurdleEM', label: 'Min Equity Multiple', suffix: 'x', min: 1, max: 5, step: 0.05, def: 1.5 },
+                                { key: 'hurdleCoC', label: 'Min Cash-on-Cash', suffix: '%', min: 0, max: 25, step: 0.5, def: 6 },
+                                { key: 'hurdleDSCR', label: 'Min DSCR', suffix: 'x', min: 0.5, max: 3, step: 0.05, def: 1.25 },
+                                { key: 'hurdleMaxCap', label: 'Max Entry Cap Rate', suffix: '%', min: 3, max: 15, step: 0.25, def: 8 },
+                            ],
+                            mla: [
+                                { key: 'marketRenewalProb', label: 'Renewal Probability', suffix: '%', min: 0, max: 100, step: 5, def: 75 },
+                                { key: 'marketVacantMonths', label: 'Vacant Months', suffix: 'mo', min: 0, max: 24, step: 1, def: 6 },
+                                { key: 'marketFreeRentMonths', label: 'Free Rent Months', suffix: 'mo', min: 0, max: 12, step: 1, def: 2 },
+                                { key: 'marketTINewPSF', label: 'TI New Lease', suffix: '$/SF', min: 0, max: 80, step: 1, def: 15 },
+                                { key: 'marketTIRenewalPSF', label: 'TI Renewal', suffix: '$/SF', min: 0, max: 50, step: 1, def: 10 },
+                                { key: 'marketLCNewPct', label: 'LC New Lease', suffix: '%', min: 0, max: 10, step: 0.5, def: 6 },
+                                { key: 'marketLCRenewalPct', label: 'LC Renewal', suffix: '%', min: 0, max: 10, step: 0.5, def: 4 },
+                            ],
+                        };
+                        const [localPrefs, setLocalPrefs] = useState({ ...userPrefs });
+                        const [saving, setSaving] = useState(false);
+                        const [saved, setSaved] = useState(false);
+                        const savePrefs = async () => {
+                            setSaving(true);
+                            try {
+                                const res = await fetch(`${API_URL}/me/preferences`, {
+                                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(localPrefs), credentials: 'include',
+                                });
+                                if (res.ok) {
+                                    const updated = await res.json();
+                                    setUserPrefs(updated);
+                                    setSaved(true);
+                                    setTimeout(() => setSaved(false), 2000);
+                                }
+                            } catch (e) { console.error('Failed to save preferences', e); }
+                            setSaving(false);
+                        };
+                        const renderField = (f) => (
+                            <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                                <label style={{ flex: '0 0 160px', fontSize: '13px', color: '#B0BEC5' }}>{f.label}</label>
+                                <input type="range" min={f.min} max={f.max} step={f.step}
+                                    value={localPrefs[f.key] ?? f.def}
+                                    onChange={(e) => setLocalPrefs(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) }))}
+                                    style={{ flex: 1, accentColor: '#00BFA5' }}
+                                />
+                                <span style={{ flex: '0 0 60px', textAlign: 'right', fontSize: '13px', fontWeight: 600, color: '#E8EDF2' }}>
+                                    {(localPrefs[f.key] ?? f.def).toFixed(f.step < 1 ? 2 : 0)}{f.suffix}
+                                </span>
+                            </div>
+                        );
+                        return (
+                            <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                                onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}>
+                                <div style={{ background: '#132337', border: '1px solid #1E3347', borderRadius: '16px', padding: '32px', width: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                                        <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#E8EDF2', margin: 0 }}>Investment Profile</h2>
+                                        <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' }}>x</button>
+                                    </div>
+                                    <div style={{ marginBottom: '24px' }}>
+                                        <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#00BFA5', marginBottom: '14px' }}>Investment Hurdles (GO / NO-GO)</h3>
+                                        {PREF_FIELDS.hurdles.map(renderField)}
+                                    </div>
+                                    <div style={{ marginBottom: '24px' }}>
+                                        <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#4A8FD4', marginBottom: '14px' }}>Market Leasing Assumptions</h3>
+                                        {PREF_FIELDS.mla.map(renderField)}
+                                    </div>
+                                    <button onClick={savePrefs} disabled={saving}
+                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: saved ? '#22c55e' : 'linear-gradient(135deg, #00BFA5, #00897B)', color: 'white', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>
+                                        {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Defaults'}
+                                    </button>
+                                    <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>
+                                        These defaults apply to new deals. You can always override per-deal.
+                                    </p>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     <Header
                         currentPage={currentView}
                         dealName={deal?.property_name}
@@ -6503,6 +6596,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         hasStripe={hasStripe}
                         onAdminClick={() => setCurrentView(currentView === 'admin' ? 'list' : 'admin')}
                         onHomeClick={() => { setCurrentView('list'); setSelectedDealId(null); setDeal(null); }}
+                        onSettingsClick={() => setShowSettings(true)}
                     />
 
                     {showUpgradeBanner && currentView === 'list' && (!subscriptionTier || subscriptionTier === 'free') && (
@@ -6549,7 +6643,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
                     {currentView === 'dashboard' && deal && (
                         <ErrorBoundary onBack={handleBack}>
-                            <DashboardV2View deal={deal} onBack={handleBack} />
+                            <DashboardV2View deal={deal} onBack={handleBack} userPrefs={userPrefs} />
                         </ErrorBoundary>
                     )}
 

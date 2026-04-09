@@ -419,7 +419,7 @@ async def logout():
 
 @app.get("/engine/me")
 async def get_current_user(request: Request):
-    """Return current user info (for frontend header)."""
+    """Return current user info (for frontend header) including investment preferences."""
     email = getattr(request.state, "user_email", "unknown")
     result = {
         "email": email,
@@ -428,6 +428,7 @@ async def get_current_user(request: Request):
         "subscription_tier": None,
         "subscription_status": None,
         "has_stripe": False,
+        "preferences": {},
     }
     db = SessionLocal()
     try:
@@ -436,9 +437,54 @@ async def get_current_user(request: Request):
             result["subscription_tier"] = user.subscription_tier
             result["subscription_status"] = user.subscription_status
             result["has_stripe"] = bool(user.stripe_customer_id)
+            result["preferences"] = user.user_preferences or {}
     finally:
         db.close()
     return result
+
+
+@app.get("/engine/me/preferences")
+async def get_preferences(request: Request):
+    """Return user's investment preferences."""
+    email = getattr(request.state, "user_email", "unknown")
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        return user.user_preferences or {} if user else {}
+    finally:
+        db.close()
+
+
+ALLOWED_PREF_KEYS = {
+    "hurdleIRR", "hurdleEM", "hurdleCoC", "hurdleDSCR", "hurdleMaxCap",
+    "marketRenewalProb", "marketVacantMonths", "marketFreeRentMonths",
+    "marketTINewPSF", "marketTIRenewalPSF", "marketLCNewPct", "marketLCRenewalPct",
+}
+
+
+@app.put("/engine/me/preferences")
+async def update_preferences(request: Request):
+    """Update user's investment preferences (merge with existing)."""
+    email = getattr(request.state, "user_email", "unknown")
+    body = await request.json()
+
+    # Whitelist only allowed preference keys
+    filtered = {k: v for k, v in body.items() if k in ALLOWED_PREF_KEYS and isinstance(v, (int, float))}
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return JSONResponse({"detail": "User not found"}, status_code=404)
+        current = user.user_preferences or {}
+        current.update(filtered)
+        user.user_preferences = current
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(user, "user_preferences")
+        db.commit()
+        return current
+    finally:
+        db.close()
 
 
 @app.get("/engine", response_class=HTMLResponse)

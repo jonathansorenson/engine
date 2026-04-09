@@ -1,6 +1,6 @@
 """User model for authentication and subscriptions."""
 
-from sqlalchemy import Column, String, Boolean
+from sqlalchemy import Column, String, Boolean, JSON
 from app.models.base import BaseModel
 
 
@@ -20,3 +20,6 @@ class User(BaseModel):
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
     subscription_status = Column(String(50), nullable=True, default=None)  # active, canceled, past_due, trialing
+
+    # User-level investment preferences (hurdle metrics + MLA defaults)
+    user_preferences = Column(JSON, nullable=True)
