@@ -3103,6 +3103,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       if (assum.amortization_years) seeded.amort = assum.amortization_years;
       if (assum.exit_cap_rate) seeded.exitCap = assum.exit_cap_rate > 1 ? assum.exit_cap_rate : assum.exit_cap_rate * 100;
       if (assum.noi_growth) seeded.rentGrowth = assum.noi_growth > 1 ? assum.noi_growth : assum.noi_growth * 100;
+      if (assum.vacancy) seeded.vacancy = assum.vacancy > 1 ? assum.vacancy : assum.vacancy * 100;
 
       setP(seeded);
       setHlF(hl);

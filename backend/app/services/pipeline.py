@@ -1307,7 +1307,17 @@ def parse_offering_memorandum(
     validation_warnings = validate_financials(result["financials"])
     warnings.extend(validation_warnings)
 
-    # Smart defaults for assumptions
+    # Smart defaults for assumptions — use AI-extracted escalation if available
+    rent_escal = result["financials"].get("rent_escalation_pct")
+    if rent_escal and isinstance(rent_escal, (int, float)) and 0 < rent_escal <= 15:
+        result["assumptions"]["noi_growth"] = float(rent_escal)
+        print(f"[Pipeline] Using AI-extracted rent escalation: {rent_escal}%")
+
+    vacancy = result["financials"].get("vacancy_pct")
+    if vacancy and isinstance(vacancy, (int, float)) and 0 < vacancy <= 50:
+        result["assumptions"]["vacancy"] = float(vacancy)
+        print(f"[Pipeline] Using AI-extracted vacancy: {vacancy}%")
+
     cap_rate = result["financials"].get("cap_rate")
     if cap_rate:
         if cap_rate > 1:

@@ -192,6 +192,12 @@ CRITICAL INSTRUCTIONS:
 6. If you can find an expense ratio (OpEx/Revenue), use it to cross-check or derive total OPEX.
 7. Look carefully in ALL sections — financial summaries, property descriptions, investment highlights, appendices, and tables. OMs often bury operating data in different sections.
 
+RENT ESCALATION / GROWTH:
+8. Look for annual rent escalations, bumps, contractual increases, or rent growth rates mentioned anywhere in the OM — lease abstracts, investment highlights, rent roll notes, or pro forma assumptions.
+9. Common terms: "annual escalation", "rent bumps", "contractual increases", "annual increase", "step-ups", "CPI adjustment", "fixed escalation".
+10. Return rent_escalation_pct as a number (e.g. 3.0 for 3%). If multiple tenants have different escalations, return the weighted average or most common rate. If not found, return null.
+11. Also extract vacancy_pct (economic or physical vacancy rate) if mentioned. Return as a number (e.g. 5.0 for 5%).
+
 EXPENSE RATIO BENCHMARKS (flag if outside these ranges):
 - Multifamily: 35-55%
 - Office: 35-55%
@@ -225,6 +231,8 @@ Return ONLY valid JSON with this exact structure (use null for fields not found,
   "noi": null,
   "expense_ratio": null,
   "capex_reserves": null,
+  "rent_escalation_pct": null,
+  "vacancy_pct": null,
   "year_type": "actual|pro_forma|projected|budget",
   "year_label": "e.g. 2024 T12, Year 1 Pro Forma, 2023 Actual",
   "confidence": "high|medium|low",
