@@ -6430,6 +6430,87 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
             );
         };
 
+        // Settings Modal Component
+        const PREF_FIELDS = {
+            hurdles: [
+                { key: 'hurdleIRR', label: 'Min IRR', suffix: '%', min: 0, max: 50, step: 0.5, def: 9 },
+                { key: 'hurdleEM', label: 'Min Equity Multiple', suffix: 'x', min: 1, max: 5, step: 0.05, def: 1.5 },
+                { key: 'hurdleCoC', label: 'Min Cash-on-Cash', suffix: '%', min: 0, max: 25, step: 0.5, def: 6 },
+                { key: 'hurdleDSCR', label: 'Min DSCR', suffix: 'x', min: 0.5, max: 3, step: 0.05, def: 1.25 },
+                { key: 'hurdleMaxCap', label: 'Max Entry Cap Rate', suffix: '%', min: 3, max: 15, step: 0.25, def: 8 },
+            ],
+            mla: [
+                { key: 'marketRenewalProb', label: 'Renewal Probability', suffix: '%', min: 0, max: 100, step: 5, def: 75 },
+                { key: 'marketVacantMonths', label: 'Vacant Months', suffix: 'mo', min: 0, max: 24, step: 1, def: 6 },
+                { key: 'marketFreeRentMonths', label: 'Free Rent Months', suffix: 'mo', min: 0, max: 12, step: 1, def: 2 },
+                { key: 'marketTINewPSF', label: 'TI New Lease', suffix: '$/SF', min: 0, max: 80, step: 1, def: 15 },
+                { key: 'marketTIRenewalPSF', label: 'TI Renewal', suffix: '$/SF', min: 0, max: 50, step: 1, def: 10 },
+                { key: 'marketLCNewPct', label: 'LC New Lease', suffix: '%', min: 0, max: 10, step: 0.5, def: 6 },
+                { key: 'marketLCRenewalPct', label: 'LC Renewal', suffix: '%', min: 0, max: 10, step: 0.5, def: 4 },
+            ],
+        };
+
+        const SettingsModal = ({ userPrefs, setUserPrefs, onClose }) => {
+            const [localPrefs, setLocalPrefs] = useState({ ...userPrefs });
+            const [saving, setSaving] = useState(false);
+            const [saved, setSaved] = useState(false);
+            const savePrefs = async () => {
+                setSaving(true);
+                try {
+                    const res = await fetch(`${API_URL}/me/preferences`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(localPrefs), credentials: 'include',
+                    });
+                    if (res.ok) {
+                        const updated = await res.json();
+                        setUserPrefs(updated);
+                        setSaved(true);
+                        setTimeout(() => setSaved(false), 2000);
+                    }
+                } catch (e) { console.error('Failed to save preferences', e); }
+                setSaving(false);
+            };
+            const renderField = (f) => (
+                <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                    <label style={{ flex: '0 0 160px', fontSize: '13px', color: '#B0BEC5' }}>{f.label}</label>
+                    <input type="range" min={f.min} max={f.max} step={f.step}
+                        value={localPrefs[f.key] ?? f.def}
+                        onChange={(e) => setLocalPrefs(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) }))}
+                        style={{ flex: 1, accentColor: '#00BFA5' }}
+                    />
+                    <span style={{ flex: '0 0 60px', textAlign: 'right', fontSize: '13px', fontWeight: 600, color: '#E8EDF2' }}>
+                        {(localPrefs[f.key] ?? f.def).toFixed(f.step < 1 ? 2 : 0)}{f.suffix}
+                    </span>
+                </div>
+            );
+            return (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                    onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+                    <div style={{ background: '#132337', border: '1px solid #1E3347', borderRadius: '16px', padding: '32px', width: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#E8EDF2', margin: 0 }}>Investment Profile</h2>
+                            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' }}>x</button>
+                        </div>
+                        <div style={{ marginBottom: '24px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#00BFA5', marginBottom: '14px' }}>Investment Hurdles (GO / NO-GO)</h3>
+                            {PREF_FIELDS.hurdles.map(renderField)}
+                        </div>
+                        <div style={{ marginBottom: '24px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#4A8FD4', marginBottom: '14px' }}>Market Leasing Assumptions</h3>
+                            {PREF_FIELDS.mla.map(renderField)}
+                        </div>
+                        <button onClick={savePrefs} disabled={saving}
+                            style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: saved ? '#22c55e' : 'linear-gradient(135deg, #00BFA5, #00897B)', color: 'white', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>
+                            {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Defaults'}
+                        </button>
+                        <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>
+                            These defaults apply to new deals. You can always override per-deal.
+                        </p>
+                    </div>
+                </div>
+            );
+        };
+
         // Main App
         function App() {
             const [currentView, setCurrentView] = useState('list');
@@ -6508,84 +6589,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
                         </div>
                     )}
                     {/* Settings Modal */}
-                    {showSettings && (() => {
-                        const PREF_FIELDS = {
-                            hurdles: [
-                                { key: 'hurdleIRR', label: 'Min IRR', suffix: '%', min: 0, max: 50, step: 0.5, def: 9 },
-                                { key: 'hurdleEM', label: 'Min Equity Multiple', suffix: 'x', min: 1, max: 5, step: 0.05, def: 1.5 },
-                                { key: 'hurdleCoC', label: 'Min Cash-on-Cash', suffix: '%', min: 0, max: 25, step: 0.5, def: 6 },
-                                { key: 'hurdleDSCR', label: 'Min DSCR', suffix: 'x', min: 0.5, max: 3, step: 0.05, def: 1.25 },
-                                { key: 'hurdleMaxCap', label: 'Max Entry Cap Rate', suffix: '%', min: 3, max: 15, step: 0.25, def: 8 },
-                            ],
-                            mla: [
-                                { key: 'marketRenewalProb', label: 'Renewal Probability', suffix: '%', min: 0, max: 100, step: 5, def: 75 },
-                                { key: 'marketVacantMonths', label: 'Vacant Months', suffix: 'mo', min: 0, max: 24, step: 1, def: 6 },
-                                { key: 'marketFreeRentMonths', label: 'Free Rent Months', suffix: 'mo', min: 0, max: 12, step: 1, def: 2 },
-                                { key: 'marketTINewPSF', label: 'TI New Lease', suffix: '$/SF', min: 0, max: 80, step: 1, def: 15 },
-                                { key: 'marketTIRenewalPSF', label: 'TI Renewal', suffix: '$/SF', min: 0, max: 50, step: 1, def: 10 },
-                                { key: 'marketLCNewPct', label: 'LC New Lease', suffix: '%', min: 0, max: 10, step: 0.5, def: 6 },
-                                { key: 'marketLCRenewalPct', label: 'LC Renewal', suffix: '%', min: 0, max: 10, step: 0.5, def: 4 },
-                            ],
-                        };
-                        const [localPrefs, setLocalPrefs] = useState({ ...userPrefs });
-                        const [saving, setSaving] = useState(false);
-                        const [saved, setSaved] = useState(false);
-                        const savePrefs = async () => {
-                            setSaving(true);
-                            try {
-                                const res = await fetch(`${API_URL}/me/preferences`, {
-                                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(localPrefs), credentials: 'include',
-                                });
-                                if (res.ok) {
-                                    const updated = await res.json();
-                                    setUserPrefs(updated);
-                                    setSaved(true);
-                                    setTimeout(() => setSaved(false), 2000);
-                                }
-                            } catch (e) { console.error('Failed to save preferences', e); }
-                            setSaving(false);
-                        };
-                        const renderField = (f) => (
-                            <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                                <label style={{ flex: '0 0 160px', fontSize: '13px', color: '#B0BEC5' }}>{f.label}</label>
-                                <input type="range" min={f.min} max={f.max} step={f.step}
-                                    value={localPrefs[f.key] ?? f.def}
-                                    onChange={(e) => setLocalPrefs(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) }))}
-                                    style={{ flex: 1, accentColor: '#00BFA5' }}
-                                />
-                                <span style={{ flex: '0 0 60px', textAlign: 'right', fontSize: '13px', fontWeight: 600, color: '#E8EDF2' }}>
-                                    {(localPrefs[f.key] ?? f.def).toFixed(f.step < 1 ? 2 : 0)}{f.suffix}
-                                </span>
-                            </div>
-                        );
-                        return (
-                            <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-                                onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-                                <div style={{ background: '#132337', border: '1px solid #1E3347', borderRadius: '16px', padding: '32px', width: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                                        <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#E8EDF2', margin: 0 }}>Investment Profile</h2>
-                                        <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' }}>x</button>
-                                    </div>
-                                    <div style={{ marginBottom: '24px' }}>
-                                        <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#00BFA5', marginBottom: '14px' }}>Investment Hurdles (GO / NO-GO)</h3>
-                                        {PREF_FIELDS.hurdles.map(renderField)}
-                                    </div>
-                                    <div style={{ marginBottom: '24px' }}>
-                                        <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#4A8FD4', marginBottom: '14px' }}>Market Leasing Assumptions</h3>
-                                        {PREF_FIELDS.mla.map(renderField)}
-                                    </div>
-                                    <button onClick={savePrefs} disabled={saving}
-                                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: saved ? '#22c55e' : 'linear-gradient(135deg, #00BFA5, #00897B)', color: 'white', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>
-                                        {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Defaults'}
-                                    </button>
-                                    <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>
-                                        These defaults apply to new deals. You can always override per-deal.
-                                    </p>
-                                </div>
-                            </div>
-                        );
-                    })()}
+                    {showSettings && <SettingsModal userPrefs={userPrefs} setUserPrefs={setUserPrefs} onClose={() => setShowSettings(false)} />}
 
                     <Header
                         currentPage={currentView}
