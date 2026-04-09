@@ -29,7 +29,7 @@ FRONTEND_DIR = _docker_frontend if _docker_frontend.exists() else _local_fronten
 
 # Cookie config
 COOKIE_NAME = "crelytic_session"
-COOKIE_MAX_AGE = 86400  # 24 hours (was 7 days)
+COOKIE_MAX_AGE = 86400 * 7  # 7 days, renewed on each authenticated request (sliding session)
 
 # Rate limiting for login — track failed attempts per IP
 _login_attempts = {}  # ip -> [timestamp, timestamp, ...]
@@ -115,7 +115,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if "/api/v1/admin" in path and user_data.get("role") != "admin":
             return JSONResponse({"detail": "Admin access required"}, status_code=403)
 
-        return await call_next(request)
+        response = await call_next(request)
+
+        # Sliding session: refresh cookie expiry on each authenticated request
+        session_val = request.cookies.get(COOKIE_NAME, "")
+        if session_val:
+            response.set_cookie(
+                key=COOKIE_NAME, value=session_val, max_age=COOKIE_MAX_AGE,
+                httponly=True, samesite="lax", secure=settings.env == "production",
+            )
+
+        return response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

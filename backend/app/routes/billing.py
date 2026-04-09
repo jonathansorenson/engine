@@ -65,8 +65,9 @@ TOTAL_LIMITS = {
 
 def _get_billing_cycle_start(user: User) -> datetime:
     """Get the start of the user's current billing month.
-    Uses the user's created_at day-of-month as the anchor."""
-    now = datetime.now(timezone.utc)
+    Uses the user's created_at day-of-month as the anchor.
+    Returns naive UTC datetime to match Deal.created_at format."""
+    now = datetime.utcnow()  # naive UTC — must match Deal.created_at which uses datetime.utcnow
     anchor_day = min(user.created_at.day, 28)  # Cap at 28 to avoid month-length issues
 
     # Start of current billing cycle

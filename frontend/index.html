@@ -1125,16 +1125,21 @@
         const DealListView = ({ onSelectDeal, onUpload, onUpgrade }) => {
             const [deals, setDeals] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [dealCount, setDealCount] = useState({ monthly_used: 0, monthly_limit: 10, total_count: 0, total_limit: 50, can_upload: true, resets_at: null });
+            const [dealCount, setDealCount] = useState(null);
+
+            const fetchCount = async () => {
+                try {
+                    const r = await fetch(`${API_URL}/api/v1/deals/count`, { credentials: 'include' });
+                    if (r.status === 401) { window.location.href = '/engine/login'; return; }
+                    if (r.ok) { const data = await r.json(); setDealCount(data); return data; }
+                } catch (e) { console.error('[Count] fetch failed', e); }
+                return null;
+            };
 
             useEffect(() => {
                 const load = async () => {
-                    const [data, countRes] = await Promise.all([
-                        fetchDeals(),
-                        fetch(`${API_URL}/api/v1/deals/count`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
-                    ]);
+                    const [data] = await Promise.all([fetchDeals(), fetchCount()]);
                     setDeals(data || []);
-                    if (countRes) setDealCount(countRes);
                     setLoading(false);
                 };
                 load();
@@ -1161,12 +1166,14 @@
                 </div>;
             }
 
+            const dc = dealCount || { monthly_used: '—', monthly_limit: '—', total_count: 0, total_limit: '—', can_upload: true, resets_at: null };
+
             return (
                 <div className="container">
                     <div style={{ marginBottom: '2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                             <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Underwriting Pipeline</h1>
-                            {dealCount.can_upload ? (
+                            {dc.can_upload ? (
                                 <button className="btn btn-primary" onClick={onUpload}>
                                     ➕ Upload New Deal
                                 </button>
@@ -1177,14 +1184,14 @@
                                 </button>
                             )}
                         </div>
-                        {dealCount.monthly_limit < 999 && (() => {
-                            const mPct = dealCount.monthly_limit > 0 ? Math.min(100, (dealCount.monthly_used / dealCount.monthly_limit) * 100) : 0;
-                            const tPct = dealCount.total_limit > 0 ? Math.min(100, (dealCount.total_count / dealCount.total_limit) * 100) : 0;
+                        {dc.monthly_limit < 999 && (() => {
+                            const mPct = dc.monthly_limit > 0 ? Math.min(100, (dc.monthly_used / dc.monthly_limit) * 100) : 0;
+                            const tPct = dc.total_limit > 0 ? Math.min(100, (dc.total_count / dc.total_limit) * 100) : 0;
                             const mColor = mPct >= 100 ? '#ef4444' : mPct >= 80 ? '#f59e0b' : mPct >= 50 ? '#3b82f6' : '#22c55e';
                             const tColor = tPct >= 100 ? '#ef4444' : tPct >= 80 ? '#f59e0b' : tPct >= 50 ? '#3b82f6' : '#22c55e';
-                            const atLimit = !dealCount.can_upload;
-                            const isStarter = dealCount.monthly_limit <= 5;
-                            const isPro = dealCount.monthly_limit > 5 && dealCount.monthly_limit <= 25;
+                            const atLimit = !dc.can_upload;
+                            const isStarter = dc.monthly_limit <= 5;
+                            const isPro = dc.monthly_limit > 5 && dc.monthly_limit <= 25;
                             const showUpgradeCard = onUpgrade && (isStarter || isPro || atLimit || mPct >= 50);
                             return (
                                 <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
@@ -1194,21 +1201,21 @@
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Monthly Uploads</span>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: mColor }}>{dealCount.monthly_used} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.monthly_limit}</span></span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: mColor }}>{dc.monthly_used} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dc.monthly_limit}</span></span>
                                                 </div>
                                                 <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                                                     <div style={{ width: `${mPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${mColor}88, ${mColor})`, transition: 'width 0.5s ease' }} />
                                                 </div>
-                                                {dealCount.resets_at && (
+                                                {dc.resets_at && (
                                                     <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '4px', display: 'block' }}>
-                                                        Resets {new Date(dealCount.resets_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                        Resets {new Date(dc.resets_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                     </span>
                                                 )}
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deals Stored</span>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: tColor }}>{dealCount.total_count} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.total_limit}</span></span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: tColor }}>{dc.total_count} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dc.total_limit}</span></span>
                                                 </div>
                                                 <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                                                     <div style={{ width: `${tPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${tColor}88, ${tColor})`, transition: 'width 0.5s ease' }} />
@@ -1298,7 +1305,7 @@
                                 <div className="empty-state-icon">📋</div>
                                 <div className="empty-state-title">No deals yet</div>
                                 <p>Upload your first deal to get started</p>
-                                {dealCount.monthly_limit < 999 && onUpgrade && (
+                                {dc.monthly_limit < 999 && onUpgrade && (
                                     <p style={{ marginTop: '12px', fontSize: '0.75rem', color: '#f472b6', opacity: 0.8 }}>
                                         💡 <a href="#" onClick={(e) => { e.preventDefault(); onUpgrade('unlimited'); }}
                                             style={{ color: '#f472b6', textDecoration: 'underline' }}>
