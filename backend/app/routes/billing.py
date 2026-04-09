@@ -338,9 +338,13 @@ async def signup_submit(request: Request):
             error="Passwords do not match.", name=name, company=company, email=email, tier=tier
         ), status_code=400)
 
-    if len(password) < 8:
+    if len(password) < 10:
         return HTMLResponse(content=_render_signup(
-            error="Password must be at least 8 characters.", name=name, company=company, email=email, tier=tier
+            error="Password must be at least 10 characters.", name=name, company=company, email=email, tier=tier
+        ), status_code=400)
+    if not any(c.isupper() for c in password) or not any(c.isdigit() for c in password):
+        return HTMLResponse(content=_render_signup(
+            error="Password must contain at least one uppercase letter and one number.", name=name, company=company, email=email, tier=tier
         ), status_code=400)
 
     if tier not in ("starter", "pro", "unlimited"):

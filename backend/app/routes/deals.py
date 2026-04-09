@@ -1,5 +1,7 @@
 import os
+import re
 import uuid
+import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -18,6 +20,27 @@ from app.services.argus_parser import is_argus_file, parse_argus_file
 from app.config import settings
 from app.models.user import User
 from app.routes.billing import get_monthly_limit, get_total_limit, get_monthly_used, _get_billing_cycle_reset
+
+logger = logging.getLogger(__name__)
+
+# ── Security helpers ──
+PDF_MAGIC = b"%PDF"
+EXCEL_MAGIC = b"PK"  # ZIP-based formats (xlsx, xlsm)
+MAX_UPLOAD_BYTES = settings.max_upload_size_mb * 1024 * 1024
+
+
+def _sanitize_filename(filename: str) -> str:
+    """Strip path traversal and special characters from upload filename."""
+    name = os.path.basename(filename)  # strip directory components
+    return re.sub(r'[^a-zA-Z0-9._-]', '_', name)
+
+
+def _validate_file_type(file_bytes: bytes, expected: str):
+    """Validate file content matches expected type by magic bytes."""
+    if expected == "pdf" and not file_bytes[:4].startswith(PDF_MAGIC):
+        raise HTTPException(status_code=400, detail="Invalid PDF file. File content does not match PDF format.")
+    if expected == "excel" and not file_bytes[:2].startswith(EXCEL_MAGIC):
+        raise HTTPException(status_code=400, detail="Invalid Excel file. File content does not match Excel format.")
 
 router = APIRouter(prefix="/api/v1/deals", tags=["deals"])
 
@@ -120,18 +143,26 @@ async def upload_and_parse_deal(
     try:
         # Save PDF file
         if pdf_file:
-            pdf_filename = f"{deal.id}_{pdf_file.filename}"
+            pdf_bytes = await pdf_file.read()
+            if len(pdf_bytes) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail=f"File too large. Max {settings.max_upload_size_mb}MB.")
+            _validate_file_type(pdf_bytes, "pdf")
+            pdf_filename = f"{deal.id}_{_sanitize_filename(pdf_file.filename)}"
             pdf_path = os.path.join(upload_dir, pdf_filename)
             with open(pdf_path, "wb") as f:
-                f.write(await pdf_file.read())
+                f.write(pdf_bytes)
             deal.original_filename = pdf_file.filename
 
         # Save Excel file
         if excel_file:
-            excel_filename = f"{deal.id}_{excel_file.filename}"
+            excel_bytes = await excel_file.read()
+            if len(excel_bytes) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail=f"File too large. Max {settings.max_upload_size_mb}MB.")
+            _validate_file_type(excel_bytes, "excel")
+            excel_filename = f"{deal.id}_{_sanitize_filename(excel_file.filename)}"
             excel_path = os.path.join(upload_dir, excel_filename)
             with open(excel_path, "wb") as f:
-                f.write(await excel_file.read())
+                f.write(excel_bytes)
             if not deal.original_filename:
                 deal.original_filename = excel_file.filename
 
@@ -174,7 +205,8 @@ async def upload_and_parse_deal(
         if excel_path and os.path.exists(excel_path):
             os.remove(excel_path)
 
-        raise HTTPException(status_code=500, detail=f"Error parsing documents: {str(e)}")
+        logger.exception("Error parsing documents")
+        raise HTTPException(status_code=500, detail="Error parsing documents. Please try again.")
 
 
 @router.get("", response_model=List[DealListItem])
@@ -308,7 +340,8 @@ async def extract_om_from_file(
         result = extract_om_fields(content, media_type)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OM extraction failed: {str(e)}")
+        logger.exception("OM extraction failed")
+        raise HTTPException(status_code=500, detail="OM extraction failed. Please try again.")
 
 
 @router.post("/extract-debt")
@@ -324,6 +357,8 @@ async def extract_debt_from_file(
         raise HTTPException(status_code=500, detail="Anthropic API key not configured")
 
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"File too large. Max {settings.max_upload_size_mb}MB.")
     media_type = file.content_type or "application/pdf"
 
     from app.services.claude_ai import extract_debt_terms
@@ -331,7 +366,8 @@ async def extract_debt_from_file(
         result = extract_debt_terms(content, media_type)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Debt term extraction failed: {str(e)}")
+        logger.exception("Debt term extraction failed")
+        raise HTTPException(status_code=500, detail="Debt term extraction failed. Please try again.")
 
 
 @router.post("/{deal_id}/rent-roll", response_model=DealResponse)
@@ -360,10 +396,14 @@ async def attach_rent_roll(
     excel_path = None
 
     try:
-        excel_filename = f"{deal.id}_rentroll_{excel_file.filename}"
+        excel_bytes = await excel_file.read()
+        if len(excel_bytes) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"File too large. Max {settings.max_upload_size_mb}MB.")
+        _validate_file_type(excel_bytes, "excel")
+        excel_filename = f"{deal.id}_rentroll_{_sanitize_filename(excel_file.filename)}"
         excel_path = os.path.join(upload_dir, excel_filename)
         with open(excel_path, "wb") as f:
-            f.write(await excel_file.read())
+            f.write(excel_bytes)
 
         from app.services.pipeline import extract_excel_rent_roll
         rent_roll = extract_excel_rent_roll(excel_path)
@@ -402,7 +442,8 @@ async def attach_rent_roll(
     except Exception as e:
         if excel_path and os.path.exists(excel_path):
             os.remove(excel_path)
-        raise HTTPException(status_code=500, detail=f"Error processing rent roll: {str(e)}")
+        logger.exception("Error processing rent roll")
+        raise HTTPException(status_code=500, detail="Error processing rent roll. Please try again.")
 
 
 @router.post("/parse-rent-roll")
@@ -419,7 +460,7 @@ async def parse_rent_roll_v2(
 
     try:
         import uuid as _uuid
-        excel_filename = f"rr_parse_{_uuid.uuid4().hex[:8]}_{excel_file.filename}"
+        excel_filename = f"rr_parse_{_uuid.uuid4().hex[:8]}_{_sanitize_filename(excel_file.filename)}"
         excel_path = os.path.join(upload_dir, excel_filename)
         with open(excel_path, "wb") as f:
             f.write(await excel_file.read())
@@ -465,7 +506,8 @@ async def parse_rent_roll_v2(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parsing rent roll: {str(e)}")
+        logger.exception("Error parsing rent roll")
+        raise HTTPException(status_code=500, detail="Error parsing rent roll. Please try again.")
     finally:
         if excel_path and os.path.exists(excel_path):
             try:
@@ -507,13 +549,14 @@ async def parse_t12_statement(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing T12: {str(e)}")
+        logger.exception("Error processing T12")
+        raise HTTPException(status_code=500, detail="Error processing T12. Please try again.")
     finally:
         if excel_path and os.path.exists(excel_path):
             try:
                 os.remove(excel_path)
-            except:
-                pass
+            except OSError as cleanup_err:
+                logger.warning(f"Failed to cleanup temp file {excel_path}: {cleanup_err}")
 
 
 @router.put("/{deal_id}/assumptions", response_model=DealResponse)

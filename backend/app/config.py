@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     jwt_expiry_minutes: int = 60
     jwt_algorithm: str = "HS256"
 
-    # CORS
-    cors_origins: str = "*"
+    # CORS — set CORS_ORIGINS in .env for production (e.g. "https://crelytic.ai,https://engine.crelytic.ai")
+    cors_origins: str = "http://localhost:3000,http://localhost:8080"
 
     # API
     api_version: str = "v1"
@@ -34,8 +34,8 @@ class Settings(BaseSettings):
 
     # Auth
     secret_key: str = "change-me-to-a-random-32-char-string-in-production"
-    admin_email: str = "jonathan_sorenson@losttree.com"
-    admin_password: str = "crelytic2026"
+    admin_email: str = ""
+    admin_password: str = ""
 
     # Stripe
     stripe_secret_key: str = ""

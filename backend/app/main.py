@@ -4,6 +4,7 @@ import hashlib
 import json
 import time
 import base64
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.database import init_db, SessionLocal
 from app.models.user import User
 from app.routes import deals_router, chat_router, admin_router, export_router, billing_router
@@ -26,7 +29,13 @@ FRONTEND_DIR = _docker_frontend if _docker_frontend.exists() else _local_fronten
 
 # Cookie config
 COOKIE_NAME = "crelytic_session"
-COOKIE_MAX_AGE = 86400 * 7  # 7 days
+COOKIE_MAX_AGE = 86400  # 24 hours (was 7 days)
+
+# Rate limiting for login — track failed attempts per IP
+_login_attempts = {}  # ip -> [timestamp, timestamp, ...]
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+LOCKOUT_SECONDS = 900  # 15 minute lockout after max attempts
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -36,7 +45,7 @@ COOKIE_MAX_AGE = 86400 * 7  # 7 days
 def _sign(value: str) -> str:
     """Create HMAC signature for a base64-encoded value."""
     b64 = base64.urlsafe_b64encode(value.encode()).decode()
-    sig = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()[:16]
+    sig = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()
     return f"{b64}.{sig}"
 
 
@@ -45,7 +54,7 @@ def _verify(signed: str):
     if not signed or "." not in signed:
         return None
     b64, sig = signed.rsplit(".", 1)
-    expected = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()[:16]
+    expected = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()
     if hmac.compare_digest(sig, expected):
         try:
             return base64.urlsafe_b64decode(b64.encode()).decode()
@@ -73,7 +82,9 @@ def _get_user_from_cookie(cookie_value: str):
 class AuthMiddleware(BaseHTTPMiddleware):
     """User authentication for /engine/* routes. Admin check for /engine/api/v1/admin/*."""
 
-    PUBLIC_PATHS = {"/health", "/engine/login", "/engine/signup", "/engine/api/v1/billing/webhook", "/", "/docs", "/openapi.json", "/redoc"}
+    _BASE_PUBLIC = {"/health", "/engine/login", "/engine/signup", "/engine/api/v1/billing/webhook", "/"}
+    _DEV_PATHS = {"/docs", "/openapi.json", "/redoc"}
+    PUBLIC_PATHS = _BASE_PUBLIC | _DEV_PATHS if settings.env != "production" else _BASE_PUBLIC
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
@@ -105,6 +116,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse({"detail": "Admin access required"}, status_code=403)
 
         return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if settings.env == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -217,18 +242,20 @@ LOGIN_HTML = """<!DOCTYPE html>
 # ═══════════════════════════════════════════════════════════════
 
 def seed_admin_user():
-    """Create or update the admin user from env vars."""
+    """Create or update the admin user from env vars. Requires ADMIN_EMAIL and ADMIN_PASSWORD."""
+    if not settings.admin_email or not settings.admin_password:
+        print("[Security] ADMIN_EMAIL and ADMIN_PASSWORD not set — skipping admin seed")
+        return
     db = SessionLocal()
     try:
         admin_email = settings.admin_email.lower().strip()
         existing = db.query(User).filter(User.email == admin_email).first()
         if existing:
-            # Always sync password from env var so changes take effect on redeploy
             existing.hashed_password = hash_password(settings.admin_password)
             existing.role = "admin"
             existing.is_active = True
             db.commit()
-            print(f"Updated admin user: {admin_email}")
+            print(f"[Startup] Admin user synced")
         else:
             admin = User(
                 email=admin_email,
@@ -239,9 +266,9 @@ def seed_admin_user():
             )
             db.add(admin)
             db.commit()
-            print(f"Created admin user: {admin_email}")
+            print(f"[Startup] Admin user created")
     except Exception as e:
-        print(f"Error seeding admin user: {e}")
+        print(f"[Startup] Admin seed error: {e}")
         db.rollback()
     finally:
         db.close()
@@ -257,12 +284,9 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_admin_user()
     os.makedirs(settings.upload_dir, exist_ok=True)
-    print(f"Application started. Upload directory: {settings.upload_dir}")
-    print(f"Anthropic API key: {'SET (' + settings.anthropic_api_key[:10] + '...)' if settings.anthropic_api_key else 'NOT SET'}")
-    print(f"Anthropic model: {settings.anthropic_model}")
-    print(f"Anthropic extraction model: {settings.anthropic_extraction_model}")
-    print(f"Engine at: http://localhost:8000/engine")
-    print(f"Login at:  http://localhost:8000/engine/login")
+    logger.info(f"Application started. ENV={settings.env}")
+    logger.info(f"Anthropic API key: {'SET' if settings.anthropic_api_key else 'NOT SET'}")
+    logger.info(f"Engine at: http://localhost:8000/engine")
     yield
     print("Application shutting down")
 
@@ -274,17 +298,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Auth middleware (must be added BEFORE CORS)
 app.add_middleware(AuthMiddleware)
 
 # CORS middleware
-cors_origins = [origin.strip() for origin in settings.cors_origins.split(",")]
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # Register API routers under /engine prefix
@@ -327,6 +354,18 @@ async def login_page(request: Request):
 @app.post("/engine/login")
 async def login_submit(request: Request):
     """Validate email+password and set session cookie."""
+    # Rate limiting by IP
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    attempts = _login_attempts.get(client_ip, [])
+    # Clean old attempts outside window
+    attempts = [t for t in attempts if now - t < LOGIN_WINDOW_SECONDS]
+    if len(attempts) >= LOGIN_MAX_ATTEMPTS:
+        oldest = min(attempts) if attempts else now
+        wait = int(LOCKOUT_SECONDS - (now - oldest))
+        html = LOGIN_HTML.replace("{error_class}", "show").replace("{error_msg}", f"Too many attempts. Try again in {max(1, wait // 60)} minutes.")
+        return HTMLResponse(content=html, status_code=429)
+
     form = await request.form()
     email = (form.get("email", "") or "").lower().strip()
     password = form.get("password", "")
@@ -336,6 +375,8 @@ async def login_submit(request: Request):
     try:
         user = db.query(User).filter(User.email == email, User.is_active == True).first()
         if user and verify_password(password, user.hashed_password):
+            # Clear failed attempts on successful login
+            _login_attempts.pop(client_ip, None)
             # Create signed session cookie with user data
             payload = json.dumps({
                 "user_id": user.id,
@@ -357,6 +398,11 @@ async def login_submit(request: Request):
             return response
     finally:
         db.close()
+
+    # Track failed attempt
+    attempts.append(now)
+    _login_attempts[client_ip] = attempts
+    remaining = LOGIN_MAX_ATTEMPTS - len(attempts)
 
     # Wrong credentials — re-render login with error
     html = LOGIN_HTML.replace("{error_class}", "show").replace("{error_msg}", "Invalid email or password.")
