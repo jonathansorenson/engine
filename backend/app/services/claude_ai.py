@@ -195,7 +195,7 @@ CRITICAL INSTRUCTIONS:
 RENT ESCALATION / GROWTH:
 8. Look for annual rent escalations, bumps, contractual increases, or rent growth rates mentioned anywhere in the OM — lease abstracts, investment highlights, rent roll notes, or pro forma assumptions.
 9. Common terms: "annual escalation", "rent bumps", "contractual increases", "annual increase", "step-ups", "CPI adjustment", "fixed escalation".
-10. Return rent_escalation_pct as a number (e.g. 3.0 for 3%). If multiple tenants have different escalations, return the weighted average or most common rate. If not found, return null.
+10. Return rent_escalation_pct as a precise number preserving ALL decimals (e.g. 3.75 for 3.75%, 2.5 for 2.5%, NOT rounded to the nearest integer). If multiple tenants have different escalations, return the weighted average or most common rate. If not found, return null.
 11. Also extract vacancy_pct (economic or physical vacancy rate) if mentioned. Return as a number (e.g. 5.0 for 5%).
 
 EXPENSE RATIO BENCHMARKS (flag if outside these ranges):

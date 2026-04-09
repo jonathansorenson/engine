@@ -3118,7 +3118,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           rentPSF: r.rent_psf || (r.annual_rent && r.sf ? r.annual_rent / r.sf : 0),
           camPSF: r.cam_psf || (r.cam_annual && r.sf ? r.cam_annual / r.sf : 0),
           type: 'NNN',
-          escalPct: 3,
+          escalPct: r.escalation_pct || r.annual_escalation || (assum.noi_growth > 0 ? assum.noi_growth : 3),
           start: r.lease_start || r.start || '',
           end: r.lease_end || r.expiry || r.end || '',
           tiPSF: 0,
@@ -3310,19 +3310,22 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       const axTick = { color: '#B0BEC5', font: { size: 12, family: "'DM Sans', system-ui, sans-serif" } };
       const gridStyle = { color: 'rgba(30, 51, 71, 0.6)' };
       const titleFont = { color: '#E8EDF2', font: { size: 15, weight: '600', family: "'DM Sans', system-ui, sans-serif" }, display: true, padding: { bottom: 12 } };
-      // 1) NOI vs Debt Service vs Net CF (bar)
+      // 1) NOI Trend + DSCR Safety (dual axis)
       mkChart(cfChartRef, 'cf', {
-        type: 'bar',
+        type: 'line',
         data: {
           labels,
           datasets: [
-            { label: 'NOI ($M)', data: hold.map(y => y.noi / 1e6), backgroundColor: '#00BFA5', borderRadius: 3 },
-            { label: 'Debt Service ($M)', data: hold.map(y => -y.annDS / 1e6), backgroundColor: '#F87171', borderRadius: 3 },
-            { label: 'Net CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: '#34D399', borderRadius: 3 },
+            { label: 'NOI ($)', data: hold.map(y => y.noi), borderColor: '#00BFA5', backgroundColor: 'rgba(0,191,165,0.15)', fill: true, tension: 0.3, pointRadius: 4, yAxisID: 'y' },
+            { label: 'DSCR', data: hold.map(y => y.annDS > 0 ? y.noi / y.annDS : 0), borderColor: '#F59E0B', borderWidth: 2.5, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5, pointBackgroundColor: '#F59E0B', borderDash: [5, 3], yAxisID: 'y1' },
           ],
         },
-        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'NOI vs Debt Service vs Net Cash Flow' } },
-          scales: { y: { beginAtZero: true, grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
+        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'NOI Trend + DSCR Safety' } },
+          scales: {
+            y: { position: 'left', grid: gridStyle, ticks: { ...axTick, callback: v => '$' + (v / 1e6).toFixed(2) + 'M' }, title: { display: true, text: 'NOI', color: '#90A4AE', font: { size: 12 } } },
+            y1: { position: 'right', grid: { display: false }, ticks: { ...axTick, callback: v => v.toFixed(2) + 'x' }, title: { display: true, text: 'DSCR', color: '#90A4AE', font: { size: 12 } }, suggestedMin: 0.8, suggestedMax: 2.5 },
+            x: { grid: { display: false }, ticks: axTick }
+          } },
       });
       // 2) Loan Balance Paydown (line)
       mkChart(loanChartRef, 'loan', {
@@ -3338,19 +3341,20 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Loan Balance Paydown' } },
           scales: { y: { beginAtZero: true, grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
       });
-      // 3) Equity Build / Cumulative CF (line + bar)
+      // 3) Cumulative Cash Flow + Equity Payback
+      const cumCF = hold.reduce((acc, y) => { acc.push((acc.length ? acc[acc.length - 1] : 0) + y.levCF); return acc; }, []);
+      const equityInvested = calc.equity || 0;
       mkChart(eqChartRef, 'eq', {
-        type: 'bar',
+        type: 'line',
         data: {
           labels,
           datasets: [
-            { label: 'Annual CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: 'rgba(52,211,153,0.6)', borderRadius: 3, order: 2 },
-            { label: 'Cumulative ($M)', data: hold.reduce((acc, y) => { const prev = acc.length ? acc[acc.length - 1] : 0; acc.push(prev + y.levCF / 1e6); return acc; }, []),
-              type: 'line', borderColor: '#A78BFA', borderWidth: 2.5, backgroundColor: 'transparent', tension: 0.3, order: 1, pointRadius: 4, pointHoverRadius: 6 },
+            { label: 'Cumulative CF ($)', data: cumCF, borderColor: '#34D399', borderWidth: 2.5, backgroundColor: 'rgba(52,211,153,0.15)', fill: true, tension: 0.3, pointRadius: 5, pointBackgroundColor: '#34D399' },
+            { label: 'Equity Invested', data: labels.map(() => equityInvested), borderColor: '#F87171', borderWidth: 2, borderDash: [8, 4], backgroundColor: 'transparent', pointRadius: 0 },
           ],
         },
-        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Equity Build & Cumulative Cash Flow' } },
-          scales: { y: { grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
+        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Cumulative Cash Flow vs Equity Payback' } },
+          scales: { y: { grid: gridStyle, ticks: { ...axTick, callback: v => '$' + (v / 1e6).toFixed(2) + 'M' }, suggestedMin: 0 }, x: { grid: { display: false }, ticks: axTick } } },
       });
       // 4) Returns Snapshot (horizontal bar)
       mkChart(hurChartRef, 'hur', {
@@ -5230,13 +5234,13 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         {/* CHARTS TAB */}
         {tab === 'charts' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-            <V2Sect title="NOI vs Debt Service vs Net CF">
+            <V2Sect title="NOI Trend + DSCR Safety">
               <canvas ref={cfChartRef} height="220" />
             </V2Sect>
             <V2Sect title="Loan Balance Paydown">
               <canvas ref={loanChartRef} height="220" />
             </V2Sect>
-            <V2Sect title="Cash Flow Build-Up">
+            <V2Sect title="Cumulative CF vs Equity Payback">
               <canvas ref={eqChartRef} height="220" />
             </V2Sect>
             <V2Sect title="Returns Snapshot">
