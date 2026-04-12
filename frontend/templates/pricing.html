@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing | CRELYTIC Engine — CRE Underwriting from $6.99/mo{% endblock %}
+
+{% block meta %}
+<meta name="description" content="CRELYTIC Engine pricing: Starter $6.99/mo, Pro $11.99/mo, Unlimited $20/mo. Full DCF, waterfall, sensitivity, and investment memos on every plan.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://engine.crelytic.ai/engine/pricing">
+<meta property="og:title" content="Pricing | CRELYTIC Engine — CRE Underwriting from $6.99/mo">
+<meta property="og:description" content="Starter $6.99/mo, Pro $11.99/mo, Unlimited $20/mo. Full DCF, waterfall, sensitivity, and investment memos on every plan.">
+<meta property="og:url" content="https://engine.crelytic.ai/engine/pricing">
+<meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CRELYTIC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Pricing | CRELYTIC Engine">
+<meta name="twitter:description" content="CRE underwriting from $6.99/mo. Full DCF, waterfall, sensitivity, and investment memos on every plan.">
+<meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+{% endblock %}
+
+{% block jsonld %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "CRELYTIC Engine",
+    "description": "AI-powered commercial real estate deal underwriting platform. Upload an OM, get a full DCF, waterfall, sensitivity analysis, and investment memo in minutes.",
+    "brand": {
+        "@type": "Brand",
+        "name": "CRELYTIC"
+    },
+    "offers": [
+        {
+            "@type": "Offer",
+            "name": "Starter",
+            "price": "6.99",
+            "priceCurrency": "USD",
+            "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "6.99",
+                "priceCurrency": "USD",
+                "billingDuration": "P1M"
+            },
+            "description": "5 deals per month. Full underwriting stack including DCF, waterfall, sensitivity, memos, and Excel export.",
+            "url": "https://engine.crelytic.ai/engine/signup"
+        },
+        {
+            "@type": "Offer",
+            "name": "Pro",
+            "price": "11.99",
+            "priceCurrency": "USD",
+            "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "11.99",
+                "priceCurrency": "USD",
+                "billingDuration": "P1M"
+            },
+            "description": "25 deals per month. Full underwriting stack with priority parsing.",
+            "url": "https://engine.crelytic.ai/engine/signup"
+        },
+        {
+            "@type": "Offer",
+            "name": "Unlimited",
+            "price": "20.00",
+            "priceCurrency": "USD",
+            "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "20.00",
+                "priceCurrency": "USD",
+                "billingDuration": "P1M"
+            },
+            "description": "Unlimited deals per month. Full underwriting stack with priority parsing.",
+            "url": "https://engine.crelytic.ai/engine/signup"
+        }
+    ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>Simple, Transparent Pricing for CRE Underwriting</h1>
+        <p>Every plan includes the full underwriting stack. No hidden fees.</p>
+    </section>
+
+    <!-- Pricing Grid -->
+    <section class="section">
+        <div class="grid-4">
+
+            <!-- Starter -->
+            <div class="card pricing-card">
+                <h3>Starter</h3>
+                <div class="pricing-amount">$6.99</div>
+                <div class="pricing-period">/month</div>
+                <p style="color: var(--text-secondary); margin: 1rem 0 0; font-size: 0.9rem;">5 deals per month</p>
+                <ul class="pricing-features">
+                    <li>OM Parsing</li>
+                    <li>DCF Analysis</li>
+                    <li>Waterfall Modeling</li>
+                    <li>Sensitivity Analysis</li>
+                    <li>Rent Roll Analysis</li>
+                    <li>T12 Analysis</li>
+                    <li>Investment Memos</li>
+                    <li>Excel Export</li>
+                    <li>AI Chat</li>
+                </ul>
+                <a href="/engine/signup" class="btn btn-primary" style="width: 100%; justify-content: center;">Get Started</a>
+            </div>
+
+            <!-- Pro -->
+            <div class="card pricing-card">
+                <h3>Pro</h3>
+                <div class="pricing-amount">$11.99</div>
+                <div class="pricing-period">/month</div>
+                <p style="color: var(--text-secondary); margin: 1rem 0 0; font-size: 0.9rem;">25 deals per month</p>
+                <ul class="pricing-features">
+                    <li>OM Parsing</li>
+                    <li>DCF Analysis</li>
+                    <li>Waterfall Modeling</li>
+                    <li>Sensitivity Analysis</li>
+                    <li>Rent Roll Analysis</li>
+                    <li>T12 Analysis</li>
+                    <li>Investment Memos</li>
+                    <li>Excel Export</li>
+                    <li>AI Chat</li>
+                    <li>Priority Parsing</li>
+                </ul>
+                <a href="/engine/signup" class="btn btn-primary" style="width: 100%; justify-content: center;">Get Started</a>
+            </div>
+
+            <!-- Unlimited (Featured) -->
+            <div class="card pricing-card featured">
+                <div class="pricing-badge">Most Popular</div>
+                <h3>Unlimited</h3>
+                <div class="pricing-amount">$20</div>
+                <div class="pricing-period">/month</div>
+                <p style="color: var(--text-secondary); margin: 1rem 0 0; font-size: 0.9rem;">Unlimited deals</p>
+                <ul class="pricing-features">
+                    <li>OM Parsing</li>
+                    <li>DCF Analysis</li>
+                    <li>Waterfall Modeling</li>
+                    <li>Sensitivity Analysis</li>
+                    <li>Rent Roll Analysis</li>
+                    <li>T12 Analysis</li>
+                    <li>Investment Memos</li>
+                    <li>Excel Export</li>
+                    <li>AI Chat</li>
+                    <li>Priority Parsing</li>
+                </ul>
+                <a href="/engine/signup" class="btn btn-primary" style="width: 100%; justify-content: center;">Get Started</a>
+            </div>
+
+            <!-- Enterprise -->
+            <div class="card pricing-card">
+                <h3>Enterprise</h3>
+                <div class="pricing-amount">Custom</div>
+                <div class="pricing-period">&nbsp;</div>
+                <p style="color: var(--text-secondary); margin: 1rem 0 0; font-size: 0.9rem;">Unlimited deals</p>
+                <ul class="pricing-features">
+                    <li>OM Parsing</li>
+                    <li>DCF Analysis</li>
+                    <li>Waterfall Modeling</li>
+                    <li>Sensitivity Analysis</li>
+                    <li>Rent Roll Analysis</li>
+                    <li>T12 Analysis</li>
+                    <li>Investment Memos</li>
+                    <li>Excel Export</li>
+                    <li>AI Chat</li>
+                    <li>Priority Parsing</li>
+                    <li>SSO</li>
+                    <li>API Access</li>
+                    <li>Custom Branding</li>
+                    <li>Dedicated Support</li>
+                </ul>
+                <a href="mailto:jonathan_sorenson@losttree.com" class="btn btn-secondary" style="width: 100%; justify-content: center;">Contact Us</a>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- What's Included on Every Plan -->
+    <section class="section" style="text-align: center;">
+        <h2 class="section-title">What's Included on Every Plan</h2>
+        <p class="section-subtitle">No feature gates. Every tier gets the full underwriting stack.</p>
+        <div class="grid-3">
+            <div class="card">
+                <div class="feature-icon">&#128196;</div>
+                <h4>OM Parsing</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Upload an offering memorandum and extract deal data automatically.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#128200;</div>
+                <h4>DCF Analysis</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Full discounted cash flow models with adjustable assumptions.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#127834;</div>
+                <h4>Waterfall Modeling</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">GP/LP equity waterfall with preferred return and promote tiers.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#128202;</div>
+                <h4>Sensitivity Analysis</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Stress-test assumptions across cap rate, rent growth, and exit scenarios.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#128203;</div>
+                <h4>Rent Roll Analysis</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Parsed rent rolls with lease expiry timelines and mark-to-market analysis.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#128176;</div>
+                <h4>T12 Analysis</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Trailing 12-month operating statement analysis with category breakdown.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#128221;</div>
+                <h4>Investment Memos</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">AI-generated investment memos ready for committee review.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#128190;</div>
+                <h4>Excel Export</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Download complete models as formatted Excel workbooks.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#128172;</div>
+                <h4>AI Chat</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Ask questions about any deal and get instant, data-backed answers.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" style="max-width: 720px; margin: 0 auto;">
+        <h2 class="section-title" style="text-align: center;">Frequently Asked Questions</h2>
+        <p class="section-subtitle" style="text-align: center;">Everything you need to know before getting started.</p>
+
+        <div class="faq-item">
+            <div class="faq-q">Can I cancel anytime?</div>
+            <div class="faq-a">Yes. All plans are month-to-month with no long-term commitments. You can cancel or change your plan at any time from your account settings, and you'll retain access through the end of your current billing period.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Is there a free trial?</div>
+            <div class="faq-a">We offer a free tier so you can explore the platform before committing. Sign up and start underwriting your first deal to see the full analysis stack in action. No credit card required to get started.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">What payment methods do you accept?</div>
+            <div class="faq-a">We process payments through Stripe and accept all major credit and debit cards, including Visa, Mastercard, American Express, and Discover.</div>
+        </div>
+    </section>
+
+    <!-- CTA Banner -->
+    <div class="cta-banner">
+        <h2>Start Underwriting Smarter Today</h2>
+        <p>Upload your first offering memorandum and get a full underwriting package in minutes.</p>
+        <a href="/engine/signup" class="btn">Get Started Free</a>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_css %}
+.pricing-card h3 {
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+.pricing-card .pricing-amount {
+    margin-top: 0.5rem;
+}
+.pricing-card.featured {
+    padding-top: 2.5rem;
+}
+.section .card h4 {
+    margin-bottom: 0.5rem;
+}
+{% endblock %}

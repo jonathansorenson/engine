@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Integrations & Exports | CRELYTIC Engine{% endblock %}
+
+{% block meta %}
+<meta name="description" content="CRELYTIC Engine works with any brokerage OM format. Export to Excel with live formulas, PDF memos, and Word documents.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://engine.crelytic.ai/engine/integrations">
+<meta property="og:title" content="Integrations & Exports | CRELYTIC Engine">
+<meta property="og:description" content="Works with any brokerage OM format. Export to Excel with live formulas, PDF memos, and Word documents.">
+<meta property="og:url" content="https://engine.crelytic.ai/engine/integrations">
+<meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CRELYTIC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Integrations & Exports | CRELYTIC Engine">
+<meta name="twitter:description" content="Works with any brokerage OM format. Export to Excel with live formulas, PDF memos, and Word documents.">
+<meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+{% endblock %}
+
+{% block jsonld %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "CRELYTIC Engine",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "url": "https://engine.crelytic.ai",
+    "description": "AI-powered CRE underwriting platform that accepts any brokerage OM format and exports to Excel with live formulas, PDF memos, and Word documents.",
+    "featureList": [
+        "PDF OM Parsing from any brokerage",
+        "Excel Rent Roll Import",
+        "T12 Operating Statement Import",
+        "Multi-Property OM Support",
+        "Excel Export with Live Formulas",
+        "PDF Investment Memo Export",
+        "Word Document Export",
+        "HTML Report Export"
+    ],
+    "creator": {
+        "@type": "Organization",
+        "name": "CRELYTIC",
+        "url": "https://crelytic.ai",
+        "parentOrganization": {
+            "@type": "Organization",
+            "name": "Rising Tide Property Group",
+            "url": "https://risingtidepg.com"
+        }
+    }
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+.section-header { text-align: center; margin-bottom: 3rem; }
+.card h3 { margin-bottom: 0.5rem; }
+.card p { color: var(--text-secondary); font-size: 0.925rem; line-height: 1.6; }
+.card .card-detail { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.75rem; line-height: 1.5; }
+.flow-arrow {
+    text-align: center; padding: 2rem 0; font-size: 2rem;
+    color: var(--teal); opacity: 0.6;
+}
+.callout-card {
+    background: linear-gradient(135deg, rgba(0, 191, 165, 0.08), rgba(30, 136, 229, 0.06));
+    border: 1px solid rgba(0, 191, 165, 0.25);
+    border-radius: 12px; padding: 2.5rem;
+    text-align: center; margin: 2rem 0;
+}
+.callout-card h3 {
+    font-family: var(--font-serif); font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+.callout-card p { color: var(--text-secondary); font-size: 1rem; max-width: 640px; margin: 0 auto; line-height: 1.7; }
+.callout-card .callout-highlight {
+    color: var(--teal); font-weight: 600;
+}
+.brokerage-list {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+.brokerage-tag {
+    background: rgba(0, 191, 165, 0.1); color: var(--teal);
+    padding: 0.25rem 0.75rem; border-radius: 99px;
+    font-size: 0.8rem; font-weight: 500;
+}
+.export-tabs {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+.export-tab {
+    background: rgba(30, 136, 229, 0.1); color: var(--blue);
+    padding: 0.2rem 0.6rem; border-radius: 6px;
+    font-size: 0.775rem; font-weight: 500; font-family: monospace;
+}
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Works With Your Existing Workflow</h1>
+        <p>CRELYTIC Engine accepts offering memorandums from any brokerage and exports your underwriting to the tools you already use &mdash; Excel with live formulas, PDF memos, and Word documents.</p>
+    </section>
+
+    <!-- Input Formats Section -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">What You Can Upload</h2>
+            <p class="section-subtitle">Bring your deals from any source. The engine handles the parsing, normalization, and data extraction.</p>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <div class="feature-icon">&#x1F4C4;</div>
+                <h3>PDF Offering Memorandums</h3>
+                <p>Upload OMs from any brokerage. The AI extracts rent rolls, operating statements, unit mixes, and property details regardless of format or layout.</p>
+                <div class="brokerage-list">
+                    <span class="brokerage-tag">CBRE</span>
+                    <span class="brokerage-tag">JLL</span>
+                    <span class="brokerage-tag">Cushman & Wakefield</span>
+                    <span class="brokerage-tag">Marcus & Millichap</span>
+                    <span class="brokerage-tag">Newmark</span>
+                    <span class="brokerage-tag">Eastdil Secured</span>
+                    <span class="brokerage-tag">HFF</span>
+                    <span class="brokerage-tag">+ any other</span>
+                </div>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F4CA;</div>
+                <h3>Excel Rent Rolls</h3>
+                <p>Upload rent rolls in any spreadsheet layout. Intelligent column mapping normalizes your data to a standard schema for immediate analysis.</p>
+                <div class="card-detail">Mapped fields: tenant name, suite/unit, square footage, base rent, lease start, lease expiration, rent escalations, and expense reimbursements.</div>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F4C5;</div>
+                <h3>T12 Operating Statements</h3>
+                <p>Import trailing 12-month financials as PDF or Excel. The engine normalizes line items, reconciles totals, and flags outliers so your pro forma starts from clean actuals.</p>
+                <div class="card-detail">Supports both single-page summaries and multi-page detailed operating statements with line-item breakdowns.</div>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F3E2;</div>
+                <h3>Multi-Property OMs</h3>
+                <p>Portfolio and multi-asset deals are fully supported. The engine parses each property individually and rolls up to portfolio-level metrics automatically.</p>
+                <div class="card-detail">Works with combined OMs, property-by-property breakdowns, and mixed-format portfolios across asset classes.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Flow Arrow -->
+    <div class="flow-arrow">&#x2193; &#x2193; &#x2193;</div>
+
+    <!-- Export Formats Section -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">What You Get Out</h2>
+            <p class="section-subtitle">Every deal produces institutional-quality deliverables in the formats your team and LPs expect.</p>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <div class="feature-icon">&#x1F4CA;</div>
+                <h3>Excel (.xlsx)</h3>
+                <p>Multi-tab workbook with live formulas &mdash; not static values. Modify any assumption and the entire model recalculates. Continue working in Excel, Google Sheets, or Numbers.</p>
+                <div class="export-tabs">
+                    <span class="export-tab">Assumptions</span>
+                    <span class="export-tab">Cash Flow</span>
+                    <span class="export-tab">Returns</span>
+                    <span class="export-tab">Sensitivity</span>
+                    <span class="export-tab">Waterfall</span>
+                    <span class="export-tab">Rent Roll</span>
+                </div>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F4DD;</div>
+                <h3>PDF Investment Memo</h3>
+                <p>Branded investment memo with executive summary, property overview, financial analysis, market context, risk factors, and return projections. Ready to send to your investment committee or LP base.</p>
+                <div class="card-detail">Professional formatting with charts, tables, and section headers. Customizable with your firm's branding.</div>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F4C3;</div>
+                <h3>Word Document (.docx)</h3>
+                <p>Same content as the PDF investment memo in an editable Word format. Add your own commentary, adjust sections, or integrate into your existing IC memo template.</p>
+                <div class="card-detail">Fully editable in Microsoft Word, Google Docs, or any .docx-compatible editor.</div>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F310;</div>
+                <h3>HTML Report</h3>
+                <p>Browser-viewable investment memo that you can share via link. No downloads required &mdash; stakeholders open it in any browser on any device.</p>
+                <div class="card-detail">Responsive layout works on desktop, tablet, and mobile. Share a private link or embed in your deal portal.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- No Lock-In Callout -->
+    <section class="section">
+        <div class="callout-card">
+            <h3>No Lock-In. Real Formulas.</h3>
+            <p>Every Excel export contains <span class="callout-highlight">live formulas</span>, not hardcoded values. Your DCF, waterfall, and sensitivity tables are fully functional spreadsheets &mdash; change an assumption and watch every output recalculate. You own your models and can take them with you, no strings attached.</p>
+        </div>
+    </section>
+
+    <!-- CTA Banner -->
+    <section class="cta-banner">
+        <h2>Start Exporting Institutional-Quality Analysis</h2>
+        <p>Upload your first deal and see the outputs for yourself. Free trial, no credit card required.</p>
+        <a href="/engine/signup" class="btn">Start Free Trial</a>
+    </section>
+
+</div>
+{% endblock %}

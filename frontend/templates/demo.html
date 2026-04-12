@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Live Demo | CRELYTIC Engine — See AI CRE Underwriting in Action{% endblock %}
+
+{% block meta %}
+<meta name="description" content="Try CRELYTIC Engine with a sample deal. See how AI parses an OM into a full DCF, waterfall, and investment memo. No signup required.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://engine.crelytic.ai/engine/demo">
+<meta property="og:title" content="Live Demo | CRELYTIC Engine">
+<meta property="og:description" content="See how AI parses an OM into a full DCF, waterfall, and investment memo. No signup required.">
+<meta property="og:url" content="https://engine.crelytic.ai/engine/demo">
+<meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CRELYTIC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Live Demo | CRELYTIC Engine">
+<meta name="twitter:description" content="See how AI parses an OM into a full DCF, waterfall, and investment memo.">
+<meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+{% endblock %}
+
+{% block jsonld %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "CRELYTIC Engine",
+    "url": "https://engine.crelytic.ai/engine/demo",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Free trial with sample deal data. No signup required for demo."
+    },
+    "description": "AI-powered commercial real estate underwriting platform. Upload an OM and get a full DCF, waterfall distribution, and investment memo.",
+    "creator": {
+        "@type": "Organization",
+        "name": "CRELYTIC",
+        "url": "https://crelytic.ai"
+    }
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+.demo-walkthrough { counter-reset: step-counter; }
+
+.demo-step {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    margin-bottom: 3rem;
+    padding-bottom: 3rem;
+    border-bottom: 1px solid var(--border);
+}
+.demo-step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.demo-step:nth-child(even) .demo-step-visual { order: -1; }
+
+.demo-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 191, 165, 0.15);
+    color: var(--teal);
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+.demo-step-content h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+.demo-step-content p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+.screenshot-placeholder {
+    background: var(--surface);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    padding: 2rem;
+    text-align: center;
+}
+
+.output-card h3 {
+    font-size: 1.125rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.output-card p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+.output-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-bottom: 1rem;
+}
+.output-icon.teal { background: rgba(0, 191, 165, 0.1); }
+.output-icon.blue { background: rgba(30, 136, 229, 0.1); }
+.output-icon.purple { background: rgba(156, 39, 176, 0.1); }
+
+.output-list {
+    list-style: none;
+    margin-top: 1rem;
+}
+.output-list li {
+    padding: 0.375rem 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+.output-list li::before {
+    content: "\2713  ";
+    color: var(--teal);
+    font-weight: 600;
+}
+
+.cta-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+    .demo-step {
+        grid-template-columns: 1fr;
+    }
+    .demo-step:nth-child(even) .demo-step-visual { order: 0; }
+}
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>See CRELYTIC Engine in Action</h1>
+        <p>Try the platform with sample deals and see how AI transforms an offering memorandum into a complete underwriting package. No signup required.</p>
+    </section>
+
+    <!-- Demo Walkthrough -->
+    <section class="section">
+        <h2 class="section-title" style="text-align:center;">How It Works</h2>
+        <p class="section-subtitle" style="text-align:center;">Four steps from raw OM to institutional-quality deliverables</p>
+
+        <div class="demo-walkthrough">
+
+            <!-- Step 1 -->
+            <div class="demo-step">
+                <div class="demo-step-content">
+                    <div class="demo-step-number">1</div>
+                    <h3>Upload an Offering Memorandum</h3>
+                    <p>Drag and drop a PDF offering memorandum or broker package. CRELYTIC Engine accepts any standard CRE deal document and begins parsing immediately.</p>
+                </div>
+                <div class="demo-step-visual">
+                    <div class="screenshot-placeholder">Screenshot: Drag-and-drop upload interface with file type indicators and upload progress bar</div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="demo-step">
+                <div class="demo-step-content">
+                    <div class="demo-step-number">2</div>
+                    <h3>AI Extracts the Financials</h3>
+                    <p>The engine identifies and structures property details, rent roll line items, operating expenses, capital expenditure schedules, and lease terms from the document automatically.</p>
+                </div>
+                <div class="demo-step-visual">
+                    <div class="screenshot-placeholder">Screenshot: Extracted data view showing property details, rent roll table, and operating expense breakdown</div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="demo-step">
+                <div class="demo-step-content">
+                    <div class="demo-step-number">3</div>
+                    <h3>Review the Full DCF</h3>
+                    <p>A complete discounted cash flow model is generated with customizable assumptions. Adjust growth rates, cap rates, financing terms, and hold period to match your investment thesis.</p>
+                </div>
+                <div class="demo-step-visual">
+                    <div class="screenshot-placeholder">Screenshot: 10-year DCF spreadsheet view with adjustable assumption inputs and return metrics summary</div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="demo-step">
+                <div class="demo-step-content">
+                    <div class="demo-step-number">4</div>
+                    <h3>Export to Excel, PDF, or Word</h3>
+                    <p>Download institutional-quality deliverables in one click. Export the full model to Excel, a formatted investment memo to Word or PDF, or share directly with your team.</p>
+                </div>
+                <div class="demo-step-visual">
+                    <div class="screenshot-placeholder">Screenshot: Export dialog showing Excel, PDF, and Word output options with preview thumbnails</div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Sample Outputs -->
+    <section class="section">
+        <h2 class="section-title" style="text-align:center;">What You Get</h2>
+        <p class="section-subtitle" style="text-align:center;">Every upload produces three institutional-grade deliverables</p>
+
+        <div class="grid-3">
+
+            <div class="card output-card">
+                <div class="output-icon teal">&#128200;</div>
+                <h3>DCF Model</h3>
+                <p>A complete discounted cash flow analysis built from the extracted financials with fully adjustable assumptions.</p>
+                <ul class="output-list">
+                    <li>10-year cash flow projections</li>
+                    <li>Levered and unlevered returns</li>
+                    <li>IRR and equity multiple</li>
+                    <li>Sensitivity tables</li>
+                </ul>
+            </div>
+
+            <div class="card output-card">
+                <div class="output-icon blue">&#128176;</div>
+                <h3>Waterfall Distribution</h3>
+                <p>A multi-tier equity waterfall that models how returns are split between investors and operators.</p>
+                <ul class="output-list">
+                    <li>LP/GP splits</li>
+                    <li>Preferred return calculations</li>
+                    <li>Promote tier modeling</li>
+                    <li>Catch-up provisions</li>
+                </ul>
+            </div>
+
+            <div class="card output-card">
+                <div class="output-icon purple">&#128196;</div>
+                <h3>Investment Memo</h3>
+                <p>A formatted narrative document ready for your investment committee or capital partners.</p>
+                <ul class="output-list">
+                    <li>Executive summary</li>
+                    <li>Property overview and market context</li>
+                    <li>Financial analysis and projections</li>
+                    <li>Risk factors and mitigants</li>
+                </ul>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-banner">
+        <h2>Ready to Try It Yourself?</h2>
+        <p>Upload your own OM and get a full underwriting package in minutes. Start with a free trial or explore our plans.</p>
+        <div class="cta-buttons">
+            <a href="/engine/signup" class="btn">Start Free Trial</a>
+            <a href="/engine/pricing" class="btn" style="background: transparent; border: 2px solid var(--navy); color: var(--navy);">View Pricing</a>
+        </div>
+    </section>
+
+</div>
+{% endblock %}

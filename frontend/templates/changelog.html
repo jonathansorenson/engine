@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Changelog | CRELYTIC Engine — Latest Updates{% endblock %}
+
+{% block meta %}
+<meta name="description" content="See what's new in CRELYTIC Engine. Latest features, improvements, and updates to our AI-powered CRE underwriting platform.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://engine.crelytic.ai/engine/changelog">
+<meta property="og:title" content="Changelog | CRELYTIC Engine — Latest Updates">
+<meta property="og:description" content="See what's new in CRELYTIC Engine. Latest features, improvements, and updates.">
+<meta property="og:url" content="https://engine.crelytic.ai/engine/changelog">
+<meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CRELYTIC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Changelog | CRELYTIC Engine">
+<meta name="twitter:description" content="See what's new in CRELYTIC Engine.">
+<meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+{% endblock %}
+
+{% block jsonld %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Changelog | CRELYTIC Engine",
+    "description": "See what's new in CRELYTIC Engine. Latest features, improvements, and updates to our AI-powered CRE underwriting platform.",
+    "url": "https://engine.crelytic.ai/engine/changelog",
+    "isPartOf": {
+        "@type": "WebSite",
+        "name": "CRELYTIC Engine",
+        "url": "https://engine.crelytic.ai"
+    },
+    "publisher": {
+        "@type": "Organization",
+        "name": "CRELYTIC",
+        "url": "https://crelytic.ai"
+    }
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+.badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem; }
+.badge-new { background: rgba(0, 191, 165, 0.15); color: #00BFA5; }
+.badge-improved { background: rgba(30, 136, 229, 0.15); color: #1E88E5; }
+.badge-fixed { background: rgba(255, 183, 77, 0.15); color: #FFB74D; }
+.changelog-date { font-family: var(--font-serif); font-size: 1.5rem; margin-bottom: 1rem; margin-top: 2.5rem; color: var(--text-primary); }
+.changelog-entry { margin-bottom: 0.75rem; color: var(--text-secondary); font-size: 0.95rem; }
+.timeline { position: relative; padding-left: 2rem; }
+.timeline::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 2px; background: var(--border);
+}
+.timeline-month { position: relative; }
+.timeline-month::before {
+    content: '';
+    position: absolute; left: -2rem; top: 0.6rem;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--teal); border: 2px solid var(--navy);
+    transform: translateX(-5px);
+}
+{% endblock %}
+
+{% block content %}
+<div class="page">
+    <!-- Hero -->
+    <div class="hero">
+        <h1>What's New in CRELYTIC Engine</h1>
+        <p>We ship improvements every week. Here's what's changed.</p>
+    </div>
+
+    <!-- Changelog Timeline -->
+    <div class="section">
+        <div class="timeline">
+
+            <!-- April 2026 -->
+            <div class="timeline-month">
+                <h2 class="changelog-date">April 2026</h2>
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        Public marketing pages launched &mdash; features, pricing, demo, how-it-works, integrations, enterprise
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        LLM optimization &mdash; llms.txt and llms-full.txt for AI discoverability
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-improved">Improved</span>
+                        robots.txt and sitemap.xml for search engine indexing
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-improved">Improved</span>
+                        SEO meta tags across all public pages
+                    </div>
+                </div>
+            </div>
+
+            <!-- March 2026 -->
+            <div class="timeline-month">
+                <h2 class="changelog-date">March 2026</h2>
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        DCF Engine V2 &mdash; 10-year hold period modeling with configurable assumptions
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        LP/GP Waterfall Engine &mdash; multi-tier promote structures with IRR and equity multiple hurdles
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-improved">Improved</span>
+                        OM parsing accuracy improvements &mdash; now 95-99% across all property types
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        AI Deal Chat &mdash; ask Claude questions about any uploaded deal
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-fixed">Fixed</span>
+                        Excel export formula references in sensitivity tables
+                    </div>
+                </div>
+            </div>
+
+            <!-- February 2026 -->
+            <div class="timeline-month">
+                <h2 class="changelog-date">February 2026</h2>
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        T12 Operating Statement parser &mdash; extract trailing 12-month financials from PDF or Excel
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        Rent Roll Management &mdash; Excel rent roll parser with column mapping
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-improved">Improved</span>
+                        Sensitivity Analysis &mdash; two-variable tables with scenario manager
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        Investment memo PDF/Word export
+                    </div>
+                </div>
+            </div>
+
+            <!-- January 2026 -->
+            <div class="timeline-month">
+                <h2 class="changelog-date">January 2026</h2>
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        CRELYTIC Engine launched &mdash; AI-powered CRE deal underwriting
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        OM Parsing Engine &mdash; upload PDF offering memorandums from any brokerage
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        Basic DCF model generation
+                    </div>
+                    <div class="changelog-entry">
+                        <span class="badge badge-new">New</span>
+                        Stripe billing integration &mdash; Starter, Pro, Unlimited tiers
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Bottom CTA -->
+    <div class="cta-banner">
+        <h2>Want to try the latest features?</h2>
+        <p>Start your free trial and underwrite your first deal in minutes.</p>
+        <a href="/engine/signup" class="btn">Start Free Trial</a>
+    </div>
+</div>
+{% endblock %}

@@ -10,7 +10,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 
@@ -19,7 +20,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 from app.database import init_db, SessionLocal
 from app.models.user import User
-from app.routes import deals_router, chat_router, admin_router, export_router, billing_router
+from app.routes import deals_router, chat_router, admin_router, export_router, billing_router, seo_router, marketing_router
 from app.routes.admin import hash_password, verify_password
 
 # Path to frontend — check Docker path first, then relative (local dev)
@@ -82,7 +83,12 @@ def _get_user_from_cookie(cookie_value: str):
 class AuthMiddleware(BaseHTTPMiddleware):
     """User authentication for /engine/* routes. Admin check for /engine/api/v1/admin/*."""
 
-    _BASE_PUBLIC = {"/health", "/engine/login", "/engine/signup", "/engine/api/v1/billing/webhook", "/"}
+    _BASE_PUBLIC = {
+        "/health", "/engine/login", "/engine/signup", "/engine/api/v1/billing/webhook", "/",
+        "/engine/features", "/engine/pricing", "/engine/demo",
+        "/engine/how-it-works", "/engine/integrations", "/engine/enterprise",
+        "/engine/changelog", "/static",
+    }
     _DEV_PATHS = {"/docs", "/openapi.json", "/redoc"}
     PUBLIC_PATHS = _BASE_PUBLIC | _DEV_PATHS if settings.env != "production" else _BASE_PUBLIC
 
@@ -90,7 +96,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Skip auth for public paths
-        if path in self.PUBLIC_PATHS or not path.startswith("/engine"):
+        if path in self.PUBLIC_PATHS or not path.startswith("/engine") or path.startswith("/static"):
             return await call_next(request)
 
         # Check session cookie
@@ -151,7 +157,20 @@ LOGIN_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRELYTIC Engine</title>
+    <meta name="description" content="Log in to CRELYTIC Engine. Upload an offering memorandum, get a full DCF, waterfall analysis, and investment memo in minutes. AI-powered CRE deal underwriting.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://engine.crelytic.ai/engine/login">
+    <meta property="og:title" content="CRELYTIC Engine — AI-Powered CRE Underwriting">
+    <meta property="og:description" content="Upload an OM. Get a full DCF, waterfall, and investment memo in minutes.">
+    <meta property="og:url" content="https://engine.crelytic.ai/engine/login">
+    <meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="CRELYTIC">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CRELYTIC Engine — AI-Powered CRE Underwriting">
+    <meta name="twitter:description" content="Upload an OM. Get a full DCF, waterfall, and investment memo in minutes.">
+    <meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+    <title>Log In | CRELYTIC Engine — AI CRE Underwriting</title>
     <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAABiUlEQVRYhe2WPy9DURiHn/e0FIn/qUi0FQwkTZlIfAJDTWInfAI7A7Gz2YTdavEhEFeCgXBaQRfSgV6peyxC5V6izW1ruL/tvHnP+zz33HuSK3wklpzsEopLgpkFBoAI/sYGrgyyJ6qwoS3rEUAABpITY2+87YP0+Qz9KVlHnHT29PBEEqlUJ06jVUP4pwTKHg11RBPLIOkawwHajGl4DRuYqcb09YUUw7FWV/1c51nZOQVAMDMKGKyGgBccYCTRVrocUvj/tZeTJlVHOACBQCBQd4FwJZumFueJxmOuek5nONjeLWtWRSfgBQfoScTLnlX3VxAIBAKua9gb6yfS1OxqtF+eub/Vvgu4TsALDhBpbvEd7ilQ6wQC/0LAriO/oICr0or98uzdWVLP6YxnT+7m65qe67xnz9n3+qXEk+Nrgln5m7DPEVaVqMIG4P1I1U1GhYubSlvWoyPONJCtJdxRJn19fPwUAsjn7h7ae7t3MCEbiIK0UuHf0i8pABcIW6qhOKdPjjTAO0ACbHMMH2tvAAAAAElFTkSuQmCC">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -324,12 +343,31 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
+# SEO & Marketing routes (must be registered BEFORE the /engine catch-all)
+app.include_router(seo_router)
+app.include_router(marketing_router)
+
 # Register API routers under /engine prefix
 app.include_router(deals_router, prefix="/engine")
 app.include_router(chat_router, prefix="/engine")
 app.include_router(admin_router, prefix="/engine")
 app.include_router(export_router, prefix="/engine")
 app.include_router(billing_router)
+
+# Static files (OG image, etc.)
+_static_dir = _docker_frontend / "static" if _docker_frontend.exists() else _local_frontend / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+
+# Dedicated route for OG image at root path (meta tags reference /og-image.png)
+@app.get("/og-image.png", include_in_schema=False)
+async def og_image():
+    """Serve OG image for social media previews."""
+    img_path = _static_dir / "og-image.png"
+    if img_path.exists():
+        return FileResponse(str(img_path), media_type="image/png")
+    return Response(status_code=404)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -339,7 +377,7 @@ app.include_router(billing_router)
 @app.get("/health")
 async def health_check():
     """Health check endpoint (no auth required)."""
-    return {"status": "healthy", "service": "CRE Lytic Engine", "version": "2.0.0"}
+    return {"status": "healthy", "service": "CRELYTIC Engine", "version": "2.0.0"}
 
 
 @app.get("/")

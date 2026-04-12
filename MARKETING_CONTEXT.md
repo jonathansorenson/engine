@@ -1,6 +1,6 @@
-# CRE Lytic Engine — Marketing Context Document
+# CRELYTIC Engine — Marketing Context Document
 
-> Use this document as context in other sessions to build marketing materials, landing pages, ad copy, sales decks, and content strategy for the CRE Lytic underwriting engine.
+> Use this document as context in other sessions to build marketing materials, landing pages, ad copy, sales decks, and content strategy for the CRELYTIC Engine underwriting engine.
 
 ---
 
@@ -17,7 +17,7 @@
 
 ## Product Overview
 
-**CRE Lytic Engine** is an AI-powered commercial real estate deal underwriting platform. Users upload an Offering Memorandum (PDF) or financial Excel files and the engine automatically extracts property data, builds a full DCF model, runs sensitivity analysis, generates LP/GP waterfall distributions, and produces institutional-quality investment memos — in minutes instead of hours.
+**CRELYTIC Engine** is an AI-powered commercial real estate deal underwriting platform. Users upload an Offering Memorandum (PDF) or financial Excel files and the engine automatically extracts property data, builds a full DCF model, runs sensitivity analysis, generates LP/GP waterfall distributions, and produces institutional-quality investment memos — in minutes instead of hours.
 
 ### One-Liner Options
 - "AI-powered CRE deal underwriting in minutes, not hours."
@@ -25,7 +25,7 @@
 - "The underwriting engine built for CRE deal speed."
 
 ### Elevator Pitch (30 seconds)
-CRE Lytic Engine lets acquisitions teams upload an Offering Memorandum and get a complete underwriting package — DCF projections, sensitivity analysis, LP/GP waterfall, and a polished investment memo — all generated automatically by AI. What used to take an analyst 4-6 hours now takes 5 minutes. It works with PDFs, Excel rent rolls, ARGUS exports, and T12 statements out of the box.
+CRELYTIC Engine lets acquisitions teams upload an Offering Memorandum and get a complete underwriting package — DCF projections, sensitivity analysis, LP/GP waterfall, and a polished investment memo — all generated automatically by AI. What used to take an analyst 4-6 hours now takes 5 minutes. It works with PDFs, Excel rent rolls, ARGUS exports, and T12 statements out of the box.
 
 ---
 
