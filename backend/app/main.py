@@ -16,7 +16,14 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import init_db, SessionLocal
 from app.models.user import User
-from app.routes import deals_router, chat_router, admin_router, export_router, billing_router
+from app.routes import (
+    deals_router,
+    chat_router,
+    admin_router,
+    admin_analytics_router,
+    export_router,
+    billing_router,
+)
 from app.routes.admin import hash_password, verify_password
 
 # Path to frontend — check Docker path first, then relative (local dev)
@@ -291,6 +298,7 @@ app.add_middleware(
 app.include_router(deals_router, prefix="/engine")
 app.include_router(chat_router, prefix="/engine")
 app.include_router(admin_router, prefix="/engine")
+app.include_router(admin_analytics_router, prefix="/engine")
 app.include_router(export_router, prefix="/engine")
 app.include_router(billing_router)
 

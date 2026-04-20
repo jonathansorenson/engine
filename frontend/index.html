@@ -969,11 +969,14 @@
 
         // Components
         const TIER_COLORS = { starter: '#22c55e', pro: '#3b82f6', unlimited: '#f472b6', enterprise: '#a78bfa', admin: '#f59e0b' };
-        const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onHomeClick }) => (
+        const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onAdminAnalyticsClick, onHomeClick }) => (
             <div className="header">
                 <div className="header-left">
                     <div className="breadcrumb" onClick={onHomeClick} style={{ cursor: 'pointer' }}>
-                        {currentPage === 'list' ? 'Deal Underwriting' : currentPage === 'admin' ? 'Admin — User Management' : dealName}
+                        {currentPage === 'list' ? 'Deal Underwriting'
+                            : currentPage === 'admin' ? 'Admin — User Management'
+                            : currentPage === 'admin-analytics' ? 'Admin — Analytics'
+                            : dealName}
                     </div>
                 </div>
                 <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -981,12 +984,28 @@
                     {subscriptionTier && <span style={{ fontSize: '0.7rem', color: TIER_COLORS[subscriptionTier] || '#94a3b8', border: `1px solid ${TIER_COLORS[subscriptionTier] || '#94a3b8'}`, borderRadius: '4px', padding: '2px 8px', textTransform: 'uppercase', fontWeight: 600 }}>{subscriptionTier}</span>}
                     {userName && <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{userName}</span>}
                     {hasStripe && <a href="#" onClick={async (e) => { e.preventDefault(); try { const r = await fetch(`${API_URL}/api/v1/billing/portal`, {method:'POST'}); const d = await r.json(); if(d.url) window.location.href=d.url; else alert(d.detail || 'Unable to open billing portal.'); } catch(err) { alert('Unable to open billing portal. Please try again.'); } }} style={{ fontSize: '0.7rem', color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '5px' }}>Manage Plan</a>}
-                    {userRole === 'admin' && (
+                    {userRole === 'admin' && (currentPage === 'admin' || currentPage === 'admin-analytics') && (
+                        <button onClick={onHomeClick} style={{
+                            fontSize: '0.75rem', color: '#94a3b8', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontWeight: 600
+                        }}>
+                            Back to Deals
+                        </button>
+                    )}
+                    {userRole === 'admin' && currentPage !== 'admin' && (
                         <button onClick={onAdminClick} style={{
                             fontSize: '0.75rem', color: '#00BFA5', background: 'transparent', border: '1px solid #00BFA5',
                             borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontWeight: 600
                         }}>
-                            {currentPage === 'admin' ? 'Back to Deals' : 'Manage Users'}
+                            Users
+                        </button>
+                    )}
+                    {userRole === 'admin' && currentPage !== 'admin-analytics' && (
+                        <button onClick={onAdminAnalyticsClick} style={{
+                            fontSize: '0.75rem', color: '#00BFA5', background: 'transparent', border: '1px solid #00BFA5',
+                            borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontWeight: 600
+                        }}>
+                            Analytics
                         </button>
                     )}
                     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALIAAAAgCAYAAAC2JCIgAAAWJ0lEQVR42u18e3xV1Zn28661L+eSC7kAuUACKCiXqhjBS3VI8PaJtVTHc8BqcRwtTFu0qC3ipT05OrRCdbBa2yHytYrVlnOqaC3a7xMkFKdegKktTexAFUSIyiUhybnvvdY7f5wTSDCBYLHgTN7f7/ySX87ea6/Ls971vO/77BCOsYVCIREOh/VDdwSqhg0ftDHPa5Q6rgYRCAAkkdIgbGuJ/ePc0JPPRyIRGQwGFQZswP4GM451g/X1QDgM1JxWPri4wBqcSGU0gUTX9xrQJYU+c3ChNRIAAoObaGAZBuyEA3KXmR7pZhzFSjPAAHJwZQCOq6GZnIHpH7BjZeLTathVmoiICABRFscHPgSA9IAnHrATH8gDNmADQB6wARsA8oANAHnABux/A5BDoZBgZurtEwqFBA7kJgZswP6+dlTpt3A4rMPhcF9fc+7nAJgH7MQEcohZhIn0ld+6a17V2LE3KddRYJY5+GrDtmn/R7vf/89X1v9TNDp+3997EIFAQI7bvZsAoHnIEI5GowOVwv9hljvxxfjx47mpqYnCgEY4rI8KyPUAhwH4CwpuHVpdXZWKxyBElpUwM4SU8OblTRi0eXNNMBh86e8xsEgkIAOBcQzUMxH1AC5zSABANNhMwT5A3XXNkSwabaZg8Igbg5hD1J+JRH1X9fPgIhzsE1MvJxoTEfenr8z8sTERkT7aa/voR78t11/uDsL6+vrDXtMXeLvuy/VN9zIGqq+v56OiFlLI/ZlkYpiTSmlQtuzMzDAsy3WSSWmZZubTBjAzSErig+AK48JLp1xUNaTA4yrgrzvbPyIKb+jGd4h6mTCisO7/MzlX2ulz4pko3C+wIdx/AHwCAOle+N7Hxh8KhURfAD8W/ThKStr7hEYikoJB1XXfhPOnnjZl8uQqv8dUO3e3yqeffe4tItr5iTgywBJEAkQgItEjaCSSrPlT5cehEAQRNMD494XXX+jz0LwRZf7hHQl9us82oBlIJNOq4Kunb/rzu+07O5KZxXT/L99gBhGBORQSFA7rN1feNpxc/YzSH3e0rBlpR3NbzMHWXbE4MT9IRKu68X8+eCpkBU/LFs+6pObk0n91lesq3bdzIJDyewz5WvPeLV+9c/l1zCFBFNahUMgIh8Put+8O3RVeMO9Lruu4gggZVxuLHvnxjxaFw8u7ruljk/EvotGHZ175hbP3t7VpkhIej0f+IvrCI3T9dU92v3ft2rVGXV2d+7Plyx+aNeOq8zpinQoABhUUiiVLf/rqbXPn3r5hw2vhM8/43GWdnXGXtTb67+iEZiLxnYUPLXr4ge89w8ySiNQjP/73FXNvvG5k6/79Oi/fz29v2S7vXPjDG1+KPr65S2TW83RjEJGad8894885/fRbz5r4uQnpVPo0n9/vFURwXIX6b3/jwz17W9/b8Ic/vbJ2/RsNBj4j1jXgJaHrB1WWWr8aWZ53od+WcJRGvkc7ADQRoPN8hhBicu3EIZNbOzNXPbXkn88Dfvo6c0ggd7plHOUr9lmTlJIH2tfM4BxEfR6gpNCL0cMLkXF03eMP3LBq8U/fnvX226+3Mh8E8+CmrOBJMg31ee1J6TSQ89w92jvwDM3w2CYIyO/+94qKiqy7J5zqzcuf5CTjEELAhgAxVQPABx9U9Ook6uvriYh467vvPrL1nXdvHj1mNFLxBGyvDzUTxzdcHpj1yn333bcrEAjISCTCQgh39rzbr7h06j98TZiG5bE98PgLsWnThoQS4goAUIpPEYZ/kmWkIY2DcySEzMoLctoZrRnMPR27kAYEuKJH4E84G5a/2uvLwPJ64ff7IKEKAaC5uZl6ATE92tDQMO2iumtHVA3zuq6LTCYDQZSmnN5Ba11WPbyy7Lyza84uLiqcbWQf1hu/Cx/T4+VYgPixUKD4lDH5a4YW+8/ojKWc9phDpiEN2zZNrRmu0jCN7EGRzjhc6Df1LsUlROBIpFkEMI6znoN1IuUo5WowmAjEliWllAJggMFIph1XKSbDJHX+58ouj81wl8wNdXw1EhmvDuXMiuEkUhnlOsrVOY9s24YURIe6ZJAgUF/8kzmZjHUqx3FcKSVnHNfUzOkjHdu5k2Frvt8//6sV5YuV42SSyQRNGHuK5+abvvxvq6LLZwUCARcAcWWl9x+nXfJA2dDBVuvefY5t29zRtle9+P/W3vjduxfs7tFdIbIHcA4IiXhca+YsjJnZtCxpW1Z3TRiEoC6O3d1icBIqkUxqKYgTiYQkEoeeLhSJRAQRyWeee+7xL027+Jp0OoXW1lZlmqbyeGxLCGmn0xlIKWCZFlzlAqwyeXn+EiPbx774HRNAxxfMDKpHPa/ZuKaorKL45aFFvjNa2xMOGIbPa9JHbenkti1tkZPLfcsTaUe3x1Txns70nFOrCk+tLvdWWVaf/ZdMAIFYCCHW/2n3Oy37ki0eS2Jcdb5ZNTTvHCkIrsMilkiq8lJ71pRpg+8IBqMfdlGVg5ySCYDMMnhIIkLTu21vdaZVpxQgcPZaBrTHMsRfP4z/NetNP57XJ6JsO2AmIimIjkjXgsGgZmZBRI+MO3V04OIp509q29+u4vGYOmfSmcH7lyxZMWPGjGeDwSCeeuqpf6o9/5wxnZ0xl4iE3++T0edeXPXduxf88sUXX7SnTZuW/mPTf23OOG5FIpFQzGwwmFnDGnvKSZMHlxQLx3HY6/WJ997f+f6Wd7Zvt0zjwBhBwKDi/NWHpGQFiCSyAGcAkrmnaGzt2rWyrq7O/cEPH35w+mUXX5NKpdLJZMqyLFMKIeX61zZt3b1372MTRo/amJfnx9rXNn3xjAmnnDPmpJHneDweGACo5oIry9Kmq7VSJKRkr1LUHou7WzbR3uPtjTkaEBQkveiumfNPGlZ4ZnsslQZg5XsN1bQjln56zbbpzz+/es0htz1bPqamdP414+6xBGLZFN04RtPHIyEpyRWGNDtS7uL7H3m2oeur3yyd/cSoysJZnbGUclw2yoo8ybtmjtXrXlyHHrrUnoEoANZCSOGzzFnX3v6zzUfypsdqmoLBoCCi1BNPP/OtkdVVa0cMq1AdHTGjqKhQXTB5UgMz/2b2LXeUnVUz8QGAleu6VFCQL5r/8teWTRs2XJvjzhkAmHPjDQsBLDzkGb4333ytrWLoEMtxHNfjzzOHlBQvO3XshHsP0y/d3xO3trZWzb7ljqorLpl6A2vlplIpy7YtzQDWv/7mnZddetlPgOxadmEfAJ6ORC7fuavl28bnv3DNGpAY6wErcBenYV1WNFiXlFUufG3V0w31jY0SgHs8gCxyx/iIof5ZynW10myakrg1ro2XXt919fPPr14TCYUsjG9WPb1UdO+t4U3zumcpONR3yi3PMv0bN8422zbBd1ENEj99xWmqLgcgiJkBpWC1d4h+V0I109+1/B+NRlUOjL+7qPb8e0fNuKreMAy3vb1DnDe5puQny5Y9OrJqmGfMmJN8rfv2Kcs0EU8k8fLa9fcsWrSoveb+GtnlQTkUEqivp+4B7pxbby0UPYbPICKbmSW2bzcxYkR3fbnub8oQAGprawURufc/uGT+SaOqC2KdMUVC6Dy/T/z6pdXrpn9x+g8MQ8JxXNlLanIVgFWGadt1rPUhnkXD8tjQ7P4DgIbmxsbjosno4sbTp196QXmpb1DGUQCDvR5LvtPStv7xp7e/tHTpbDM4J5zpLe0UjQREIBjV1A+un8i4ybPOanAAtAPAU0v++SQpAK2Y/T5D7dqTaH965btONtijI6XrUFwoT/v9L+dJKR2hlKkBwJCKXSVp8/Zd78xZEG0/NAvyt1pdXZ1iZlFYOPyRsaNP/sI5Z51+ZmvbfsRinXzltEtuEkKgs72dCUBefr5c9ds1/3/ezd/4WVd24cCmD4c1cmmvrqzIldddp3pPO5LijRsFjRz5Nxehzp088RSDBDMzbMvij/a20up1//FoJBKRq9vaBNHHX8aIRCISAAzXcRWBRc8JZaVcV5JG4vgSi0YBQI8Z5j3TY5k+QDlSEGkmbPswvp3QnBkzJmD0nuoC48iFDOS0Iqgs8YzcFL3ltPf2xj1btse/WV7s/XI8kWbLFJZtWdjT4Tz43Jo1+xrrQ0ZdL2mwrNcHmElorTEo316epbc2YHSREYJlGUjGrasArAyFpshweN2xPOk4Go2Kjo6drSuefeG2yvKhvxtSWuwkkkkzz+dVmpkcx6WC/Dz+05/fTi9ZtuLmXFHhuMZBtbW1DADjRp/sIvs6hjZM00wk9u58YsVvXnn4gUU62Efeu+t9T0EECSLK5YcFiARnGxNMx1cdV4taAEBlqS9tSDqQztLM2LkvaTNAjY2fvH0iQDMM13ExYeSg+STkH0cMLXjj8s8P+3KBz2AG6URat29o/uiR2Xc+vohDIdEXiA81pbTjKpXJftyMq9wMmBOu62akKT6117yCwaBaunSp+dAPvr9+458219serymFcB3XlUopYZmGUgxj7auv373muSe3NDY2HrY48mlbUVGRICJlFZeNbfqvrVNd5UJrFoIImYzT0bGzufWQwLF3Cnoi544bu0UM3H0gDBi5t7Jrj+HziADWWsUT6Yxi1oYhxaatrWuuu/1n85hDjPr6fnsul8l0tbCyH2m5WlopFz7F0uqIOZ5Pc97mtLQoZhZz5y/80Vub/7zR5/cLZtYM1h6vVza++vv/mDf368uYWdbV1R13XQozk4TRkef378n61OxaG4bsdxsneEEkC+UtO2Ly3HGabElQrCEl4dSqgiQBvKXig8MRVurHbmYiolTG3WNI2h9P6dGDi7wykUxrx3F46hllVz14zzV/JApPDIW69lRfCwIwM0spaeNf9oV2tabetSQJpbJVAymFBkjs+GD/69msxbpPB0ThsG6srTVa/rJhX2Ge/x4hxG+JyJVSUCKZFMpRd1A2FpDHm1a0tbVpoFEmW3fuGlk1bIMUspKIWCnFzFQ56fwLxwDY2ksFsEcsdUIDuWuhN7+feCGVyiy0/GYBM2nWiksLPBcwTi6YPfuieEtLeY9BMoOiwYCY8auoYj6cJwAMSa4wDHP95t333n7fL370jRuvuPhL5w//l7Ji71XxZEalHVddPGnYhEfvnfXlb3w3vLxLA3AYr85ERGOriqNf+84P3z5ilvyIpwRRKBQSra0pEeol63KEFB4pV9la61zFkeC6CkopDwMUjUZPDHeV9Ve0+nevDrp6+uUMQDiu65YNHVI4/YuXThNCPLRixQoTQPegnkKhENXW1oq6ujr3RC9R5yqWq3dsu7hy59njSsemHUXJlMMjK/NH3vXNiXcSBe8URNi4dLa5CcDs2RdpoqACogqA9+tfD8gf/zga6wexEADw6P994eUnXhzzh8i9dXUVJb5BybSrbVNxZan9vSlTpjyLpqZ+BcAZx/VnK12A/hsYqGZ2wveGNYD0J5q/QwrlWdEJnzBV2yyQGwGA3966/VepZLqWiJDJZIxBgwr1hed//pZ7mB8KBoMZZqZNmzYZADB58mQnHA5zOBzWU/7PlcNOeK1Fff0UCaxT2z+Kf3/imME/t02ZzjjKNlm7l04qX2B/e6YTWvbmg2fNaWgHgDlzGnBqTU35dbWjzhw9ouj+eCpzF4AXIpGARNORF+9HoUDe3HB0b0vrud+vKitcLBzFyZSjR1UWVs64cNhM+m542dq1IaOu7vBB37YPY0Mvv3xqpc8nZCJxUJ3k83nhuhln5cqXdx+JN+Z+KQnMmlXpoyKTOXUwSPQC+1qTWIXkh/iM66/D4bCKRCLyscd+/fglU5pvO3fSxJGtbft1R0cn1ZwxYeTvf//qmp88/nSIiF4F0DUH9n2LFw+rPffs+c1b3rnBOPEHuc7NqdaeOn3ETZM+N7rkm/tjyUwq4xr5Xqm+eF7ld8ZX111fWnjZrxNpBQHO39uRCZxUke8blO9B05bdRyUtNSuK0sygsy/7aGlliedb5SW+Iam06xKYhw/13zZuXGB5bS0Om35TSqGsxPr19ZeOhOiZ3FK2ZcqU4761ciVq+uJ9RASllEEArr16+oJUOn2HEOJAO5o1PLaNLe9sV+nHIyNWAy2H45CfAWMAePnln8fH11TXVw2vXD50cAl3dMQQi8cxueaMqaUlxVNvvukrrwwqKGj2er3YsavlgiGlJaedPHo07W1t48+E+o3C4awE85bwvJeWfU1Wl+fPzWQcpNNKMTKZkysKqizLmKs5G90NLcpoACnN8DiMj2UI2JQMh50cLnI7PBuQjWkp54Y5s403f9vQsfeSG5ZUlRUsTKeVE086qqLUP/aWmckvEIWfXRsKGQcjStYAHBBczmkOhg329SKSIO21DUqmHe6DDytmdkDkclboglEjqkiIniUdrTX8Pi9cpbXPd0SIMDM7ROTmhMY6Ry0+iTm5AokDMIQQ/ToJCOQi2wed0+5oIsGHpg1zctMnT6qqtK+47JLHqodXoLMzpmOxmFM2pMQ8eWT1VBBNJSKUDSlFKpVy4abIsm1pgFkfqhyg7GD1oYIhBjT6mANmZhIHrzekYO6asUP+ZVaWoYmjmUymcBg5/e7ND4Wu3TW2quCbQ4p8ZT6vITMZB5lMFo9SCti2LeIpx9PyQUeTBm3OVuOiGk1ZlZ/lOEZxYYHpuBqANm3bBgN5B9JXDQ0uEfDM73Y8VlJg3zt+VIk3nnBQmGejcki8IRC4pHFPc3N70zjI7NjJV1zoM1PptNkl0+4NK1qxkeezsD+WGtzrIDUGefMGmYBr9ky4HLJCrACy4fV6jaxk77DRosf05JumbZsg2bVh7KNFsCGlyM/P93vyimB7kiZggqEL+udueShMn1lcLADpQXFxMRTY6oViuLky+7Ktd9y1b1Zw+u3Vw4d9vrSkxAYYmVT6AEAty4INr7FtRwu2vff+KkMYhvg4KLUlDROZTNruubPYJwwDJAS6JIrMDBIChmmSdpwDnXNSysgvsMhViqnbImgApiEgiM2jPX6IwgiFQmJeOHw/qqsfWnzduV85fXRx9ZYd7V/xWYaPQXCVem/M8EHR377R8uHiR5/5OQB17W1dE5otu1oe9dG+/fEFWmtIKXQspYQJWp1L+GkAnA301+z70rmVV4+qyB+7P5bmzniS8vyGdVHNCBVc0KAigUBX9eON1vbEAqVcrZQWffNeYsdRBBK7cwvHANDS0qKy/dNPpOPtf3AdR7u673aU1vB7vWhvb2cjk9nfva1uAZTOpi3wlpOOL0jG45qEIMfVJKV8GwACgcARqUiXZiJp2x2dnR3z0/F2EU8mdXGpIbTi1wAANTW9emYhcs6K6W44yZLW9jbO9/vQ1tZKxHgHAKLRaI8+1NXVuTkl38qHF31v5R3fCV/5lRlXjtmxY8cVJI1TDEOqeCIliwryXtnfGf/Px55a8fpvfvHkOjrv8pmPEmgSwC532/bCMDKOm1n0xqrIi7OXLjUb5sxxrp5/z0+qJ0z4FzeTVshtb2bNhu3hjj17dv1h/at1m04/dRs+5X8ry5GApJ7lZy8wOJc935MEoLqn4rpLLgfss2GRSETOnDlDac3dawL+bsdTrHtg/N+HmweFa5sSeQAAAABJRU5ErkJggg==" alt="CRElytic" style={{ height: '32px', opacity: 0.95 }} />
@@ -6025,6 +6044,265 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             }
         }
 
+        // Admin Analytics — read-only dashboard of usage and deal volume
+        const AdminAnalyticsView = ({ onBack }) => {
+            const [range, setRange] = useState(30);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+            const [overview, setOverview] = useState(null);
+            const [timeseries, setTimeseries] = useState(null);
+            const [byTier, setByTier] = useState(null);
+            const [topUsers, setTopUsers] = useState([]);
+            const [statusBreakdown, setStatusBreakdown] = useState(null);
+
+            const tsChartRef = useRef(null);
+            const tierChartRef = useRef(null);
+            const chartInstances = useRef({});
+
+            const loadAll = async (days) => {
+                setLoading(true);
+                setError('');
+                const base = `${API_URL}/api/v1/admin/analytics`;
+                const bucket = days <= 14 ? 'day' : days <= 90 ? 'day' : 'week';
+                try {
+                    const [ov, ts, bt, tu, sb] = await Promise.all([
+                        fetch(`${base}/overview`).then(r => r.json()),
+                        fetch(`${base}/timeseries?bucket=${bucket}&days=${days}`).then(r => r.json()),
+                        fetch(`${base}/by-tier`).then(r => r.json()),
+                        fetch(`${base}/top-users?limit=20`).then(r => r.json()),
+                        fetch(`${base}/status-breakdown`).then(r => r.json()),
+                    ]);
+                    if (ov.detail) throw new Error(ov.detail);
+                    setOverview(ov);
+                    setTimeseries(ts);
+                    setByTier(bt);
+                    setTopUsers(tu.users || []);
+                    setStatusBreakdown(sb);
+                } catch (e) {
+                    setError(e.message || 'Failed to load analytics');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => { loadAll(range); }, [range]);
+
+            // Chart rendering
+            useEffect(() => {
+                if (!timeseries || !window.Chart) return;
+                const raf = requestAnimationFrame(() => {
+                    const legendStyle = { color: '#E8EDF2', font: { size: 13, weight: '500', family: "'DM Sans', system-ui, sans-serif" }, padding: 16, boxWidth: 12, boxHeight: 12, usePointStyle: true, pointStyle: 'rectRounded' };
+                    const axTick = { color: '#B0BEC5', font: { size: 11, family: "'DM Sans', system-ui, sans-serif" } };
+                    const gridStyle = { color: 'rgba(30, 51, 71, 0.6)' };
+                    const titleFont = { color: '#E8EDF2', font: { size: 14, weight: '600', family: "'DM Sans', system-ui, sans-serif" }, display: true, padding: { bottom: 10 } };
+
+                    const mkChart = (ref, key, cfg) => {
+                        if (!ref.current) return;
+                        if (chartInstances.current[key]) chartInstances.current[key].destroy();
+                        chartInstances.current[key] = new window.Chart(ref.current.getContext('2d'), cfg);
+                    };
+
+                    // Time-series: deals per bucket (stacked bar: success / error)
+                    const points = timeseries.points || [];
+                    mkChart(tsChartRef, 'ts', {
+                        type: 'bar',
+                        data: {
+                            labels: points.map(p => p.date),
+                            datasets: [
+                                { label: 'Parsed', data: points.map(p => p.success), backgroundColor: '#00BFA5', borderRadius: 3, stack: 's' },
+                                { label: 'Errors', data: points.map(p => p.error), backgroundColor: '#F87171', borderRadius: 3, stack: 's' },
+                                { label: 'Other', data: points.map(p => Math.max(0, (p.count || 0) - (p.success || 0) - (p.error || 0))), backgroundColor: '#64748b', borderRadius: 3, stack: 's' },
+                            ],
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: `Deals created (last ${range} days)` } },
+                            scales: {
+                                y: { stacked: true, beginAtZero: true, grid: gridStyle, ticks: { ...axTick, precision: 0 } },
+                                x: { stacked: true, grid: { display: false }, ticks: { ...axTick, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+                            },
+                        },
+                    });
+
+                    // Tier breakdown doughnut (user_count)
+                    if (byTier && byTier.tiers) {
+                        const palette = { starter: '#22c55e', pro: '#3b82f6', unlimited: '#f472b6', enterprise: '#a78bfa', admin: '#f59e0b', free: '#64748b' };
+                        mkChart(tierChartRef, 'tier', {
+                            type: 'doughnut',
+                            data: {
+                                labels: byTier.tiers.map(t => t.tier),
+                                datasets: [{
+                                    data: byTier.tiers.map(t => t.user_count),
+                                    backgroundColor: byTier.tiers.map(t => palette[t.tier] || '#94a3b8'),
+                                    borderColor: '#0a1628',
+                                    borderWidth: 2,
+                                }],
+                            },
+                            options: {
+                                responsive: true, maintainAspectRatio: false,
+                                plugins: { legend: { position: 'right', labels: legendStyle }, title: { ...titleFont, text: 'Users by Tier' } },
+                            },
+                        });
+                    }
+                });
+                return () => cancelAnimationFrame(raf);
+            }, [timeseries, byTier, range]);
+
+            // Cleanup charts on unmount
+            useEffect(() => () => {
+                Object.values(chartInstances.current).forEach(c => c && c.destroy());
+                chartInstances.current = {};
+            }, []);
+
+            const fmtPct = (f) => `${((f || 0) * 100).toFixed(1)}%`;
+            const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString() : '—';
+            const fmtMoney = (cents) => `$${((cents || 0) / 100).toFixed(0)}`;
+
+            if (loading && !overview) {
+                return (
+                    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+                        <div className="loading" style={{ textAlign: 'center', color: '#94a3b8' }}>Loading analytics…</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div style={{ padding: '1.5rem 2rem', maxWidth: '1400px', margin: '0 auto' }}>
+                    {error && (
+                        <div style={{ background: '#ef444433', border: '1px solid #ef4444', color: '#fca5a5', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>
+                            {error}
+                        </div>
+                    )}
+
+                    {/* Range selector */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginRight: '4px' }}>Range:</span>
+                        {[7, 30, 90].map(d => (
+                            <button key={d} onClick={() => setRange(d)} style={{
+                                fontSize: '0.75rem', padding: '4px 12px', borderRadius: '999px', cursor: 'pointer', fontWeight: 600,
+                                background: range === d ? '#00BFA5' : 'transparent',
+                                color: range === d ? '#0a1628' : '#94a3b8',
+                                border: `1px solid ${range === d ? '#00BFA5' : 'rgba(255,255,255,0.15)'}`,
+                            }}>{d}d</button>
+                        ))}
+                        {overview && overview.generated_at && (
+                            <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: '#64748b' }}>
+                                as of {new Date(overview.generated_at.replace('Z', '')).toLocaleString()}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* KPI strip */}
+                    {overview && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '1.5rem' }}>
+                            <KPICard label="Total Deals" value={overview.total_deals} format="number" />
+                            <KPICard label="Total Users" value={overview.total_users} format="number" />
+                            <KPICard label="Active Users (30d)" value={overview.active_users_30d} format="number" />
+                            <KPICard label="Deals (30d)" value={overview.deals_last_30d} format="number" />
+                            <KPICard label="Parse Success" value={fmtPct(overview.parse_success_rate)} format="raw" />
+                        </div>
+                    )}
+
+                    {/* Charts row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <div className="panel" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1rem', height: '340px' }}>
+                            <canvas ref={tsChartRef}></canvas>
+                        </div>
+                        <div className="panel" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '1rem', height: '340px' }}>
+                            <canvas ref={tierChartRef}></canvas>
+                        </div>
+                    </div>
+
+                    {/* Tier table with MRR */}
+                    {byTier && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <h3 style={{ color: '#e2e8f0', fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                Subscription Tiers — Total MRR: {fmtMoney(byTier.total_mrr_cents)}
+                            </h3>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', fontSize: '0.8rem', color: '#e2e8f0', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr style={{ textAlign: 'left', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                            <th style={{ padding: '8px 10px' }}>Tier</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Users</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Total Deals</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Deals (30d)</th>
+                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>MRR</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {byTier.tiers.map(t => (
+                                            <tr key={t.tier} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                                <td style={{ padding: '8px 10px', textTransform: 'capitalize' }}>{t.tier}</td>
+                                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{t.user_count}</td>
+                                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{t.deal_count}</td>
+                                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{t.deals_last_30d}</td>
+                                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{fmtMoney(t.mrr_cents)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Top users table */}
+                    <div>
+                        <h3 style={{ color: '#e2e8f0', fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem' }}>Top Users by Deal Volume</h3>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', fontSize: '0.8rem', color: '#e2e8f0', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                        <th style={{ padding: '8px 10px' }}>Email</th>
+                                        <th style={{ padding: '8px 10px' }}>Name</th>
+                                        <th style={{ padding: '8px 10px' }}>Tier</th>
+                                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Total Deals</th>
+                                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>This Month</th>
+                                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Limit</th>
+                                        <th style={{ padding: '8px 10px' }}>Last Deal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {topUsers.map(u => (
+                                        <tr key={u.email} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                            <td style={{ padding: '8px 10px' }}>{u.email}</td>
+                                            <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{u.name || '—'}</td>
+                                            <td style={{ padding: '8px 10px' }}>
+                                                {u.subscription_tier ? (
+                                                    <span style={{ fontSize: '0.7rem', color: TIER_COLORS[u.subscription_tier] || '#94a3b8', border: `1px solid ${TIER_COLORS[u.subscription_tier] || '#94a3b8'}`, borderRadius: '4px', padding: '1px 6px', textTransform: 'uppercase', fontWeight: 600 }}>
+                                                        {u.subscription_tier}
+                                                    </span>
+                                                ) : <span style={{ color: '#64748b' }}>—</span>}
+                                            </td>
+                                            <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{u.total_deals}</td>
+                                            <td style={{ padding: '8px 10px', textAlign: 'right' }}>{u.monthly_used}</td>
+                                            <td style={{ padding: '8px 10px', textAlign: 'right', color: u.is_at_limit ? '#F87171' : '#94a3b8' }}>
+                                                {u.monthly_limit > 0 ? u.monthly_limit : '∞'}
+                                                {u.is_at_limit && <span style={{ marginLeft: 4 }}>⚠</span>}
+                                            </td>
+                                            <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{fmtDate(u.last_deal_at)}</td>
+                                        </tr>
+                                    ))}
+                                    {topUsers.length === 0 && (
+                                        <tr><td colSpan="7" style={{ padding: '16px 10px', textAlign: 'center', color: '#64748b' }}>No deals recorded yet.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Status breakdown footer */}
+                    {statusBreakdown && (
+                        <div style={{ marginTop: '1.5rem', fontSize: '0.75rem', color: '#64748b', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                            <span>Pipeline: {Object.entries(statusBreakdown.by_status || {}).map(([s, n]) => `${s}=${n}`).join(' · ')}</span>
+                            <span>Versions: {Object.entries(statusBreakdown.by_version || {}).map(([v, n]) => `v${v}=${n}`).join(' · ')}</span>
+                            <span>Errors (7d): {statusBreakdown.errors_last_7d}</span>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         // Admin Panel — User Management
         const AdminPanel = ({ onBack }) => {
             const [users, setUsers] = useState([]);
@@ -6375,6 +6653,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         subscriptionTier={subscriptionTier}
                         hasStripe={hasStripe}
                         onAdminClick={() => setCurrentView(currentView === 'admin' ? 'list' : 'admin')}
+                        onAdminAnalyticsClick={() => setCurrentView(currentView === 'admin-analytics' ? 'list' : 'admin-analytics')}
                         onHomeClick={() => { setCurrentView('list'); setSelectedDealId(null); setDeal(null); }}
                     />
 
@@ -6428,6 +6707,10 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
                     {currentView === 'admin' && (
                         <AdminPanel onBack={() => setCurrentView('list')} />
+                    )}
+
+                    {currentView === 'admin-analytics' && (
+                        <AdminAnalyticsView onBack={() => setCurrentView('list')} />
                     )}
 
                     <div style={{
