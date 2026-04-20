@@ -4,16 +4,20 @@ import hashlib
 import json
 import time
 import base64
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.database import init_db, SessionLocal
 from app.models.user import User
 from app.routes import (
@@ -23,6 +27,8 @@ from app.routes import (
     admin_analytics_router,
     export_router,
     billing_router,
+    seo_router,
+    marketing_router,
 )
 from app.routes.admin import hash_password, verify_password
 
@@ -33,7 +39,13 @@ FRONTEND_DIR = _docker_frontend if _docker_frontend.exists() else _local_fronten
 
 # Cookie config
 COOKIE_NAME = "crelytic_session"
-COOKIE_MAX_AGE = 86400 * 7  # 7 days
+COOKIE_MAX_AGE = 86400 * 7  # 7 days, renewed on each authenticated request (sliding session)
+
+# Rate limiting for login — track failed attempts per IP
+_login_attempts = {}  # ip -> [timestamp, timestamp, ...]
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+LOCKOUT_SECONDS = 900  # 15 minute lockout after max attempts
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -43,7 +55,7 @@ COOKIE_MAX_AGE = 86400 * 7  # 7 days
 def _sign(value: str) -> str:
     """Create HMAC signature for a base64-encoded value."""
     b64 = base64.urlsafe_b64encode(value.encode()).decode()
-    sig = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()[:16]
+    sig = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()
     return f"{b64}.{sig}"
 
 
@@ -52,7 +64,7 @@ def _verify(signed: str):
     if not signed or "." not in signed:
         return None
     b64, sig = signed.rsplit(".", 1)
-    expected = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()[:16]
+    expected = hmac.new(settings.secret_key.encode(), b64.encode(), hashlib.sha256).hexdigest()
     if hmac.compare_digest(sig, expected):
         try:
             return base64.urlsafe_b64decode(b64.encode()).decode()
@@ -80,13 +92,20 @@ def _get_user_from_cookie(cookie_value: str):
 class AuthMiddleware(BaseHTTPMiddleware):
     """User authentication for /engine/* routes. Admin check for /engine/api/v1/admin/*."""
 
-    PUBLIC_PATHS = {"/health", "/engine/login", "/engine/signup", "/engine/api/v1/billing/webhook", "/", "/docs", "/openapi.json", "/redoc"}
+    _BASE_PUBLIC = {
+        "/health", "/engine/login", "/engine/signup", "/engine/api/v1/billing/webhook", "/",
+        "/engine/features", "/engine/pricing", "/engine/demo",
+        "/engine/how-it-works", "/engine/integrations", "/engine/enterprise",
+        "/engine/changelog", "/static",
+    }
+    _DEV_PATHS = {"/docs", "/openapi.json", "/redoc"}
+    PUBLIC_PATHS = _BASE_PUBLIC | _DEV_PATHS if settings.env != "production" else _BASE_PUBLIC
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
         # Skip auth for public paths
-        if path in self.PUBLIC_PATHS or not path.startswith("/engine"):
+        if path in self.PUBLIC_PATHS or not path.startswith("/engine") or path.startswith("/static"):
             return await call_next(request)
 
         # Check session cookie
@@ -111,7 +130,31 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if "/api/v1/admin" in path and user_data.get("role") != "admin":
             return JSONResponse({"detail": "Admin access required"}, status_code=403)
 
-        return await call_next(request)
+        response = await call_next(request)
+
+        # Sliding session: refresh cookie expiry on each authenticated request
+        session_val = request.cookies.get(COOKIE_NAME, "")
+        if session_val:
+            response.set_cookie(
+                key=COOKIE_NAME, value=session_val, max_age=COOKIE_MAX_AGE,
+                httponly=True, samesite="lax", secure=settings.env == "production",
+            )
+
+        return response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if settings.env == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -123,7 +166,20 @@ LOGIN_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRELYTIC Engine</title>
+    <meta name="description" content="Log in to CRELYTIC Engine. Upload an offering memorandum, get a full DCF, waterfall analysis, and investment memo in minutes. AI-powered CRE deal underwriting.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://engine.crelytic.ai/engine/login">
+    <meta property="og:title" content="CRELYTIC Engine — AI-Powered CRE Underwriting">
+    <meta property="og:description" content="Upload an OM. Get a full DCF, waterfall, and investment memo in minutes.">
+    <meta property="og:url" content="https://engine.crelytic.ai/engine/login">
+    <meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="CRELYTIC">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CRELYTIC Engine — AI-Powered CRE Underwriting">
+    <meta name="twitter:description" content="Upload an OM. Get a full DCF, waterfall, and investment memo in minutes.">
+    <meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+    <title>Log In | CRELYTIC Engine — AI CRE Underwriting</title>
     <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAABiUlEQVRYhe2WPy9DURiHn/e0FIn/qUi0FQwkTZlIfAJDTWInfAI7A7Gz2YTdavEhEFeCgXBaQRfSgV6peyxC5V6izW1ruL/tvHnP+zz33HuSK3wklpzsEopLgpkFBoAI/sYGrgyyJ6qwoS3rEUAABpITY2+87YP0+Qz9KVlHnHT29PBEEqlUJ06jVUP4pwTKHg11RBPLIOkawwHajGl4DRuYqcb09YUUw7FWV/1c51nZOQVAMDMKGKyGgBccYCTRVrocUvj/tZeTJlVHOACBQCBQd4FwJZumFueJxmOuek5nONjeLWtWRSfgBQfoScTLnlX3VxAIBAKua9gb6yfS1OxqtF+eub/Vvgu4TsALDhBpbvEd7ilQ6wQC/0LAriO/oICr0or98uzdWVLP6YxnT+7m65qe67xnz9n3+qXEk+Nrgln5m7DPEVaVqMIG4P1I1U1GhYubSlvWoyPONJCtJdxRJn19fPwUAsjn7h7ae7t3MCEbiIK0UuHf0i8pABcIW6qhOKdPjjTAO0ACbHMMH2tvAAAAAElFTkSuQmCC">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -224,18 +280,20 @@ LOGIN_HTML = """<!DOCTYPE html>
 # ═══════════════════════════════════════════════════════════════
 
 def seed_admin_user():
-    """Create or update the admin user from env vars."""
+    """Create or update the admin user from env vars. Requires ADMIN_EMAIL and ADMIN_PASSWORD."""
+    if not settings.admin_email or not settings.admin_password:
+        print("[Security] ADMIN_EMAIL and ADMIN_PASSWORD not set — skipping admin seed")
+        return
     db = SessionLocal()
     try:
         admin_email = settings.admin_email.lower().strip()
         existing = db.query(User).filter(User.email == admin_email).first()
         if existing:
-            # Always sync password from env var so changes take effect on redeploy
             existing.hashed_password = hash_password(settings.admin_password)
             existing.role = "admin"
             existing.is_active = True
             db.commit()
-            print(f"Updated admin user: {admin_email}")
+            print(f"[Startup] Admin user synced")
         else:
             admin = User(
                 email=admin_email,
@@ -246,9 +304,9 @@ def seed_admin_user():
             )
             db.add(admin)
             db.commit()
-            print(f"Created admin user: {admin_email}")
+            print(f"[Startup] Admin user created")
     except Exception as e:
-        print(f"Error seeding admin user: {e}")
+        print(f"[Startup] Admin seed error: {e}")
         db.rollback()
     finally:
         db.close()
@@ -264,12 +322,9 @@ async def lifespan(app: FastAPI):
     init_db()
     seed_admin_user()
     os.makedirs(settings.upload_dir, exist_ok=True)
-    print(f"Application started. Upload directory: {settings.upload_dir}")
-    print(f"Anthropic API key: {'SET (' + settings.anthropic_api_key[:10] + '...)' if settings.anthropic_api_key else 'NOT SET'}")
-    print(f"Anthropic model: {settings.anthropic_model}")
-    print(f"Anthropic extraction model: {settings.anthropic_extraction_model}")
-    print(f"Engine at: http://localhost:8000/engine")
-    print(f"Login at:  http://localhost:8000/engine/login")
+    logger.info(f"Application started. ENV={settings.env}")
+    logger.info(f"Anthropic API key: {'SET' if settings.anthropic_api_key else 'NOT SET'}")
+    logger.info(f"Engine at: http://localhost:8000/engine")
     yield
     print("Application shutting down")
 
@@ -281,18 +336,25 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Auth middleware (must be added BEFORE CORS)
 app.add_middleware(AuthMiddleware)
 
 # CORS middleware
-cors_origins = [origin.strip() for origin in settings.cors_origins.split(",")]
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
+
+# SEO & Marketing routes (must be registered BEFORE the /engine catch-all)
+app.include_router(seo_router)
+app.include_router(marketing_router)
 
 # Register API routers under /engine prefix
 app.include_router(deals_router, prefix="/engine")
@@ -302,6 +364,21 @@ app.include_router(admin_analytics_router, prefix="/engine")
 app.include_router(export_router, prefix="/engine")
 app.include_router(billing_router)
 
+# Static files (OG image, etc.)
+_static_dir = _docker_frontend / "static" if _docker_frontend.exists() else _local_frontend / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+
+# Dedicated route for OG image at root path (meta tags reference /og-image.png)
+@app.get("/og-image.png", include_in_schema=False)
+async def og_image():
+    """Serve OG image for social media previews."""
+    img_path = _static_dir / "og-image.png"
+    if img_path.exists():
+        return FileResponse(str(img_path), media_type="image/png")
+    return Response(status_code=404)
+
 
 # ═══════════════════════════════════════════════════════════════
 # ROUTES
@@ -310,7 +387,7 @@ app.include_router(billing_router)
 @app.get("/health")
 async def health_check():
     """Health check endpoint (no auth required)."""
-    return {"status": "healthy", "service": "CRE Lytic Engine", "version": "2.0.0"}
+    return {"status": "healthy", "service": "CRELYTIC Engine", "version": "2.0.0"}
 
 
 @app.get("/")
@@ -335,6 +412,18 @@ async def login_page(request: Request):
 @app.post("/engine/login")
 async def login_submit(request: Request):
     """Validate email+password and set session cookie."""
+    # Rate limiting by IP
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    attempts = _login_attempts.get(client_ip, [])
+    # Clean old attempts outside window
+    attempts = [t for t in attempts if now - t < LOGIN_WINDOW_SECONDS]
+    if len(attempts) >= LOGIN_MAX_ATTEMPTS:
+        oldest = min(attempts) if attempts else now
+        wait = int(LOCKOUT_SECONDS - (now - oldest))
+        html = LOGIN_HTML.replace("{error_class}", "show").replace("{error_msg}", f"Too many attempts. Try again in {max(1, wait // 60)} minutes.")
+        return HTMLResponse(content=html, status_code=429)
+
     form = await request.form()
     email = (form.get("email", "") or "").lower().strip()
     password = form.get("password", "")
@@ -344,6 +433,8 @@ async def login_submit(request: Request):
     try:
         user = db.query(User).filter(User.email == email, User.is_active == True).first()
         if user and verify_password(password, user.hashed_password):
+            # Clear failed attempts on successful login
+            _login_attempts.pop(client_ip, None)
             # Create signed session cookie with user data
             payload = json.dumps({
                 "user_id": user.id,
@@ -366,6 +457,11 @@ async def login_submit(request: Request):
     finally:
         db.close()
 
+    # Track failed attempt
+    attempts.append(now)
+    _login_attempts[client_ip] = attempts
+    remaining = LOGIN_MAX_ATTEMPTS - len(attempts)
+
     # Wrong credentials — re-render login with error
     html = LOGIN_HTML.replace("{error_class}", "show").replace("{error_msg}", "Invalid email or password.")
     return HTMLResponse(content=html, status_code=401)
@@ -381,7 +477,7 @@ async def logout():
 
 @app.get("/engine/me")
 async def get_current_user(request: Request):
-    """Return current user info (for frontend header)."""
+    """Return current user info (for frontend header) including investment preferences."""
     email = getattr(request.state, "user_email", "unknown")
     result = {
         "email": email,
@@ -390,6 +486,7 @@ async def get_current_user(request: Request):
         "subscription_tier": None,
         "subscription_status": None,
         "has_stripe": False,
+        "preferences": {},
     }
     db = SessionLocal()
     try:
@@ -398,9 +495,54 @@ async def get_current_user(request: Request):
             result["subscription_tier"] = user.subscription_tier
             result["subscription_status"] = user.subscription_status
             result["has_stripe"] = bool(user.stripe_customer_id)
+            result["preferences"] = user.user_preferences or {}
     finally:
         db.close()
     return result
+
+
+@app.get("/engine/me/preferences")
+async def get_preferences(request: Request):
+    """Return user's investment preferences."""
+    email = getattr(request.state, "user_email", "unknown")
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        return user.user_preferences or {} if user else {}
+    finally:
+        db.close()
+
+
+ALLOWED_PREF_KEYS = {
+    "hurdleIRR", "hurdleEM", "hurdleCoC", "hurdleDSCR", "hurdleMaxCap",
+    "marketRenewalProb", "marketVacantMonths", "marketFreeRentMonths",
+    "marketTINewPSF", "marketTIRenewalPSF", "marketLCNewPct", "marketLCRenewalPct",
+}
+
+
+@app.put("/engine/me/preferences")
+async def update_preferences(request: Request):
+    """Update user's investment preferences (merge with existing)."""
+    email = getattr(request.state, "user_email", "unknown")
+    body = await request.json()
+
+    # Whitelist only allowed preference keys
+    filtered = {k: v for k, v in body.items() if k in ALLOWED_PREF_KEYS and isinstance(v, (int, float))}
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return JSONResponse({"detail": "User not found"}, status_code=404)
+        current = user.user_preferences or {}
+        current.update(filtered)
+        user.user_preferences = current
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(user, "user_preferences")
+        db.commit()
+        return current
+    finally:
+        db.close()
 
 
 @app.get("/engine", response_class=HTMLResponse)

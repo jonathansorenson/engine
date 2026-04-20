@@ -3,12 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CRELYTIC Engine — AI-powered commercial real estate deal underwriting. Upload an OM, get a full DCF, waterfall, and investment memo in minutes.">
+    <meta name="robots" content="noindex">
+    <link rel="canonical" href="https://engine.crelytic.ai/engine">
     <title>CRELYTIC Engine — AI-Powered CRE Underwriting</title>
     <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAABiUlEQVRYhe2WPy9DURiHn/e0FIn/qUi0FQwkTZlIfAJDTWInfAI7A7Gz2YTdavEhEFeCgXBaQRfSgV6peyxC5V6izW1ruL/tvHnP+zz33HuSK3wklpzsEopLgpkFBoAI/sYGrgyyJ6qwoS3rEUAABpITY2+87YP0+Qz9KVlHnHT29PBEEqlUJ06jVUP4pwTKHg11RBPLIOkawwHajGl4DRuYqcb09YUUw7FWV/1c51nZOQVAMDMKGKyGgBccYCTRVrocUvj/tZeTJlVHOACBQCBQd4FwJZumFueJxmOuek5nONjeLWtWRSfgBQfoScTLnlX3VxAIBAKua9gb6yfS1OxqtF+eub/Vvgu4TsALDhBpbvEd7ilQ6wQC/0LAriO/oICr0or98uzdWVLP6YxnT+7m65qe67xnz9n3+qXEk+Nrgln5m7DPEVaVqMIG4P1I1U1GhYubSlvWoyPONJCtJdxRJn19fPwUAsjn7h7ae7t3MCEbiIK0UuHf0i8pABcIW6qhOKdPjjTAO0ACbHMMH2tvAAAAAElFTkSuQmCC">
     <link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,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">
     <meta property="og:title" content="CRELYTIC Engine — AI-Powered CRE Underwriting">
     <meta property="og:description" content="Upload an OM, get a full DCF, waterfall, and investment memo in minutes. AI-powered commercial real estate underwriting.">
     <meta property="og:type" content="website">
+    <meta property="og:url" content="https://engine.crelytic.ai/engine">
+    <meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+    <meta property="og:site_name" content="CRELYTIC">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CRELYTIC Engine — AI-Powered CRE Underwriting">
+    <meta name="twitter:description" content="Upload an OM, get a full DCF, waterfall, and investment memo in minutes. AI-powered commercial real estate underwriting.">
+    <meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -576,6 +586,64 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Upload Orbital Animation */
+        .upload-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(11, 17, 32, 0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 9999;
+        }
+        .orbit-container { position: relative; width: 140px; height: 140px; margin-bottom: 32px; }
+        .orbit-ring {
+            position: absolute; border: 2.5px solid transparent; border-radius: 50%;
+        }
+        .orbit-ring-1 {
+            width: 140px; height: 140px; top: 0; left: 0;
+            border-top-color: var(--teal); animation: spin 2s linear infinite;
+        }
+        .orbit-ring-2 {
+            width: 100px; height: 100px; top: 20px; left: 20px;
+            border-right-color: #3b82f6; animation: spin 1.4s linear infinite reverse;
+        }
+        .orbit-ring-3 {
+            width: 60px; height: 60px; top: 40px; left: 40px;
+            border-bottom-color: #f472b6; animation: spin 0.9s linear infinite;
+        }
+        .orbit-icon {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 32px;
+        }
+        .upload-overlay h3 {
+            font-size: 20px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px;
+        }
+        .upload-overlay .upload-sub {
+            font-size: 13px; color: #64748b; margin-bottom: 24px;
+        }
+        .upload-progress-track {
+            width: 260px; height: 4px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 24px;
+        }
+        .upload-progress-fill {
+            height: 100%; width: 30%;
+            background: linear-gradient(90deg, var(--teal), #3b82f6);
+            border-radius: 4px;
+            animation: progressSweep 2.5s ease-in-out infinite;
+        }
+        @keyframes progressSweep { 0% { width: 10%; } 50% { width: 80%; } 100% { width: 10%; } }
+        .upload-steps { list-style: none; padding: 0; margin: 0; text-align: left; }
+        .upload-steps li {
+            display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px;
+        }
+        .upload-steps li.done { color: #94a3b8; }
+        .upload-steps li.active { color: #e2e8f0; }
+        .upload-steps li.waiting { color: #334155; }
+        .upload-steps .step-icon { width: 18px; text-align: center; font-size: 12px; }
+        .upload-steps li.done .step-icon { color: var(--teal); }
+        .upload-steps li.active .step-spinner {
+            display: inline-block; width: 12px; height: 12px;
+            border: 2px solid var(--teal); border-top-color: transparent;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+
         /* Property Header */
         .property-header {
             background: var(--card);
@@ -717,6 +785,25 @@
             margin-bottom: 0.5rem;
         }
     </style>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "CRELYTIC",
+      "url": "https://crelytic.ai",
+      "logo": "https://engine.crelytic.ai/og-image.png",
+      "description": "AI-powered commercial real estate analytics and underwriting.",
+      "founder": {
+        "@type": "Person",
+        "name": "Jonathan Sorenson"
+      },
+      "parentOrganization": {
+        "@type": "Organization",
+        "name": "Rising Tide Property Group",
+        "url": "https://risingtidepg.com"
+      }
+    }
+    </script>
 </head>
 <body>
     <div id="root"></div>
@@ -969,7 +1056,7 @@
 
         // Components
         const TIER_COLORS = { starter: '#22c55e', pro: '#3b82f6', unlimited: '#f472b6', enterprise: '#a78bfa', admin: '#f59e0b' };
-        const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onAdminAnalyticsClick, onHomeClick }) => (
+        const Header = ({ currentPage, dealName, userName, userRole, subscriptionTier, hasStripe, onAdminClick, onAdminAnalyticsClick, onHomeClick, onSettingsClick }) => (
             <div className="header">
                 <div className="header-left">
                     <div className="breadcrumb" onClick={onHomeClick} style={{ cursor: 'pointer' }}>
@@ -1009,6 +1096,7 @@
                         </button>
                     )}
                     <img src="data:image/png;base64,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" alt="CRElytic" style={{ height: '32px', opacity: 0.95 }} />
+                    {!DEMO_MODE && onSettingsClick && <button onClick={onSettingsClick} style={{ fontSize: '0.75rem', color: '#00BFA5', background: 'none', border: '1px solid rgba(0,191,165,0.3)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>Settings</button>}
                     {!DEMO_MODE && <a href="/engine/logout" style={{ fontSize: '0.75rem', color: '#94a3b8', textDecoration: 'none', padding: '4px 10px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px' }}>Sign Out</a>}
                 </div>
             </div>
@@ -1085,16 +1173,21 @@
         const DealListView = ({ onSelectDeal, onUpload, onUpgrade }) => {
             const [deals, setDeals] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [dealCount, setDealCount] = useState({ monthly_used: 0, monthly_limit: 10, total_count: 0, total_limit: 50, can_upload: true, resets_at: null });
+            const [dealCount, setDealCount] = useState(null);
+
+            const fetchCount = async () => {
+                try {
+                    const r = await fetch(`${API_URL}/api/v1/deals/count`, { credentials: 'include' });
+                    if (r.status === 401) { window.location.href = '/engine/login'; return; }
+                    if (r.ok) { const data = await r.json(); setDealCount(data); return data; }
+                } catch (e) { console.error('[Count] fetch failed', e); }
+                return null;
+            };
 
             useEffect(() => {
                 const load = async () => {
-                    const [data, countRes] = await Promise.all([
-                        fetchDeals(),
-                        fetch(`${API_URL}/api/v1/deals/count`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).catch(() => null),
-                    ]);
+                    const [data] = await Promise.all([fetchDeals(), fetchCount()]);
                     setDeals(data || []);
-                    if (countRes) setDealCount(countRes);
                     setLoading(false);
                 };
                 load();
@@ -1121,12 +1214,14 @@
                 </div>;
             }
 
+            const dc = dealCount || { monthly_used: '—', monthly_limit: '—', total_count: 0, total_limit: '—', can_upload: true, resets_at: null };
+
             return (
                 <div className="container">
                     <div style={{ marginBottom: '2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                             <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Underwriting Pipeline</h1>
-                            {dealCount.can_upload ? (
+                            {dc.can_upload ? (
                                 <button className="btn btn-primary" onClick={onUpload}>
                                     ➕ Upload New Deal
                                 </button>
@@ -1137,14 +1232,14 @@
                                 </button>
                             )}
                         </div>
-                        {dealCount.monthly_limit < 999 && (() => {
-                            const mPct = dealCount.monthly_limit > 0 ? Math.min(100, (dealCount.monthly_used / dealCount.monthly_limit) * 100) : 0;
-                            const tPct = dealCount.total_limit > 0 ? Math.min(100, (dealCount.total_count / dealCount.total_limit) * 100) : 0;
+                        {dc.monthly_limit < 999 && (() => {
+                            const mPct = dc.monthly_limit > 0 ? Math.min(100, (dc.monthly_used / dc.monthly_limit) * 100) : 0;
+                            const tPct = dc.total_limit > 0 ? Math.min(100, (dc.total_count / dc.total_limit) * 100) : 0;
                             const mColor = mPct >= 100 ? '#ef4444' : mPct >= 80 ? '#f59e0b' : mPct >= 50 ? '#3b82f6' : '#22c55e';
                             const tColor = tPct >= 100 ? '#ef4444' : tPct >= 80 ? '#f59e0b' : tPct >= 50 ? '#3b82f6' : '#22c55e';
-                            const atLimit = !dealCount.can_upload;
-                            const isStarter = dealCount.monthly_limit <= 5;
-                            const isPro = dealCount.monthly_limit > 5 && dealCount.monthly_limit <= 25;
+                            const atLimit = !dc.can_upload;
+                            const isStarter = dc.monthly_limit <= 5;
+                            const isPro = dc.monthly_limit > 5 && dc.monthly_limit <= 25;
                             const showUpgradeCard = onUpgrade && (isStarter || isPro || atLimit || mPct >= 50);
                             return (
                                 <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch' }}>
@@ -1154,21 +1249,21 @@
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Monthly Uploads</span>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: mColor }}>{dealCount.monthly_used} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.monthly_limit}</span></span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: mColor }}>{dc.monthly_used} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dc.monthly_limit}</span></span>
                                                 </div>
                                                 <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                                                     <div style={{ width: `${mPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${mColor}88, ${mColor})`, transition: 'width 0.5s ease' }} />
                                                 </div>
-                                                {dealCount.resets_at && (
+                                                {dc.resets_at && (
                                                     <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', opacity: 0.6, marginTop: '4px', display: 'block' }}>
-                                                        Resets {new Date(dealCount.resets_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                        Resets {new Date(dc.resets_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                     </span>
                                                 )}
                                             </div>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deals Stored</span>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: tColor }}>{dealCount.total_count} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dealCount.total_limit}</span></span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: tColor }}>{dc.total_count} <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>/ {dc.total_limit}</span></span>
                                                 </div>
                                                 <div style={{ width: '100%', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                                                     <div style={{ width: `${tPct}%`, height: '100%', borderRadius: '3px', background: `linear-gradient(90deg, ${tColor}88, ${tColor})`, transition: 'width 0.5s ease' }} />
@@ -1258,7 +1353,7 @@
                                 <div className="empty-state-icon">📋</div>
                                 <div className="empty-state-title">No deals yet</div>
                                 <p>Upload your first deal to get started</p>
-                                {dealCount.monthly_limit < 999 && onUpgrade && (
+                                {dc.monthly_limit < 999 && onUpgrade && (
                                     <p style={{ marginTop: '12px', fontSize: '0.75rem', color: '#f472b6', opacity: 0.8 }}>
                                         💡 <a href="#" onClick={(e) => { e.preventDefault(); onUpgrade('unlimited'); }}
                                             style={{ color: '#f472b6', textDecoration: 'underline' }}>
@@ -1320,6 +1415,7 @@
             const [files, setFiles] = useState([]);
             const [uploading, setUploading] = useState(false);
             const [dragActive, setDragActive] = useState(false);
+            const [uploadStep, setUploadStep] = useState(0);
 
             const handleDrag = (e) => {
                 e.preventDefault();
@@ -1338,25 +1434,69 @@
             const handleAnalyze = async () => {
                 if (files.length === 0) return;
                 setUploading(true);
+                setUploadStep(0);
+                const stepTimer1 = setTimeout(() => setUploadStep(1), 2000);
+                const stepTimer2 = setTimeout(() => setUploadStep(2), 5000);
+                const stepTimer3 = setTimeout(() => setUploadStep(3), 10000);
                 try {
                     const result = await uploadDeal(files);
+                    clearTimeout(stepTimer1);
+                    clearTimeout(stepTimer2);
+                    clearTimeout(stepTimer3);
                     onSuccess(result.id);
                 } catch (error) {
+                    clearTimeout(stepTimer1);
+                    clearTimeout(stepTimer2);
+                    clearTimeout(stepTimer3);
                     alert('Error uploading deal: ' + error.message);
                     setUploading(false);
+                    setUploadStep(0);
                 }
             };
 
             const getFileIcon = (file) => {
-                if (file.type.includes('pdf')) return '📄';
-                if (file.type.includes('excel') || file.type.includes('spreadsheet')) return '📊';
-                return '📁';
+                if (file.type.includes('pdf')) return '\u{1F4C4}';
+                if (file.type.includes('excel') || file.type.includes('spreadsheet')) return '\u{1F4CA}';
+                return '\u{1F4C1}';
             };
+
+            const uploadSteps = [
+                'Uploading document',
+                'Reading pages',
+                'Extracting financials & rent roll',
+                'Building underwriting model',
+            ];
+
+            if (uploading) {
+                return (
+                    <div className="upload-overlay">
+                        <div className="orbit-container">
+                            <div className="orbit-ring orbit-ring-1"></div>
+                            <div className="orbit-ring orbit-ring-2"></div>
+                            <div className="orbit-ring orbit-ring-3"></div>
+                            <div className="orbit-icon">{'\u{1F3E2}'}</div>
+                        </div>
+                        <h3>Analyzing Your Deal</h3>
+                        <div className="upload-sub">This usually takes 15–30 seconds</div>
+                        <div className="upload-progress-track"><div className="upload-progress-fill"></div></div>
+                        <ul className="upload-steps">
+                            {uploadSteps.map((step, i) => (
+                                <li key={i} className={i < uploadStep ? 'done' : i === uploadStep ? 'active' : 'waiting'}>
+                                    <span className="step-icon">
+                                        {i < uploadStep ? '\u2713' : i === uploadStep ? <span className="step-spinner"></span> : '\u25CB'}
+                                    </span>
+                                    {step}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                );
+            }
 
             return (
                 <div className="container">
                     <button className="btn btn-secondary btn-sm" onClick={onCancel} style={{ marginBottom: '2rem' }}>
-                        ← Back
+                        {'\u2190'} Back
                     </button>
 
                     <div className="upload-container">
@@ -1368,7 +1508,7 @@
                             onDrop={handleDrop}
                             onClick={() => document.getElementById('fileInput').click()}
                         >
-                            <div className="dropzone-icon">📥</div>
+                            <div className="dropzone-icon">{'\u{1F4E5}'}</div>
                             <div className="dropzone-text">Drop files here or click to browse</div>
                             <div className="dropzone-hint">PDF or Excel files (offering memorandum, ARGUS export, financial statements)</div>
                             <input
@@ -1396,7 +1536,7 @@
                                             className="btn btn-sm btn-secondary"
                                             onClick={() => setFiles(files.filter((_, i) => i !== idx))}
                                         >
-                                            ✕
+                                            {'\u2715'}
                                         </button>
                                     </div>
                                 ))}
@@ -1407,13 +1547,7 @@
                                     disabled={uploading}
                                     style={{ marginTop: '1.5rem', width: '100%' }}
                                 >
-                                    {uploading ? (
-                                        <>
-                                            <span className="loading"></span> Analyzing Deal...
-                                        </>
-                                    ) : (
-                                        '🔍 Analyze Deal'
-                                    )}
+                                    {'\u{1F50D}'} Analyze Deal
                                 </button>
                             </div>
                         )}
@@ -2323,7 +2457,7 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
     const intPaid = loanBal * ((p.rate || 6.25) / 100);
     const prinPaid = useIO ? 0 : Math.max(0, (yr <= hold ? annDS : 0) - intPaid);
     if (yr <= hold) loanBal = Math.max(0, loanBal - prinPaid);
-    const capexRes = yr <= hold ? (p.useCapexPct ? noi * ((p.capexReservePct || 2) / 100) : (p.capexReserveFlat || 0)) : 0;
+    const capexRes = yr <= hold ? (p.useCapexPct ? noi * ((p.capexReservePct || 2) / 100) : ((p.capexReservePSF || 0) * (p.sf || 0))) : 0;
     const specCapex = yr <= hold ? capItems.filter(c => c.year === yr).reduce((s, c) => s + (c.amount || 0), 0) : 0;
     const tiLC = yr <= hold && p.showTILC !== false ? (p.useRentRoll ? tiCost : ((p.tiReserve || 0) + noi * ((p.lcReservePct || 0) / 100))) : 0;
     const vaInc = yr <= hold ? events.filter(e => e.year === yr && e.type === "income").reduce((s, e) => s + (e.amount || 0), 0) : 0;
@@ -2386,7 +2520,11 @@ const runModelV2 = (p, tenants, events, capItems, wf) => {
   const gpIRR = calcIRRv2(gpCFs);
   const lpEM = lpEq > 0 ? lpOut / lpEq : 0;
   const gpPromote = Math.max(0, gpOut - gpEq);
-  const goGreen = (levIRR || 0) >= (p.hurdleTier1 || p.hurdleIRR || 9) && em >= (p.hurdleEM || 1.5);
+  const goGreen = (levIRR || 0) >= (p.hurdleTier1 || p.hurdleIRR || 9)
+    && em >= (p.hurdleEM || 1.5)
+    && (p.hurdleCoC ? (avgCoC || 0) >= p.hurdleCoC : true)
+    && (dscr || 0) >= (p.hurdleDSCR || 1.25)
+    && (p.hurdleMaxCap ? goingCap <= p.hurdleMaxCap : true);
 
   const gpTotalDist = gpOut;
   return {
@@ -2413,7 +2551,7 @@ const V2_DEFAULTS = {
   rate: 6.25,
   amort: 30,
   ioPeriod: 2,
-  isIO: true,
+  isIO: false,
   origFee: 1.0,
   prepayPct: 1.0,
   recourse: false,
@@ -2431,8 +2569,11 @@ const V2_DEFAULTS = {
   hurdleTier2LP: 80,
   hurdleTier3LP: 70,
   hurdleEM: 1.5,
+  hurdleCoC: 6,
+  hurdleDSCR: 1.25,
+  hurdleMaxCap: 8,
   capexReservePct: 2,
-  capexReserveFlat: 0,
+  capexReservePSF: 0.25,
   useCapexPct: true,
   tiReserve: 0,
   lcReservePct: 3,
@@ -2936,7 +3077,7 @@ const exportMemoPDF = async (deal, calc, p, wf, tenants) => {
 };
 
 // Main DashboardV2View Component
-const DashboardV2View = ({ deal: initialDeal, onBack }) => {
+const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
   const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
   // State
@@ -3006,7 +3147,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       const address = prop.address ? `${prop.address || ''}${prop.city ? ', ' + prop.city : ''}${prop.state ? ' ' + prop.state : ''}`.trim() : '';
 
       const hl = [];
-      const seeded = { ...V2_DEFAULTS };
+      const seeded = { ...V2_DEFAULTS, ...userPrefs };
       if (prop.name) { seeded.name = prop.name; hl.push('name'); }
       if (address) { seeded.address = address; hl.push('address'); }
       if (prop.property_type) { seeded.assetType = prop.property_type; hl.push('assetType'); }
@@ -3025,6 +3166,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       if (assum.amortization_years) seeded.amort = assum.amortization_years;
       if (assum.exit_cap_rate) seeded.exitCap = assum.exit_cap_rate > 1 ? assum.exit_cap_rate : assum.exit_cap_rate * 100;
       if (assum.noi_growth) seeded.rentGrowth = assum.noi_growth > 1 ? assum.noi_growth : assum.noi_growth * 100;
+      if (assum.vacancy) seeded.vacancy = assum.vacancy > 1 ? assum.vacancy : assum.vacancy * 100;
+      if (assum.is_io !== undefined) seeded.isIO = assum.is_io;
+      if (assum.io_period) seeded.ioPeriod = assum.io_period;
 
       setP(seeded);
       setHlF(hl);
@@ -3039,7 +3183,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
           rentPSF: r.rent_psf || (r.annual_rent && r.sf ? r.annual_rent / r.sf : 0),
           camPSF: r.cam_psf || (r.cam_annual && r.sf ? r.cam_annual / r.sf : 0),
           type: 'NNN',
-          escalPct: 3,
+          escalPct: r.escalation_pct || r.annual_escalation || (assum.noi_growth > 0 ? assum.noi_growth : 3),
           start: r.lease_start || r.start || '',
           end: r.lease_end || r.expiry || r.end || '',
           tiPSF: 0,
@@ -3231,19 +3375,22 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
       const axTick = { color: '#B0BEC5', font: { size: 12, family: "'DM Sans', system-ui, sans-serif" } };
       const gridStyle = { color: 'rgba(30, 51, 71, 0.6)' };
       const titleFont = { color: '#E8EDF2', font: { size: 15, weight: '600', family: "'DM Sans', system-ui, sans-serif" }, display: true, padding: { bottom: 12 } };
-      // 1) NOI vs Debt Service vs Net CF (bar)
+      // 1) NOI Trend + DSCR Safety (dual axis)
       mkChart(cfChartRef, 'cf', {
-        type: 'bar',
+        type: 'line',
         data: {
           labels,
           datasets: [
-            { label: 'NOI ($M)', data: hold.map(y => y.noi / 1e6), backgroundColor: '#00BFA5', borderRadius: 3 },
-            { label: 'Debt Service ($M)', data: hold.map(y => -y.annDS / 1e6), backgroundColor: '#F87171', borderRadius: 3 },
-            { label: 'Net CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: '#34D399', borderRadius: 3 },
+            { label: 'NOI ($)', data: hold.map(y => y.noi), borderColor: '#00BFA5', backgroundColor: 'rgba(0,191,165,0.15)', fill: true, tension: 0.3, pointRadius: 4, yAxisID: 'y' },
+            { label: 'DSCR', data: hold.map(y => y.annDS > 0 ? y.noi / y.annDS : 0), borderColor: '#F59E0B', borderWidth: 2.5, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5, pointBackgroundColor: '#F59E0B', borderDash: [5, 3], yAxisID: 'y1' },
           ],
         },
-        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'NOI vs Debt Service vs Net Cash Flow' } },
-          scales: { y: { beginAtZero: true, grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
+        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'NOI Trend + DSCR Safety' } },
+          scales: {
+            y: { position: 'left', grid: gridStyle, ticks: { ...axTick, callback: v => '$' + (v / 1e6).toFixed(2) + 'M' }, title: { display: true, text: 'NOI', color: '#90A4AE', font: { size: 12 } } },
+            y1: { position: 'right', grid: { display: false }, ticks: { ...axTick, callback: v => v.toFixed(2) + 'x' }, title: { display: true, text: 'DSCR', color: '#90A4AE', font: { size: 12 } }, suggestedMin: 0.8, suggestedMax: 2.5 },
+            x: { grid: { display: false }, ticks: axTick }
+          } },
       });
       // 2) Loan Balance Paydown (line)
       mkChart(loanChartRef, 'loan', {
@@ -3259,35 +3406,58 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Loan Balance Paydown' } },
           scales: { y: { beginAtZero: true, grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
       });
-      // 3) Equity Build / Cumulative CF (line + bar)
+      // 3) Cumulative Cash Flow + Equity Payback
+      const cumCF = hold.reduce((acc, y) => { acc.push((acc.length ? acc[acc.length - 1] : 0) + y.levCF); return acc; }, []);
+      const equityInvested = calc.equity || 0;
       mkChart(eqChartRef, 'eq', {
-        type: 'bar',
+        type: 'line',
         data: {
           labels,
           datasets: [
-            { label: 'Annual CF ($M)', data: hold.map(y => y.levCF / 1e6), backgroundColor: 'rgba(52,211,153,0.6)', borderRadius: 3, order: 2 },
-            { label: 'Cumulative ($M)', data: hold.reduce((acc, y) => { const prev = acc.length ? acc[acc.length - 1] : 0; acc.push(prev + y.levCF / 1e6); return acc; }, []),
-              type: 'line', borderColor: '#A78BFA', borderWidth: 2.5, backgroundColor: 'transparent', tension: 0.3, order: 1, pointRadius: 4, pointHoverRadius: 6 },
+            { label: 'Cumulative CF ($)', data: cumCF, borderColor: '#34D399', borderWidth: 2.5, backgroundColor: 'rgba(52,211,153,0.15)', fill: true, tension: 0.3, pointRadius: 5, pointBackgroundColor: '#34D399' },
+            { label: 'Equity Invested', data: labels.map(() => equityInvested), borderColor: '#F87171', borderWidth: 2, borderDash: [8, 4], backgroundColor: 'transparent', pointRadius: 0 },
           ],
         },
-        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Equity Build & Cumulative Cash Flow' } },
-          scales: { y: { grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' } }, x: { grid: { display: false }, ticks: axTick } } },
+        options: { responsive: true, plugins: { legend: { labels: legendStyle }, title: { ...titleFont, text: 'Cumulative Cash Flow vs Equity Payback' } },
+          scales: { y: { grid: gridStyle, ticks: { ...axTick, callback: v => '$' + (v / 1e6).toFixed(2) + 'M' }, suggestedMin: 0 }, x: { grid: { display: false }, ticks: axTick } } },
       });
-      // 4) Returns Snapshot (horizontal bar)
+      // 4) Full Amortization Schedule
+      const fullAmortYrs = p.amort || 30;
+      const amortLabels = Array.from({length: fullAmortYrs}, (_, i) => `Y${i+1}`);
+      const annRate = (p.rate || 6.25) / 100;
+      const fullDS = mortgageV2(calc.loan || 0, annRate, fullAmortYrs);
+      const amortData = [];
+      let amBal = calc.loan || 0;
+      for (let ayr = 1; ayr <= fullAmortYrs; ayr++) {
+        const interest = amBal * annRate;
+        const principal = Math.min(amBal, Math.max(0, fullDS - interest));
+        amBal = Math.max(0, amBal - principal);
+        amortData.push({ balance: amBal, interest, principal });
+      }
+      const holdPeriod = p.holdPeriod || 5;
       mkChart(hurChartRef, 'hur', {
         type: 'bar',
         data: {
-          labels: ['Levered IRR', 'Unlev IRR', 'Going-in Cap', 'YoC', 'Avg CoC'],
-          datasets: [{
-            label: 'Return (%)',
-            data: [calc.levIRR || 0, calc.unlevIRR || 0, calc.goingCap || 0, calc.yoc || 0, calc.avgCoC || 0],
-            backgroundColor: ['#00BFA5', '#34D399', '#4A8FD4', '#A78BFA', '#F59E0B'],
-            borderRadius: 3,
-          }],
+          labels: amortLabels,
+          datasets: [
+            { label: 'Principal ($K)', data: amortData.map(d => d.principal / 1e3), backgroundColor: '#00BFA5', borderRadius: 2, order: 2 },
+            { label: 'Interest ($K)', data: amortData.map(d => d.interest / 1e3), backgroundColor: 'rgba(248,113,113,0.5)', borderRadius: 2, order: 2 },
+            { label: 'Balance ($M)', data: amortData.map(d => d.balance / 1e6), type: 'line', borderColor: '#4A8FD4', borderWidth: 2.5, backgroundColor: 'transparent', tension: 0.3, pointRadius: 0, yAxisID: 'y1', order: 1 },
+          ],
         },
-        options: { indexAxis: 'y', responsive: true,
-          plugins: { legend: { display: false }, title: { ...titleFont, text: 'Returns Snapshot' } },
-          scales: { x: { grid: gridStyle, ticks: { ...axTick, callback: v => v.toFixed(1) + '%' } }, y: { grid: { display: false }, ticks: { color: '#E8EDF2', font: { size: 14, weight: '500', family: "'DM Sans', system-ui, sans-serif" } } } } },
+        options: { responsive: true,
+          plugins: {
+            legend: { labels: legendStyle },
+            title: { ...titleFont, text: 'Full Amortization Schedule' },
+            annotation: window.Chart.registry?.plugins?.get('annotation') ? {
+              annotations: { holdLine: { type: 'line', xMin: holdPeriod - 0.5, xMax: holdPeriod - 0.5, borderColor: '#F59E0B', borderWidth: 2, borderDash: [6, 3], label: { display: true, content: 'Exit', color: '#F59E0B', font: { size: 11 } } } }
+            } : undefined,
+          },
+          scales: {
+            y: { stacked: true, grid: gridStyle, ticks: { ...axTick, callback: v => '$' + v.toFixed(0) + 'K' }, title: { display: true, text: 'Annual Payment', color: '#90A4AE', font: { size: 12 } } },
+            y1: { position: 'right', grid: { display: false }, ticks: { ...axTick, callback: v => '$' + v.toFixed(1) + 'M' }, title: { display: true, text: 'Loan Balance', color: '#90A4AE', font: { size: 12 } } },
+            x: { stacked: true, grid: { display: false }, ticks: { ...axTick, maxRotation: 0, autoSkip: true, maxTicksLimit: 15 } }
+          } },
       });
     });
     return () => cancelAnimationFrame(raf);
@@ -4814,11 +4984,12 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                   />
                 ) : (
                   <V2Inp
-                    label="Annual Reserve"
+                    label="Reserve $/SF"
                     type="number"
-                    value={p.capexReserveFlat}
-                    onChange={(v) => setP(prev => ({ ...prev, capexReserveFlat: parseFloat(v) || 0 }))}
+                    value={p.capexReservePSF}
+                    onChange={(v) => setP(prev => ({ ...prev, capexReservePSF: parseFloat(v) || 0 }))}
                     prefix="$"
+                    suffix="/SF"
                   />
                 )}
               </V2Sect>
@@ -5151,16 +5322,16 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
         {/* CHARTS TAB */}
         {tab === 'charts' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-            <V2Sect title="NOI vs Debt Service vs Net CF">
+            <V2Sect title="NOI Trend + DSCR Safety">
               <canvas ref={cfChartRef} height="220" />
             </V2Sect>
             <V2Sect title="Loan Balance Paydown">
               <canvas ref={loanChartRef} height="220" />
             </V2Sect>
-            <V2Sect title="Cash Flow Build-Up">
+            <V2Sect title="Cumulative CF vs Equity Payback">
               <canvas ref={eqChartRef} height="220" />
             </V2Sect>
-            <V2Sect title="Returns Snapshot">
+            <V2Sect title="Full Amortization Schedule">
               <canvas ref={hurChartRef} height="220" />
             </V2Sect>
           </div>
@@ -6573,6 +6744,87 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             );
         };
 
+        // Settings Modal Component
+        const PREF_FIELDS = {
+            hurdles: [
+                { key: 'hurdleIRR', label: 'Min IRR', suffix: '%', min: 0, max: 50, step: 0.5, def: 9 },
+                { key: 'hurdleEM', label: 'Min Equity Multiple', suffix: 'x', min: 1, max: 5, step: 0.05, def: 1.5 },
+                { key: 'hurdleCoC', label: 'Min Cash-on-Cash', suffix: '%', min: 0, max: 25, step: 0.5, def: 6 },
+                { key: 'hurdleDSCR', label: 'Min DSCR', suffix: 'x', min: 0.5, max: 3, step: 0.05, def: 1.25 },
+                { key: 'hurdleMaxCap', label: 'Max Entry Cap Rate', suffix: '%', min: 3, max: 15, step: 0.25, def: 8 },
+            ],
+            mla: [
+                { key: 'marketRenewalProb', label: 'Renewal Probability', suffix: '%', min: 0, max: 100, step: 5, def: 75 },
+                { key: 'marketVacantMonths', label: 'Vacant Months', suffix: 'mo', min: 0, max: 24, step: 1, def: 6 },
+                { key: 'marketFreeRentMonths', label: 'Free Rent Months', suffix: 'mo', min: 0, max: 12, step: 1, def: 2 },
+                { key: 'marketTINewPSF', label: 'TI New Lease', suffix: '$/SF', min: 0, max: 80, step: 1, def: 15 },
+                { key: 'marketTIRenewalPSF', label: 'TI Renewal', suffix: '$/SF', min: 0, max: 50, step: 1, def: 10 },
+                { key: 'marketLCNewPct', label: 'LC New Lease', suffix: '%', min: 0, max: 10, step: 0.5, def: 6 },
+                { key: 'marketLCRenewalPct', label: 'LC Renewal', suffix: '%', min: 0, max: 10, step: 0.5, def: 4 },
+            ],
+        };
+
+        const SettingsModal = ({ userPrefs, setUserPrefs, onClose }) => {
+            const [localPrefs, setLocalPrefs] = useState({ ...userPrefs });
+            const [saving, setSaving] = useState(false);
+            const [saved, setSaved] = useState(false);
+            const savePrefs = async () => {
+                setSaving(true);
+                try {
+                    const res = await fetch(`${API_URL}/me/preferences`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(localPrefs), credentials: 'include',
+                    });
+                    if (res.ok) {
+                        const updated = await res.json();
+                        setUserPrefs(updated);
+                        setSaved(true);
+                        setTimeout(() => setSaved(false), 2000);
+                    }
+                } catch (e) { console.error('Failed to save preferences', e); }
+                setSaving(false);
+            };
+            const renderField = (f) => (
+                <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                    <label style={{ flex: '0 0 160px', fontSize: '13px', color: '#B0BEC5' }}>{f.label}</label>
+                    <input type="range" min={f.min} max={f.max} step={f.step}
+                        value={localPrefs[f.key] ?? f.def}
+                        onChange={(e) => setLocalPrefs(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) }))}
+                        style={{ flex: 1, accentColor: '#00BFA5' }}
+                    />
+                    <span style={{ flex: '0 0 60px', textAlign: 'right', fontSize: '13px', fontWeight: 600, color: '#E8EDF2' }}>
+                        {(localPrefs[f.key] ?? f.def).toFixed(f.step < 1 ? 2 : 0)}{f.suffix}
+                    </span>
+                </div>
+            );
+            return (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                    onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+                    <div style={{ background: '#132337', border: '1px solid #1E3347', borderRadius: '16px', padding: '32px', width: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#E8EDF2', margin: 0 }}>Investment Profile</h2>
+                            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' }}>x</button>
+                        </div>
+                        <div style={{ marginBottom: '24px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#00BFA5', marginBottom: '14px' }}>Investment Hurdles (GO / NO-GO)</h3>
+                            {PREF_FIELDS.hurdles.map(renderField)}
+                        </div>
+                        <div style={{ marginBottom: '24px' }}>
+                            <h3 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', color: '#4A8FD4', marginBottom: '14px' }}>Market Leasing Assumptions</h3>
+                            {PREF_FIELDS.mla.map(renderField)}
+                        </div>
+                        <button onClick={savePrefs} disabled={saving}
+                            style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: saved ? '#22c55e' : 'linear-gradient(135deg, #00BFA5, #00897B)', color: 'white', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>
+                            {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Defaults'}
+                        </button>
+                        <p style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', marginTop: '10px' }}>
+                            These defaults apply to new deals. You can always override per-deal.
+                        </p>
+                    </div>
+                </div>
+            );
+        };
+
         // Main App
         function App() {
             const [currentView, setCurrentView] = useState('list');
@@ -6584,8 +6836,10 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
             const [subscriptionStatus, setSubscriptionStatus] = useState(null);
             const [hasStripe, setHasStripe] = useState(false);
             const [showUpgradeBanner, setShowUpgradeBanner] = useState(true);
+            const [userPrefs, setUserPrefs] = useState({});
+            const [showSettings, setShowSettings] = useState(false);
 
-            // Fetch current user info on mount
+            // Fetch current user info + preferences on mount
             useEffect(() => {
                 if (!DEMO_MODE) {
                     fetch(`${API_URL}/me`)
@@ -6597,6 +6851,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                                 setSubscriptionTier(data.subscription_tier || null);
                                 setSubscriptionStatus(data.subscription_status || null);
                                 setHasStripe(data.has_stripe || false);
+                                if (data.preferences && Object.keys(data.preferences).length > 0) {
+                                    setUserPrefs(data.preferences);
+                                }
                             }
                         })
                         .catch(() => {});
@@ -6645,6 +6902,9 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                             Your subscription has expired. <a href="#" onClick={async (e) => { e.preventDefault(); await handleUpgrade(subscriptionTier || 'pro'); }} style={{ color: '#60a5fa', textDecoration: 'underline' }}>Renew subscription</a>
                         </div>
                     )}
+                    {/* Settings Modal */}
+                    {showSettings && <SettingsModal userPrefs={userPrefs} setUserPrefs={setUserPrefs} onClose={() => setShowSettings(false)} />}
+
                     <Header
                         currentPage={currentView}
                         dealName={deal?.property_name}
@@ -6655,6 +6915,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
                         onAdminClick={() => setCurrentView(currentView === 'admin' ? 'list' : 'admin')}
                         onAdminAnalyticsClick={() => setCurrentView(currentView === 'admin-analytics' ? 'list' : 'admin-analytics')}
                         onHomeClick={() => { setCurrentView('list'); setSelectedDealId(null); setDeal(null); }}
+                        onSettingsClick={() => setShowSettings(true)}
                     />
 
                     {showUpgradeBanner && currentView === 'list' && (!subscriptionTier || subscriptionTier === 'free') && (
@@ -6701,7 +6962,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack }) => {
 
                     {currentView === 'dashboard' && deal && (
                         <ErrorBoundary onBack={handleBack}>
-                            <DashboardV2View deal={deal} onBack={handleBack} />
+                            <DashboardV2View deal={deal} onBack={handleBack} userPrefs={userPrefs} />
                         </ErrorBoundary>
                     )}
 

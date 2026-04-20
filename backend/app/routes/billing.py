@@ -65,8 +65,9 @@ TOTAL_LIMITS = {
 
 def _get_billing_cycle_start(user: User) -> datetime:
     """Get the start of the user's current billing month.
-    Uses the user's created_at day-of-month as the anchor."""
-    now = datetime.now(timezone.utc)
+    Uses the user's created_at day-of-month as the anchor.
+    Returns naive UTC datetime to match Deal.created_at format."""
+    now = datetime.utcnow()  # naive UTC — must match Deal.created_at which uses datetime.utcnow
     anchor_day = min(user.created_at.day, 28)  # Cap at 28 to avoid month-length issues
 
     # Start of current billing cycle
@@ -133,7 +134,20 @@ SIGNUP_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRE Lytic — Sign Up</title>
+    <meta name="description" content="Create your CRELYTIC Engine account. AI-powered CRE deal underwriting starting at $6.99/month. Full DCF, waterfall, and investment memos in minutes.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://engine.crelytic.ai/engine/signup">
+    <meta property="og:title" content="Sign Up | CRELYTIC Engine">
+    <meta property="og:description" content="AI-powered CRE deal underwriting starting at $6.99/month. Full DCF, waterfall, and investment memos in minutes.">
+    <meta property="og:url" content="https://engine.crelytic.ai/engine/signup">
+    <meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="CRELYTIC">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sign Up | CRELYTIC Engine">
+    <meta name="twitter:description" content="AI-powered CRE deal underwriting starting at $6.99/month.">
+    <meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+    <title>Sign Up | CRELYTIC Engine — CRE Deal Underwriting</title>
     <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAABiUlEQVRYhe2WPy9DURiHn/e0FIn/qUi0FQwkTZlIfAJDTWInfAI7A7Gz2YTdavEhEFeCgXBaQRfSgV6peyxC5V6izW1ruL/tvHnP+zz33HuSK3wklpzsEopLgpkFBoAI/sYGrgyyJ6qwoS3rEUAABpITY2+87YP0+Qz9KVlHnHT29PBEEqlUJ06jVUP4pwTKHg11RBPLIOkawwHajGl4DRuYqcb09YUUw7FWV/1c51nZOQVAMDMKGKyGgBccYCTRVrocUvj/tZeTJlVHOACBQCBQd4FwJZumFueJxmOuek5nONjeLWtWRSfgBQfoScTLnlX3VxAIBAKua9gb6yfS1OxqtF+eub/Vvgu4TsALDhBpbvEd7ilQ6wQC/0LAriO/oICr0or98uzdWVLP6YxnT+7m65qe67xnz9n3+qXEk+Nrgln5m7DPEVaVqMIG4P1I1U1GhYubSlvWoyPONJCtJdxRJn19fPwUAsjn7h7ae7t3MCEbiIK0UuHf0i8pABcIW6qhOKdPjjTAO0ACbHMMH2tvAAAAAElFTkSuQmCC">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -338,9 +352,13 @@ async def signup_submit(request: Request):
             error="Passwords do not match.", name=name, company=company, email=email, tier=tier
         ), status_code=400)
 
-    if len(password) < 8:
+    if len(password) < 10:
         return HTMLResponse(content=_render_signup(
-            error="Password must be at least 8 characters.", name=name, company=company, email=email, tier=tier
+            error="Password must be at least 10 characters.", name=name, company=company, email=email, tier=tier
+        ), status_code=400)
+    if not any(c.isupper() for c in password) or not any(c.isdigit() for c in password):
+        return HTMLResponse(content=_render_signup(
+            error="Password must contain at least one uppercase letter and one number.", name=name, company=company, email=email, tier=tier
         ), status_code=400)
 
     if tier not in ("starter", "pro", "unlimited"):

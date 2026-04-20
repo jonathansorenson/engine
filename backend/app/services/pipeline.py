@@ -990,6 +990,12 @@ def merge_financial_results(regex_results: dict, claude_results: dict) -> Tuple[
     if claude_results.get("capex_reserves"):
         merged["capex_reserves"] = claude_results["capex_reserves"]
 
+    # Carry over rent escalation and vacancy from Claude extraction
+    if claude_results.get("rent_escalation_pct") is not None:
+        merged["rent_escalation_pct"] = claude_results["rent_escalation_pct"]
+    if claude_results.get("vacancy_pct") is not None:
+        merged["vacancy_pct"] = claude_results["vacancy_pct"]
+
     # ── Derive expense ratio if we now have both ──
     if "expense_ratio" not in merged and merged.get("operating_expenses") and merged.get("annual_revenue"):
         if merged["annual_revenue"] > 0:
@@ -1307,7 +1313,17 @@ def parse_offering_memorandum(
     validation_warnings = validate_financials(result["financials"])
     warnings.extend(validation_warnings)
 
-    # Smart defaults for assumptions
+    # Smart defaults for assumptions — use AI-extracted escalation if available
+    rent_escal = result["financials"].get("rent_escalation_pct")
+    if rent_escal and isinstance(rent_escal, (int, float)) and 0 < rent_escal <= 15:
+        result["assumptions"]["noi_growth"] = float(rent_escal)
+        print(f"[Pipeline] Using AI-extracted rent escalation: {rent_escal}%")
+
+    vacancy = result["financials"].get("vacancy_pct")
+    if vacancy and isinstance(vacancy, (int, float)) and 0 < vacancy <= 50:
+        result["assumptions"]["vacancy"] = float(vacancy)
+        print(f"[Pipeline] Using AI-extracted vacancy: {vacancy}%")
+
     cap_rate = result["financials"].get("cap_rate")
     if cap_rate:
         if cap_rate > 1:

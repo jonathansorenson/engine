@@ -2,7 +2,7 @@
 T12 (Trailing 12-Month Operating Statement) Parser
 
 Parses Excel/CSV files containing monthly operating statements and extracts
-revenue, expense, and NOI data into the CRE Lytic deal data model.
+revenue, expense, and NOI data into the CRELYTIC Engine deal data model.
 
 Supported formats:
   - Standard T12 with months as columns and line items as rows

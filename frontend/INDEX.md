@@ -1,4 +1,4 @@
-# CRE Lytic — CRE Deal Underwriting Frontend
+# CRELYTIC Engine — CRE Deal Underwriting Frontend
 
 ## Quick Links
 
@@ -445,7 +445,7 @@ Edit `<input type="range" ... />` attributes in sliders
 
 ## License
 
-Copyright © 2025 CRE Lytic. All rights reserved.
+Copyright © 2025 CRELYTIC Engine. All rights reserved.
 
 This tool is provided for institutional use. Financial calculations are informational only and should not be relied upon without verification by qualified professionals.
 

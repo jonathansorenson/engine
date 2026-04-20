@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}CRELYTIC Engine Features | AI-Powered CRE Deal Underwriting{% endblock %}
+
+{% block meta %}
+<meta name="description" content="OM parsing, DCF analysis, LP/GP waterfall, sensitivity modeling, rent roll management, and investment memos — all AI-powered. Starting at $6.99/mo.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://engine.crelytic.ai/engine/features">
+<meta property="og:title" content="CRELYTIC Engine Features | AI-Powered CRE Deal Underwriting">
+<meta property="og:description" content="OM parsing, DCF analysis, LP/GP waterfall, sensitivity modeling, rent roll management, and investment memos — all AI-powered.">
+<meta property="og:url" content="https://engine.crelytic.ai/engine/features">
+<meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CRELYTIC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CRELYTIC Engine Features | AI-Powered CRE Deal Underwriting">
+<meta name="twitter:description" content="OM parsing, DCF analysis, LP/GP waterfall, sensitivity modeling, and investment memos — all AI-powered.">
+<meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+{% endblock %}
+
+{% block jsonld %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@graph": [
+        {
+            "@type": "SoftwareApplication",
+            "name": "CRELYTIC Engine",
+            "applicationCategory": "BusinessApplication",
+            "applicationSubCategory": "Financial Analysis",
+            "operatingSystem": "Web",
+            "url": "https://engine.crelytic.ai",
+            "description": "AI-powered commercial real estate deal underwriting platform. Upload an OM and get a full DCF, waterfall, sensitivity analysis, and investment memo in minutes.",
+            "featureList": [
+                "OM Parsing",
+                "DCF Analysis",
+                "Sensitivity Analysis",
+                "LP/GP Waterfall Modeling",
+                "Rent Roll Management",
+                "T12 Parsing",
+                "Investment Memo Generation",
+                "Excel Export",
+                "AI Deal Chat"
+            ],
+            "offers": [
+                {
+                    "@type": "Offer",
+                    "name": "Starter",
+                    "price": "6.99",
+                    "priceCurrency": "USD",
+                    "billingIncrement": "P1M",
+                    "url": "https://engine.crelytic.ai/engine/pricing"
+                },
+                {
+                    "@type": "Offer",
+                    "name": "Pro",
+                    "price": "11.99",
+                    "priceCurrency": "USD",
+                    "billingIncrement": "P1M",
+                    "url": "https://engine.crelytic.ai/engine/pricing"
+                },
+                {
+                    "@type": "Offer",
+                    "name": "Unlimited",
+                    "price": "20.00",
+                    "priceCurrency": "USD",
+                    "billingIncrement": "P1M",
+                    "url": "https://engine.crelytic.ai/engine/pricing"
+                }
+            ],
+            "creator": {
+                "@type": "Organization",
+                "name": "CRELYTIC",
+                "url": "https://crelytic.ai",
+                "parentOrganization": {
+                    "@type": "Organization",
+                    "name": "Rising Tide Property Group",
+                    "url": "https://risingtidepg.com"
+                }
+            }
+        },
+        {
+            "@type": "FAQPage",
+            "mainEntity": [
+                {
+                    "@type": "Question",
+                    "name": "What property types does CRELYTIC Engine support?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "CRELYTIC Engine supports all major commercial real estate property types including multifamily, office, retail, industrial, self-storage, mixed-use, and hospitality. The AI models are trained on thousands of OMs across every asset class to ensure accurate parsing and analysis regardless of property type."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "How accurate is the OM parsing?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "CRELYTIC Engine achieves 95-99% extraction accuracy on offering memorandums. The AI identifies and extracts rent rolls, operating statements, unit mixes, capital expenditure schedules, and property details. Every parsed field includes a confidence score, and you can review and correct any value before it flows into your underwriting model."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "Can I customize the DCF assumptions and hold period?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "Yes. Every assumption in the DCF is fully editable including hold period (1-30 years), discount rate, exit cap rate, rent growth, expense growth, vacancy, capital reserves, and financing terms. You can also save assumption templates for different property types or markets and apply them to new deals instantly."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "What format is the Excel export?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "Exports are generated as .xlsx files compatible with Microsoft Excel, Google Sheets, and Apple Numbers. The workbook includes separate tabs for the DCF cash flow, rent roll, operating statement, sensitivity tables, waterfall distribution, and key metrics summary. All formulas are live so you can continue modeling in your preferred spreadsheet tool."
+                    }
+                },
+                {
+                    "@type": "Question",
+                    "name": "How does CRELYTIC Engine protect my deal data?",
+                    "acceptedAnswer": {
+                        "@type": "Answer",
+                        "text": "All data is encrypted at rest (AES-256) and in transit (TLS 1.3). Your deal files are stored in isolated tenant environments and are never used to train AI models. CRELYTIC Engine runs on SOC 2-compliant infrastructure and supports single sign-on (SSO) for enterprise accounts. You can delete any deal and all associated data at any time."
+                    }
+                }
+            ]
+        }
+    ]
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+.hero-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; text-align: center; }
+.stat-value { font-family: var(--font-serif); font-size: 2.5rem; color: var(--teal); margin-bottom: 0.25rem; }
+.stat-label { color: var(--text-secondary); font-size: 0.95rem; }
+.stat-sub { color: var(--text-muted); font-size: 0.8125rem; margin-top: 0.25rem; }
+.card h3 { margin-bottom: 0.5rem; }
+.card p { color: var(--text-secondary); font-size: 0.925rem; line-height: 1.6; }
+.section-header { text-align: center; margin-bottom: 3rem; }
+.faq-list { max-width: 800px; margin: 0 auto; }
+@media (max-width: 768px) {
+    .stats-grid { grid-template-columns: 1fr; gap: 1.5rem; }
+    .stat-value { font-size: 2rem; }
+}
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Everything You Need to Underwrite CRE Deals in Minutes</h1>
+        <p>Upload an offering memorandum and let AI extract the data, build your DCF, model the waterfall, and generate a polished investment memo &mdash; all before your coffee gets cold.</p>
+        <div class="hero-buttons">
+            <a href="/engine/pricing" class="btn btn-primary">View Pricing</a>
+            <a href="/engine/demo" class="btn btn-secondary">Try the Demo</a>
+        </div>
+    </section>
+
+    <!-- Feature Grid -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Platform Features</h2>
+            <p class="section-subtitle">Nine integrated modules that turn raw deal documents into institutional-quality underwriting.</p>
+        </div>
+        <div class="grid-3">
+            <div class="card">
+                <div class="feature-icon">&#x1F4C4;</div>
+                <h3>OM Parsing</h3>
+                <p>Upload a PDF offering memorandum and let AI extract the rent roll, operating statement, unit mix, and property details in seconds. Confidence scores flag anything that needs a second look.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F4C8;</div>
+                <h3>DCF Analysis</h3>
+                <p>Auto-generate a discounted cash flow model with customizable hold period, discount rate, exit cap, and growth assumptions. Every cell is editable, and changes ripple through the full model in real time.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F4CA;</div>
+                <h3>Sensitivity Analysis</h3>
+                <p>Stress-test your deal across two-variable matrices. Vary cap rate vs. rent growth, vacancy vs. exit cap, or any custom pair to see how returns shift under different market conditions.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F4DA;</div>
+                <h3>LP/GP Waterfall</h3>
+                <p>Model preferred returns, catch-up provisions, and promote structures across unlimited tiers. Compare IRR and equity multiples for each partner class side by side.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F3E2;</div>
+                <h3>Rent Roll Management</h3>
+                <p>View, edit, and normalize unit-level lease data. Flag below-market rents, track lease expirations, and model rent bumps to see the impact on net operating income over your hold period.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F4C5;</div>
+                <h3>T12 Parsing</h3>
+                <p>Extract trailing-twelve-month operating data from PDFs or spreadsheets. The engine normalizes line items, reconciles totals, and identifies outliers so your pro forma starts from clean actuals.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F4DD;</div>
+                <h3>Investment Memos</h3>
+                <p>Generate LP-ready investment memos with deal summary, market context, financial highlights, risk factors, and return projections. Export as PDF or share a live link with your team.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F4CA;</div>
+                <h3>Excel Export</h3>
+                <p>Download a fully-formulated .xlsx workbook with live tabs for the DCF, rent roll, operating statement, sensitivity tables, and waterfall. Continue modeling in Excel, Sheets, or Numbers.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F4AC;</div>
+                <h3>AI Deal Chat</h3>
+                <p>Ask natural-language questions about any deal in your pipeline. The AI references your underwriting data to answer questions like "What happens to IRR if vacancy rises 200 bps?"</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison / Stats Section -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Why CRELYTIC Engine?</h2>
+            <p class="section-subtitle">Institutional-grade underwriting without the institutional price tag or the 6-hour spreadsheet marathon.</p>
+        </div>
+        <div class="stats-grid">
+            <div>
+                <div class="stat-value">Under 3 min</div>
+                <div class="stat-label">OM to fully-built DCF</div>
+                <div class="stat-sub">vs. 4-6 hours manually</div>
+            </div>
+            <div>
+                <div class="stat-value">95-99%</div>
+                <div class="stat-label">Document extraction accuracy</div>
+                <div class="stat-sub">with field-level confidence scores</div>
+            </div>
+            <div>
+                <div class="stat-value">$6.99/mo</div>
+                <div class="stat-label">Starting price</div>
+                <div class="stat-sub">no contracts, cancel anytime</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Teaser -->
+    <section class="section" style="text-align: center;">
+        <p class="section-subtitle">Want the full walkthrough? <a href="/engine/how-it-works">See how it works &rarr;</a></p>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Frequently Asked Questions</h2>
+        </div>
+        <div class="faq-list">
+            <div class="faq-item">
+                <div class="faq-q">What property types does CRELYTIC Engine support?</div>
+                <div class="faq-a">CRELYTIC Engine supports all major commercial real estate property types including multifamily, office, retail, industrial, self-storage, mixed-use, and hospitality. The AI models are trained on thousands of OMs across every asset class to ensure accurate parsing and analysis regardless of property type.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-q">How accurate is the OM parsing?</div>
+                <div class="faq-a">CRELYTIC Engine achieves 95-99% extraction accuracy on offering memorandums. The AI identifies and extracts rent rolls, operating statements, unit mixes, capital expenditure schedules, and property details. Every parsed field includes a confidence score, and you can review and correct any value before it flows into your underwriting model.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-q">Can I customize the DCF assumptions and hold period?</div>
+                <div class="faq-a">Yes. Every assumption in the DCF is fully editable including hold period (1-30 years), discount rate, exit cap rate, rent growth, expense growth, vacancy, capital reserves, and financing terms. You can also save assumption templates for different property types or markets and apply them to new deals instantly.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-q">What format is the Excel export?</div>
+                <div class="faq-a">Exports are generated as .xlsx files compatible with Microsoft Excel, Google Sheets, and Apple Numbers. The workbook includes separate tabs for the DCF cash flow, rent roll, operating statement, sensitivity tables, waterfall distribution, and key metrics summary. All formulas are live so you can continue modeling in your preferred spreadsheet tool.</div>
+            </div>
+            <div class="faq-item">
+                <div class="faq-q">How does CRELYTIC Engine protect my deal data?</div>
+                <div class="faq-a">All data is encrypted at rest (AES-256) and in transit (TLS 1.3). Your deal files are stored in isolated tenant environments and are never used to train AI models. CRELYTIC Engine runs on SOC 2-compliant infrastructure and supports single sign-on (SSO) for enterprise accounts. You can delete any deal and all associated data at any time.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Banner -->
+    <section class="cta-banner">
+        <h2>Ready to Underwrite Smarter?</h2>
+        <p>Start your free trial today. No credit card required.</p>
+        <a href="/engine/signup" class="btn">Start Free Trial</a>
+    </section>
+
+</div>
+{% endblock %}

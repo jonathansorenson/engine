@@ -784,13 +784,13 @@ def _v2_build_tenant_analytics(tenants: list, total_sf: float):
 @router.post("/v2")
 async def export_v2_deal_to_excel(data: V2ExportRequest):
     """Generate institutional-grade V2 Excel workbook with formulas, charts and analytics."""
-    import traceback
+    import traceback, logging
     try:
       return await _export_v2_excel_inner(data)
     except Exception as e:
-      print(f"[Excel Export] ERROR: {traceback.format_exc()}")
+      logging.exception("[Excel Export] ERROR")
       from fastapi.responses import JSONResponse
-      return JSONResponse(status_code=500, content={"detail": str(e), "traceback": traceback.format_exc()})
+      return JSONResponse(status_code=500, content={"detail": "Export failed. Please try again."})
 
 async def _export_v2_excel_inner(data: V2ExportRequest):
     wb = Workbook()
@@ -2093,13 +2093,13 @@ async def export_v2_memo_html(data: V2ExportRequest):
 @router.post("/v2/memo/pdf")
 async def export_v2_memo_pdf(data: V2ExportRequest):
     """Generate a real PDF memo from V2 deal data using fpdf2."""
-    import traceback
+    import traceback, logging
     try:
         return await _export_v2_memo_pdf_inner(data)
     except Exception as e:
-        print(f"[PDF Export] ERROR: {traceback.format_exc()}")
+        logging.exception("[PDF Export] ERROR")
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=500, content={"detail": str(e), "traceback": traceback.format_exc()})
+        return JSONResponse(status_code=500, content={"detail": "PDF export failed. Please try again."})
 
 def _pdf_safe(text: str) -> str:
     """Replace Unicode chars unsupported by fpdf2 core fonts (latin-1 only)."""

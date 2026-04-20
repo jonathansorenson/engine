@@ -1,4 +1,4 @@
-# CRE Lytic — Deal Underwriting Engine
+# CRELYTIC Engine — Deal Underwriting Engine
 
 Complete, production-ready commercial real estate deal underwriting platform for institutional investors.
 
@@ -270,7 +270,7 @@ npx html-minifier --minify-js --minify-css index.html > index.min.html
 
 ## License
 
-Copyright © 2025 CRE Lytic. All rights reserved.
+Copyright © 2025 CRELYTIC Engine. All rights reserved.
 
 This tool is provided for institutional use. All financial calculations are informational only and should be verified by qualified professionals.
 

@@ -84,7 +84,9 @@ async def stream_deal_chat(
             db.commit()
 
         except Exception as e:
-            yield f"data: Error: {str(e)}\n\n"
+            import logging
+            logging.getLogger(__name__).exception("Chat stream error")
+            yield f"data: Error: An unexpected error occurred. Please try again.\n\n"
 
         # Send completion signal
         yield "data: [DONE]\n\n"

@@ -1,7 +1,7 @@
 """
 ARGUS Enterprise Excel Export Parser
 
-Parses ARGUS cash flow exports (.xlsx) into the CRE Lytic deal data model.
+Parses ARGUS cash flow exports (.xlsx) into the CRELYTIC Engine deal data model.
 Handles the standard ARGUS export sheets:
   - Executive Summary Report
   - Cash Flow
@@ -451,7 +451,7 @@ def parse_market_leasing(wb) -> Dict[str, Any]:
 
 def parse_argus_file(excel_path: str) -> Dict[str, Any]:
     """
-    Main entry point: parse an ARGUS Excel export into the CRE Lytic deal data model.
+    Main entry point: parse an ARGUS Excel export into the CRELYTIC Engine deal data model.
 
     Returns the same structure as parse_offering_memorandum() so the dashboard
     can consume it seamlessly.

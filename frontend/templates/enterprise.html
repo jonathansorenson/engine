@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Enterprise | CRELYTIC Engine — CRE AI for Funds & Institutions{% endblock %}
+
+{% block meta %}
+<meta name="description" content="CRELYTIC Engine Enterprise: unlimited deals, SSO, API access, custom branding, and dedicated support for CRE funds and institutions.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://engine.crelytic.ai/engine/enterprise">
+<meta property="og:title" content="Enterprise | CRELYTIC Engine — CRE AI for Funds & Institutions">
+<meta property="og:description" content="Unlimited deals, SSO, API access, custom branding, and dedicated support for CRE funds and institutions.">
+<meta property="og:url" content="https://engine.crelytic.ai/engine/enterprise">
+<meta property="og:image" content="https://engine.crelytic.ai/og-image.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CRELYTIC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Enterprise | CRELYTIC Engine">
+<meta name="twitter:description" content="Unlimited deals, SSO, API access, custom branding, and dedicated support for CRE funds and institutions.">
+<meta name="twitter:image" content="https://engine.crelytic.ai/og-image.png">
+{% endblock %}
+
+{% block jsonld %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@graph": [
+        {
+            "@type": "Product",
+            "name": "CRELYTIC Engine Enterprise",
+            "description": "Enterprise-grade AI-powered CRE underwriting platform for funds, REITs, and institutional investors. Unlimited deals, SSO, API access, custom branding, and dedicated support.",
+            "brand": {
+                "@type": "Brand",
+                "name": "CRELYTIC"
+            },
+            "url": "https://engine.crelytic.ai/engine/enterprise",
+            "category": "Business Software",
+            "offers": {
+                "@type": "Offer",
+                "name": "Enterprise",
+                "price": "0",
+                "priceCurrency": "USD",
+                "availability": "https://schema.org/OnlineOnly",
+                "description": "Custom pricing for institutional CRE teams. Includes unlimited deals, SSO/SAML, API access, custom branding, dedicated support, and team management.",
+                "url": "https://engine.crelytic.ai/engine/enterprise"
+            },
+            "featureList": [
+                "Unlimited Deals",
+                "SSO / SAML Integration",
+                "API Access",
+                "Custom Branding",
+                "Dedicated Support",
+                "Team Management",
+                "Role-Based Access Control",
+                "Priority Parsing",
+                "Full Underwriting Stack"
+            ]
+        },
+        {
+            "@type": "Organization",
+            "name": "CRELYTIC",
+            "url": "https://crelytic.ai",
+            "logo": "https://engine.crelytic.ai/og-image.png",
+            "description": "AI-powered commercial real estate analytics and underwriting.",
+            "founder": {
+                "@type": "Person",
+                "name": "Jonathan Sorenson"
+            },
+            "parentOrganization": {
+                "@type": "Organization",
+                "name": "Rising Tide Property Group",
+                "url": "https://risingtidepg.com"
+            },
+            "contactPoint": {
+                "@type": "ContactPoint",
+                "email": "jonathan_sorenson@losttree.com",
+                "contactType": "sales",
+                "availableLanguage": "English"
+            }
+        }
+    ]
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+.section-header { text-align: center; margin-bottom: 3rem; }
+.card h3 { margin-bottom: 0.5rem; }
+.card p { color: var(--text-secondary); font-size: 0.925rem; line-height: 1.6; }
+.who-card { text-align: center; }
+.who-card h3 { font-family: var(--font-serif); font-size: 1.25rem; margin-bottom: 0.75rem; }
+.who-icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: rgba(0, 191, 165, 0.1);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1rem; font-size: 1.5rem;
+}
+.security-list { list-style: none; margin: 1.25rem 0 0; }
+.security-list li {
+    padding: 0.625rem 0;
+    color: var(--text-secondary);
+    font-size: 0.925rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.75rem;
+}
+.security-list li:last-child { border-bottom: none; }
+.security-list li::before {
+    content: "\2713";
+    color: var(--teal);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.cta-contact {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 3rem;
+    text-align: center;
+    margin: 3rem 0;
+}
+.cta-contact h2 {
+    font-family: var(--font-serif);
+    font-size: 1.75rem;
+    margin-bottom: 0.75rem;
+}
+.cta-contact p { color: var(--text-secondary); margin-bottom: 1rem; font-size: 1rem; }
+.cta-contact .contact-email {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-size: 1.125rem; font-weight: 600; color: var(--teal);
+    margin-bottom: 1rem;
+}
+.cta-contact .contact-note {
+    color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;
+}
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Built for Institutional CRE Teams</h1>
+        <p>Enterprise-grade underwriting at scale. CRELYTIC Engine gives funds, REITs, and institutional investors the speed of AI with the controls, security, and integrations your organization demands.</p>
+        <a href="mailto:jonathan_sorenson@losttree.com" class="btn btn-primary">Contact Sales</a>
+    </section>
+
+    <!-- Enterprise Features Grid -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Enterprise Features</h2>
+            <p class="section-subtitle">Everything in the Unlimited plan, plus the infrastructure institutional teams need.</p>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <div class="feature-icon">&#x267E;</div>
+                <h3>Unlimited Deals</h3>
+                <p>No caps on deal volume. Process your entire pipeline without worrying about monthly limits or overage charges.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F512;</div>
+                <h3>SSO / SAML</h3>
+                <p>Single sign-on integration with your identity provider. Support for Okta, Azure AD, Google Workspace, and any SAML 2.0-compliant IdP.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F517;</div>
+                <h3>API Access</h3>
+                <p>Programmatic access to deal creation, analysis, and export. Build custom workflows, integrate with your data warehouse, or connect to internal tools.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F3A8;</div>
+                <h3>Custom Branding</h3>
+                <p>White-label investment memos with your firm's logo, colors, and formatting. Present institutional-quality deliverables under your own brand.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon">&#x1F4DE;</div>
+                <h3>Dedicated Support</h3>
+                <p>Priority support with a dedicated account manager. Direct access via email and scheduled onboarding for your team.</p>
+            </div>
+            <div class="card">
+                <div class="feature-icon blue">&#x1F465;</div>
+                <h3>Team Management</h3>
+                <p>Role-based access control, shared deal libraries, and collaboration tools. Manage permissions across analysts, associates, and principals.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Who It's For -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Who It's For</h2>
+            <p class="section-subtitle">Purpose-built for teams that underwrite at scale.</p>
+        </div>
+        <div class="grid-3">
+            <div class="card who-card">
+                <div class="who-icon">&#x1F3E6;</div>
+                <h3>Private Equity Funds</h3>
+                <p>Model LP/GP economics across fund-level acquisitions. Run sensitivity and waterfall analyses on every deal in your pipeline and generate committee-ready memos in minutes.</p>
+            </div>
+            <div class="card who-card">
+                <div class="who-icon">&#x1F3E2;</div>
+                <h3>REITs & Institutional Investors</h3>
+                <p>Portfolio-scale underwriting and analysis. Standardize assumptions across asset classes, benchmark performance, and maintain consistent reporting for your investment committee.</p>
+            </div>
+            <div class="card who-card">
+                <div class="who-icon">&#x1F4BC;</div>
+                <h3>Large Brokerages</h3>
+                <p>Generate defensible DCF analyses for listing presentations. Equip your brokers with institutional-quality underwriting that strengthens every pitch and shortens time to close.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Security & Compliance -->
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Security & Compliance</h2>
+            <p class="section-subtitle">Your deal data is protected at every layer.</p>
+        </div>
+        <div class="card" style="max-width: 720px; margin: 0 auto;">
+            <h3 style="font-family: var(--font-serif); font-size: 1.25rem; margin-bottom: 0.25rem;">Infrastructure & Data Protection</h3>
+            <p>CRELYTIC Engine is built on secure, auditable infrastructure designed for institutional requirements.</p>
+            <ul class="security-list">
+                <li>HTTPS/HSTS encryption in transit for all data and API calls</li>
+                <li>Encrypted at rest via PostgreSQL/Supabase with row-level security</li>
+                <li>Isolated user data with no cross-tenant access</li>
+                <li>No training on user data &mdash; your deals are never used to improve AI models</li>
+                <li>Session-based authentication with HMAC-signed cookies</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-contact">
+        <h2>Let's Talk</h2>
+        <p>Enterprise pricing is customized based on team size, deal volume, and integration requirements.</p>
+        <a href="mailto:jonathan_sorenson@losttree.com" class="contact-email">jonathan_sorenson@losttree.com</a>
+        <br>
+        <a href="mailto:jonathan_sorenson@losttree.com" class="btn btn-primary" style="margin-top: 1rem;">Contact Sales</a>
+        <p class="contact-note">Custom pricing &middot; Dedicated onboarding &middot; No long-term commitment required</p>
+    </section>
+
+</div>
+{% endblock %}

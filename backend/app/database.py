@@ -56,6 +56,7 @@ def init_db():
                     ("stripe_customer_id", "VARCHAR(255)"),
                     ("stripe_subscription_id", "VARCHAR(255)"),
                     ("subscription_status", "VARCHAR(50)"),
+                    ("user_preferences", "JSONB" if "sqlite" not in settings.database_url else "JSON"),
                 ]:
                     if col_name not in user_cols:
                         conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"))

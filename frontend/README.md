@@ -1,4 +1,4 @@
-# CRE Lytic — Deal Underwriting Engine (Frontend)
+# CRELYTIC Engine — Deal Underwriting Engine (Frontend)
 
 A professional, institutional-grade single-file React application for commercial real estate deal underwriting. Built with React 18, Chart.js, and inline CSS for instant deployment.
 
@@ -248,4 +248,4 @@ Requires ES6+ support and Fetch API.
 
 ## License
 
-Copyright © 2025 CRE Lytic. All rights reserved.
+Copyright © 2025 CRELYTIC Engine. All rights reserved.
