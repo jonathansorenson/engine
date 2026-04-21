@@ -9,7 +9,7 @@ import os
 # ═══════════════════════════════════════════════════════════
 
 BRAND_NAME = "CRELYTIC"
-COMPANY_NAME = "Rising Tide Property Group"
+COMPANY_NAME = "CRELYTIC"
 PRODUCT_URL = "engine.crelytic.ai"
 TAGLINE = "AI-Powered CRE Deal Underwriting"
 

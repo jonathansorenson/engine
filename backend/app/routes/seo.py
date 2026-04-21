@@ -194,7 +194,6 @@ CRELYTIC Engine is a SaaS platform built for CRE acquisitions analysts, fund man
 
 - Product: https://engine.crelytic.ai
 - Company: https://crelytic.ai
-- Parent: https://risingtidepg.com
 - Features: https://engine.crelytic.ai/engine/features
 - Pricing: https://engine.crelytic.ai/engine/pricing
 """
@@ -404,7 +403,6 @@ Yes. All plans are month-to-month with no long-term contracts. Cancel anytime fr
 - **Headquarters**: Florida, USA
 - **Founded**: 2025
 - **Sector**: PropTech / CRE AI
-- **Parent Company**: Rising Tide Property Group (risingtidepg.com)
 - **Product URL**: https://engine.crelytic.ai
 - **Company URL**: https://crelytic.ai
 - **Contact**: jonathan_sorenson@losttree.com

@@ -29,7 +29,7 @@ TEMPLATE_DIR = HERE.parent / "app" / "templates"
 RESEND_API_URL = "https://api.resend.com/emails"
 
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "intelligence@crelytic.ai")
-EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO", "jonathan@risingtidepg.com")
+EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO", "jonathan@crelytic.ai")
 FEEDBACK_BASE_URL = os.environ.get("FEEDBACK_BASE_URL", "https://engine.crelytic.ai")
 
 
