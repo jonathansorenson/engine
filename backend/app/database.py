@@ -33,6 +33,15 @@ def init_db():
     from sqlalchemy import text, inspect
     try:
         insp = inspect(engine)
+
+        # Heal partial `feedback` migration: if the table was created on a prior boot
+        # but its secondary indexes didn't finish (CREATE INDEX IF NOT EXISTS is idempotent).
+        if "feedback" in insp.get_table_names():
+            with engine.begin() as conn:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_fund_id ON feedback (fund_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_deal_id ON feedback (deal_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_submitted_at ON feedback (submitted_at)"))
+
         if "deals" in insp.get_table_names():
             existing_cols = {c["name"] for c in insp.get_columns("deals")}
             with engine.begin() as conn:
