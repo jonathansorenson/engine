@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 import logging
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from app.schemas.deal import (
 )
 from app.services.pipeline import parse_offering_memorandum
 from app.services.argus_parser import is_argus_file, parse_argus_file
+from app.services.email import send_first_deal_feedback_email
 from app.config import settings
 from app.models.user import User
 from app.routes.billing import get_monthly_limit, get_total_limit, get_monthly_used, _get_billing_cycle_reset
@@ -185,6 +187,19 @@ async def upload_and_parse_deal(
 
         db.commit()
         db.refresh(deal)
+
+        # First-deal feedback email: fire-and-forget, never blocks the response.
+        try:
+            existing_user = db.query(User).filter(User.email == fund_id).first()
+            if existing_user and existing_user.first_deal_at is None:
+                existing_user.first_deal_at = datetime.utcnow()
+                db.commit()
+                sent = send_first_deal_feedback_email(existing_user, deal)
+                if sent:
+                    existing_user.feedback_email_sent_at = datetime.utcnow()
+                    db.commit()
+        except Exception:
+            logger.exception("First-deal feedback email hook failed")
 
         # Clean up temp files
         if pdf_path and os.path.exists(pdf_path):

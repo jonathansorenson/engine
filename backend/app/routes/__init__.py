@@ -6,6 +6,7 @@ from app.routes.export import router as export_router
 from app.routes.billing import router as billing_router
 from app.routes.seo import router as seo_router
 from app.routes.marketing import router as marketing_router
+from app.routes.feedback import router as feedback_router
 
 __all__ = [
     "deals_router",
@@ -16,4 +17,5 @@ __all__ = [
     "billing_router",
     "seo_router",
     "marketing_router",
+    "feedback_router",
 ]

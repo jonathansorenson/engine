@@ -6474,8 +6474,110 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
             );
         };
 
-        // Admin Panel — User Management
+        // FeedbackAnalyticsCards — KPI strip at top of admin Feedback tab
+        const FeedbackAnalyticsCards = ({ analytics }) => {
+            if (!analytics) {
+                return (
+                    <div style={{ marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        Loading analytics…
+                    </div>
+                );
+            }
+            const a = analytics;
+            const npsScoreColor = a.nps_score == null ? '#94a3b8' : a.nps_score >= 50 ? '#22c55e' : a.nps_score >= 0 ? '#eab308' : '#ef4444';
+            const avgNpsColor = a.avg_nps == null ? '#94a3b8' : a.avg_nps >= 9 ? '#22c55e' : a.avg_nps >= 7 ? '#eab308' : '#ef4444';
+            const respRate = a.response_rate_pct;
+            const respRateColor = respRate == null ? '#94a3b8' : respRate >= 40 ? '#22c55e' : respRate >= 20 ? '#eab308' : '#ef4444';
+
+            const Card = ({ label, value, sub, color }) => (
+                <div style={{
+                    flex: '1 1 160px', minWidth: '160px',
+                    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px',
+                    padding: '0.9rem 1rem',
+                }}>
+                    <div style={{ fontSize: '0.68rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 700, marginBottom: '6px' }}>
+                        {label}
+                    </div>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: color || 'var(--text-primary)', lineHeight: 1.1 }}>
+                        {value}
+                    </div>
+                    {sub && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{sub}</div>
+                    )}
+                </div>
+            );
+
+            const total = a.promoters + a.passives + a.detractors;
+            const pct = (n) => total ? Math.round(n / total * 100) : 0;
+
+            return (
+                <div style={{ marginBottom: '1.25rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                        <Card
+                            label="NPS Score"
+                            value={a.nps_score == null ? '—' : a.nps_score}
+                            sub={a.nps_respondents ? `${a.nps_respondents} rated` : 'no ratings yet'}
+                            color={npsScoreColor}
+                        />
+                        <Card
+                            label="Avg NPS"
+                            value={a.avg_nps == null ? '—' : a.avg_nps}
+                            sub="0–10 scale"
+                            color={avgNpsColor}
+                        />
+                        <Card
+                            label="Responses"
+                            value={a.total_responses}
+                            sub={`${a.responses_last_7d} last 7d · ${a.responses_last_30d} last 30d`}
+                        />
+                        <Card
+                            label="Response Rate"
+                            value={respRate == null ? '—' : `${respRate}%`}
+                            sub={`${a.unique_responders}/${a.emails_sent} emailed responded`}
+                            color={respRateColor}
+                        />
+                        <Card
+                            label="First Deals"
+                            value={a.users_with_first_deal}
+                            sub={`${a.emails_sent} feedback emails sent`}
+                        />
+                        <Card
+                            label="With Wishlist"
+                            value={a.wishlist_count}
+                            sub={a.total_responses ? `${Math.round(a.wishlist_count / a.total_responses * 100)}% of responses` : ''}
+                        />
+                    </div>
+
+                    {total > 0 && (
+                        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.75rem 1rem' }}>
+                            <div style={{ fontSize: '0.68rem', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 700, marginBottom: '8px' }}>
+                                NPS Distribution
+                            </div>
+                            <div style={{ display: 'flex', width: '100%', height: '12px', borderRadius: '6px', overflow: 'hidden', background: 'rgba(100,116,139,0.15)' }}>
+                                {a.detractors > 0 && (
+                                    <div title={`Detractors (0–6): ${a.detractors}`} style={{ width: `${pct(a.detractors)}%`, background: '#ef4444' }} />
+                                )}
+                                {a.passives > 0 && (
+                                    <div title={`Passives (7–8): ${a.passives}`} style={{ width: `${pct(a.passives)}%`, background: '#eab308' }} />
+                                )}
+                                {a.promoters > 0 && (
+                                    <div title={`Promoters (9–10): ${a.promoters}`} style={{ width: `${pct(a.promoters)}%`, background: '#22c55e' }} />
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', marginRight: '5px' }} />Detractors {a.detractors} ({pct(a.detractors)}%)</span>
+                                <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#eab308', borderRadius: '50%', marginRight: '5px' }} />Passives {a.passives} ({pct(a.passives)}%)</span>
+                                <span><span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#22c55e', borderRadius: '50%', marginRight: '5px' }} />Promoters {a.promoters} ({pct(a.promoters)}%)</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Admin Panel — User Management + Feedback
         const AdminPanel = ({ onBack }) => {
+            const [tab, setTab] = useState('users');
             const [users, setUsers] = useState([]);
             const [loading, setLoading] = useState(true);
             const [showCreate, setShowCreate] = useState(false);
@@ -6483,6 +6585,13 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
             const [editingId, setEditingId] = useState(null);
             const [editData, setEditData] = useState({});
             const [error, setError] = useState('');
+            const [feedback, setFeedback] = useState([]);
+            const [feedbackLoading, setFeedbackLoading] = useState(false);
+            const [feedbackMinNps, setFeedbackMinNps] = useState('');
+            const [feedbackMaxNps, setFeedbackMaxNps] = useState('');
+            const [expandedFeedback, setExpandedFeedback] = useState(null);
+            const [sendingEmail, setSendingEmail] = useState(null);
+            const [feedbackAnalytics, setFeedbackAnalytics] = useState(null);
 
             const loadUsers = async () => {
                 try {
@@ -6567,6 +6676,63 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
                 }
             };
 
+            const loadFeedback = async () => {
+                setFeedbackLoading(true);
+                try {
+                    const params = new URLSearchParams();
+                    if (feedbackMinNps !== '') params.set('min_nps', feedbackMinNps);
+                    if (feedbackMaxNps !== '') params.set('max_nps', feedbackMaxNps);
+                    const qs = params.toString() ? `?${params.toString()}` : '';
+                    const res = await fetch(`${API_URL}/api/v1/admin/feedback${qs}`);
+                    if (!res.ok) throw new Error('Failed to load feedback');
+                    const data = await res.json();
+                    setFeedback(data);
+                } catch (e) {
+                    setError(e.message);
+                } finally {
+                    setFeedbackLoading(false);
+                }
+            };
+
+            const loadFeedbackAnalytics = async () => {
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/admin/feedback/analytics`);
+                    if (!res.ok) throw new Error('Failed to load analytics');
+                    const data = await res.json();
+                    setFeedbackAnalytics(data);
+                } catch (e) {
+                    // analytics is a nice-to-have; don't block the table with a top-level error
+                    console.error('analytics load failed', e);
+                }
+            };
+
+            useEffect(() => {
+                if (tab === 'feedback') {
+                    loadFeedback();
+                    loadFeedbackAnalytics();
+                }
+            }, [tab]);
+
+            const handleSendFeedbackEmail = async (user) => {
+                if (!confirm(`Send feedback email to ${user.email}?`)) return;
+                setSendingEmail(user.id);
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/admin/feedback/send/${user.id}`, { method: 'POST' });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.detail || 'Failed to send');
+                    alert(data.sent ? `Sent to ${data.to}` : `Queued (email service may be unconfigured). Marked as sent for ${data.to}.`);
+                } catch (e) {
+                    setError(e.message);
+                } finally {
+                    setSendingEmail(null);
+                }
+            };
+
+            const npsColor = (n) => n == null ? '#64748b' : n >= 9 ? '#22c55e' : n >= 7 ? '#eab308' : '#ef4444';
+            const formatDate = (iso) => {
+                try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+            };
+
             if (loading) return <div className="container"><div className="loading"></div> Loading users...</div>;
 
             const inputStyle = {
@@ -6579,13 +6745,30 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
                 color: role === 'admin' ? '#FBbf24' : role === 'analyst' ? '#4A8FD4' : '#8A9BB0',
             });
 
+            const tabBtnStyle = (active) => ({
+                padding: '0.5rem 1rem', border: 'none', background: 'transparent',
+                color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontSize: '0.9rem', fontWeight: active ? 700 : 500, cursor: 'pointer',
+                borderBottom: active ? '2px solid #00BFA5' : '2px solid transparent',
+                marginRight: '0.5rem',
+            });
+
             return (
                 <div className="container">
-                    <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>User Management</h1>
-                        <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
-                            {showCreate ? 'Cancel' : '+ Add User'}
-                        </button>
+                    <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {tab === 'users' ? 'User Management' : 'Feedback'}
+                        </h1>
+                        {tab === 'users' && (
+                            <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
+                                {showCreate ? 'Cancel' : '+ Add User'}
+                            </button>
+                        )}
+                    </div>
+
+                    <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
+                        <button style={tabBtnStyle(tab === 'users')} onClick={() => setTab('users')}>Users</button>
+                        <button style={tabBtnStyle(tab === 'feedback')} onClick={() => setTab('feedback')}>Feedback</button>
                     </div>
 
                     {error && (
@@ -6595,7 +6778,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
                         </div>
                     )}
 
-                    {showCreate && (
+                    {tab === 'users' && showCreate && (
                         <div className="card" style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
                             <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text-primary)' }}>Create New User</h3>
                             <form onSubmit={handleCreate}>
@@ -6643,6 +6826,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
                         </div>
                     )}
 
+                    {tab === 'users' && (
                     <div className="card">
                         <table className="table">
                             <thead>
@@ -6712,10 +6896,16 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
+                                                <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                                                     <button onClick={() => { setEditingId(user.id); setEditData({ name: user.name, role: user.role }); }}
                                                         style={{ padding: '4px 10px', background: 'var(--blue)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
                                                         Edit
+                                                    </button>
+                                                    <button onClick={() => handleSendFeedbackEmail(user)}
+                                                        disabled={sendingEmail === user.id}
+                                                        title="Send first-deal feedback email to this user"
+                                                        style={{ padding: '4px 10px', background: 'rgba(0,191,165,0.2)', color: '#00BFA5', border: '1px solid rgba(0,191,165,0.35)', borderRadius: '6px', fontSize: '0.75rem', cursor: sendingEmail === user.id ? 'wait' : 'pointer' }}>
+                                                        {sendingEmail === user.id ? 'Sending…' : 'Send feedback email'}
                                                     </button>
                                                     <button onClick={() => handleToggleActive(user)}
                                                         style={{ padding: '4px 10px', background: user.is_active ? 'rgba(251,191,36,0.2)' : 'rgba(52,211,153,0.2)', color: user.is_active ? '#FBbf24' : 'var(--green)', border: 'none', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
@@ -6736,10 +6926,104 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
                             </tbody>
                         </table>
                     </div>
+                    )}
 
+                    {tab === 'users' && (
                     <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                         <strong>Roles:</strong> Admin — full access + user management | Analyst — upload, parse, analyze deals | Viewer — view shared deals only
                     </div>
+                    )}
+
+                    {tab === 'feedback' && (
+                        <>
+                            <FeedbackAnalyticsCards analytics={feedbackAnalytics} />
+
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Min NPS</label>
+                                    <input type="number" min="0" max="10" value={feedbackMinNps} onChange={e => setFeedbackMinNps(e.target.value)} style={{ ...inputStyle, width: '80px' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Max NPS</label>
+                                    <input type="number" min="0" max="10" value={feedbackMaxNps} onChange={e => setFeedbackMaxNps(e.target.value)} style={{ ...inputStyle, width: '80px' }} />
+                                </div>
+                                <button className="btn btn-primary" onClick={loadFeedback} style={{ fontSize: '0.85rem' }}>Apply filter</button>
+                                <button className="btn" onClick={() => { setFeedbackMinNps(''); setFeedbackMaxNps(''); setTimeout(loadFeedback, 0); }} style={{ fontSize: '0.85rem', background: 'transparent', color: 'var(--text-secondary)' }}>Reset</button>
+                                <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                    {feedback.length} response{feedback.length === 1 ? '' : 's'}
+                                </div>
+                            </div>
+
+                            <div className="card">
+                                {feedbackLoading ? (
+                                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                        <div className="loading"></div> Loading feedback…
+                                    </div>
+                                ) : (
+                                    <table className="table">
+                                        <thead>
+                                            <tr>
+                                                <th style={{ width: '160px' }}>Submitted</th>
+                                                <th>User</th>
+                                                <th>Deal</th>
+                                                <th style={{ width: '70px', textAlign: 'center' }}>NPS</th>
+                                                <th>Wishlist</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {feedback.map(f => {
+                                                const expanded = expandedFeedback === f.id;
+                                                const text = f.wishlist || '';
+                                                const isLong = text.length > 140;
+                                                return (
+                                                    <tr key={f.id}>
+                                                        <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{formatDate(f.submitted_at)}</td>
+                                                        <td>
+                                                            <div style={{ fontWeight: 500 }}>{f.user_name || '—'}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{f.user_email}</div>
+                                                        </td>
+                                                        <td style={{ fontSize: '0.85rem' }}>{f.deal_name || '—'}</td>
+                                                        <td style={{ textAlign: 'center' }}>
+                                                            <span style={{
+                                                                display: 'inline-block', minWidth: '32px', padding: '4px 8px',
+                                                                borderRadius: '6px', fontWeight: 700, fontSize: '0.85rem',
+                                                                background: f.nps == null ? 'rgba(100,116,139,0.15)' : 'rgba(0,0,0,0.2)',
+                                                                color: npsColor(f.nps),
+                                                                border: `1px solid ${npsColor(f.nps)}55`,
+                                                            }}>
+                                                                {f.nps == null ? '—' : f.nps}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ fontSize: '0.85rem', maxWidth: '420px' }}>
+                                                            {text ? (
+                                                                <div>
+                                                                    <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)' }}>
+                                                                        {expanded || !isLong ? text : `${text.slice(0, 140)}…`}
+                                                                    </div>
+                                                                    {isLong && (
+                                                                        <button
+                                                                            onClick={() => setExpandedFeedback(expanded ? null : f.id)}
+                                                                            style={{ marginTop: '4px', background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '0.75rem', padding: 0 }}>
+                                                                            {expanded ? 'Collapse' : 'Show full'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span style={{ color: 'var(--text-secondary)' }}>—</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {feedback.length === 0 && (
+                                                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No feedback yet</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
             );
         };
@@ -6826,8 +7110,160 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
         };
 
         // Main App
+        // FeedbackForm — shown at /engine/feedback after a user's first deal.
+        const FeedbackForm = ({ userName, dealId, onDone }) => {
+            const [nps, setNps] = useState(9);
+            const [wishlist, setWishlist] = useState('');
+            const [submitting, setSubmitting] = useState(false);
+            const [submitted, setSubmitted] = useState(false);
+            const [error, setError] = useState('');
+
+            const firstName = (userName || '').trim().split(/\s+/)[0] || 'there';
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setSubmitting(true);
+                try {
+                    const res = await fetch(`${API_URL}/api/v1/feedback`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            nps: Number(nps),
+                            wishlist: wishlist.trim() || null,
+                            deal_id: dealId || null,
+                        }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.detail || 'Failed to submit feedback');
+                    }
+                    setSubmitted(true);
+                } catch (e) {
+                    setError(e.message);
+                } finally {
+                    setSubmitting(false);
+                }
+            };
+
+            const npsColor = nps >= 9 ? '#22c55e' : nps >= 7 ? '#eab308' : '#ef4444';
+
+            if (submitted) {
+                return (
+                    <div className="container" style={{ maxWidth: '640px', padding: '3rem 1.5rem' }}>
+                        <div style={{
+                            background: 'linear-gradient(135deg, rgba(0,191,165,0.08), rgba(59,130,246,0.08))',
+                            border: '1px solid rgba(0,191,165,0.25)', borderRadius: '12px', padding: '2.5rem', textAlign: 'center',
+                        }}>
+                            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+                                Thanks, {firstName}.
+                            </div>
+                            <div style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+                                Feedback received. Jonathan reads every one of these &mdash; he'll follow up if there's something to dig into.
+                            </div>
+                            <button className="btn btn-primary" onClick={onDone}>Back to deals</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="container" style={{ maxWidth: '640px', padding: '2.5rem 1.5rem' }}>
+                    <div style={{ marginBottom: '2rem' }}>
+                        <div style={{ fontSize: '0.75rem', letterSpacing: '2px', color: '#8fb3d9', textTransform: 'uppercase', fontWeight: 700, marginBottom: '0.5rem' }}>
+                            First-Deal Feedback
+                        </div>
+                        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                            How was it, {firstName}?
+                        </h1>
+                        <div style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            Two questions. Under a minute. Your answers go straight to Jonathan.
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                            {error}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit}>
+                        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1rem' }}>
+                            <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                                How likely are you to recommend CRELYTIC Engine?
+                            </label>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                                0 = not at all, 10 = definitely
+                            </div>
+                            <input
+                                type="range" min="0" max="10" step="1"
+                                value={nps}
+                                onChange={(e) => setNps(e.target.value)}
+                                style={{ width: '100%', accentColor: npsColor }}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+                                <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
+                            </div>
+                            <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '2.25rem', fontWeight: 800, color: npsColor }}>
+                                {nps}
+                            </div>
+                        </div>
+
+                        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                                What's on your wishlist?
+                            </label>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                                What would make this a no-brainer for you? Feature, workflow, integration &mdash; anything.
+                            </div>
+                            <textarea
+                                value={wishlist}
+                                onChange={(e) => setWishlist(e.target.value)}
+                                maxLength={4000}
+                                rows={5}
+                                placeholder="e.g. I'd love to see&hellip;"
+                                style={{
+                                    width: '100%', padding: '0.75rem', borderRadius: '8px',
+                                    border: '1px solid var(--border)', background: 'var(--surface-dark, var(--surface))',
+                                    color: 'var(--text-primary)', fontSize: '0.9rem', fontFamily: 'inherit', resize: 'vertical',
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                            <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                {submitting ? 'Sending\u2026' : 'Send feedback'}
+                            </button>
+                            <button type="button" className="btn" onClick={onDone} style={{ background: 'transparent', color: 'var(--text-secondary)' }}>
+                                Skip for now
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        };
+
         function App() {
-            const [currentView, setCurrentView] = useState('list');
+            // Detect /engine/feedback path (or ?view=feedback for static previews) on mount.
+            const initialView = (() => {
+                try {
+                    if (typeof window === 'undefined') return 'list';
+                    if (window.location.pathname === '/engine/feedback') return 'feedback';
+                    const params = new URLSearchParams(window.location.search);
+                    const v = params.get('view');
+                    if (v === 'feedback' || v === 'admin') return v;
+                } catch (e) {}
+                return 'list';
+            })();
+            const initialFeedbackDealId = (() => {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    return params.get('deal') || null;
+                } catch (e) { return null; }
+            })();
+
+            const [currentView, setCurrentView] = useState(initialView);
             const [selectedDealId, setSelectedDealId] = useState(null);
             const [deal, setDeal] = useState(null);
             const [userName, setUserName] = useState('');
@@ -6838,6 +7274,7 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
             const [showUpgradeBanner, setShowUpgradeBanner] = useState(true);
             const [userPrefs, setUserPrefs] = useState({});
             const [showSettings, setShowSettings] = useState(false);
+            const [feedbackDealId, setFeedbackDealId] = useState(initialFeedbackDealId);
 
             // Fetch current user info + preferences on mount
             useEffect(() => {
@@ -6972,6 +7409,19 @@ const DashboardV2View = ({ deal: initialDeal, onBack, userPrefs = {} }) => {
 
                     {currentView === 'admin-analytics' && (
                         <AdminAnalyticsView onBack={() => setCurrentView('list')} />
+                    )}
+
+                    {currentView === 'feedback' && (
+                        <FeedbackForm
+                            userName={userName}
+                            dealId={feedbackDealId}
+                            onDone={() => {
+                                if (typeof window !== 'undefined' && window.history && window.location.pathname === '/engine/feedback') {
+                                    window.history.replaceState({}, '', '/engine');
+                                }
+                                setCurrentView('list');
+                            }}
+                        />
                     )}
 
                     <div style={{

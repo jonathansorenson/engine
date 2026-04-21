@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     stripe_pro_price_id: str = ""
     stripe_unlimited_price_id: str = ""
 
+    # Email (Resend) — first-deal feedback email (transactional sender: jonathan@crelytic.ai)
+    resend_api_key: str = ""
+    email_from: str = "jonathan@crelytic.ai"
+    email_reply_to: str = "jonathan@crelytic.ai"
+    feedback_base_url: str = "https://engine.crelytic.ai"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -29,6 +29,7 @@ from app.routes import (
     billing_router,
     seo_router,
     marketing_router,
+    feedback_router,
 )
 from app.routes.admin import hash_password, verify_password
 
@@ -85,6 +86,21 @@ def _get_user_from_cookie(cookie_value: str):
         return None
 
 
+def _safe_next(next_param: str, default: str = "/engine") -> str:
+    """Return `next_param` only if it's a safe internal /engine/* path. Else default."""
+    if not next_param:
+        return default
+    # Must be a relative path starting with /engine/ or == /engine. Reject schemes and protocol-relative.
+    if "://" in next_param or next_param.startswith("//"):
+        return default
+    if not next_param.startswith("/engine"):
+        return default
+    # Disallow newlines or control chars
+    if any(ch in next_param for ch in "\r\n"):
+        return default
+    return next_param
+
+
 # ═══════════════════════════════════════════════════════════════
 # AUTH MIDDLEWARE
 # ═══════════════════════════════════════════════════════════════
@@ -118,7 +134,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not user_data:
             if "/api/" in path:
                 return JSONResponse({"detail": "Authentication required"}, status_code=401)
-            return RedirectResponse(url="/engine/login", status_code=302)
+            # Preserve the originally requested /engine/* path (with query string) as ?next=
+            from urllib.parse import quote
+            original = path
+            if request.url.query:
+                original = f"{path}?{request.url.query}"
+            safe = _safe_next(original, default="")
+            login_url = "/engine/login"
+            if safe:
+                login_url += f"?next={quote(safe, safe='')}"
+            return RedirectResponse(url=login_url, status_code=302)
 
         # Inject user info into request state
         request.state.fund_id = user_data.get("email", "unknown")
@@ -251,6 +276,7 @@ LOGIN_HTML = """<!DOCTYPE html>
             <div class="subtitle">AI-Powered Deal Underwriting</div>
             <form method="POST" action="/engine/login">
                 <div class="error {error_class}" id="err">{error_msg}</div>
+                <input type="hidden" name="next" value="{next_value}" />
                 <input type="email" name="email" placeholder="Email address" required />
                 <input type="password" name="password" placeholder="Password" required />
                 <button type="submit" class="btn-primary">Sign In</button>
@@ -362,6 +388,7 @@ app.include_router(chat_router, prefix="/engine")
 app.include_router(admin_router, prefix="/engine")
 app.include_router(admin_analytics_router, prefix="/engine")
 app.include_router(export_router, prefix="/engine")
+app.include_router(feedback_router, prefix="/engine")
 app.include_router(billing_router)
 
 # Static files (OG image, etc.)
@@ -396,10 +423,20 @@ async def root():
     return RedirectResponse(url="/engine")
 
 
+def _render_login(error_msg: str = "", next_value: str = "") -> str:
+    """Render the login HTML with optional error and next= hidden field."""
+    import html as _html
+    html = LOGIN_HTML.replace("{error_class}", "show" if error_msg else "")
+    html = html.replace("{error_msg}", _html.escape(error_msg))
+    html = html.replace("{next_value}", _html.escape(next_value, quote=True))
+    return html
+
+
 @app.get("/engine/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Serve the email/password login form."""
-    html = LOGIN_HTML.replace("{error_class}", "").replace("{error_msg}", "")
+    next_value = _safe_next(request.query_params.get("next", ""), default="")
+    html = _render_login(next_value=next_value)
     # Show success message after signup
     if request.query_params.get("signup") == "success":
         html = html.replace(
@@ -418,10 +455,14 @@ async def login_submit(request: Request):
     attempts = _login_attempts.get(client_ip, [])
     # Clean old attempts outside window
     attempts = [t for t in attempts if now - t < LOGIN_WINDOW_SECONDS]
+    form_peek_next = _safe_next(request.query_params.get("next", ""), default="")
     if len(attempts) >= LOGIN_MAX_ATTEMPTS:
         oldest = min(attempts) if attempts else now
         wait = int(LOCKOUT_SECONDS - (now - oldest))
-        html = LOGIN_HTML.replace("{error_class}", "show").replace("{error_msg}", f"Too many attempts. Try again in {max(1, wait // 60)} minutes.")
+        html = _render_login(
+            error_msg=f"Too many attempts. Try again in {max(1, wait // 60)} minutes.",
+            next_value=form_peek_next,
+        )
         return HTMLResponse(content=html, status_code=429)
 
     form = await request.form()
@@ -444,7 +485,9 @@ async def login_submit(request: Request):
                 "ts": int(time.time()),
             })
             token = _sign(payload)
-            response = RedirectResponse(url="/engine", status_code=302)
+            # Honor ?next= from form or query (validated to an internal /engine/* path)
+            next_url = _safe_next(form.get("next", "") or request.query_params.get("next", ""))
+            response = RedirectResponse(url=next_url, status_code=302)
             response.set_cookie(
                 key=COOKIE_NAME,
                 value=token,
@@ -462,8 +505,9 @@ async def login_submit(request: Request):
     _login_attempts[client_ip] = attempts
     remaining = LOGIN_MAX_ATTEMPTS - len(attempts)
 
-    # Wrong credentials — re-render login with error
-    html = LOGIN_HTML.replace("{error_class}", "show").replace("{error_msg}", "Invalid email or password.")
+    # Wrong credentials — re-render login with error, preserve next=
+    preserved_next = _safe_next(form.get("next", "") or request.query_params.get("next", ""), default="")
+    html = _render_login(error_msg="Invalid email or password.", next_value=preserved_next)
     return HTMLResponse(content=html, status_code=401)
 
 
@@ -550,11 +594,20 @@ async def serve_frontend():
     """Serve the frontend dashboard (authenticated)."""
     index_file = FRONTEND_DIR / "index.html"
     if index_file.exists():
-        return HTMLResponse(content=index_file.read_text(), status_code=200)
+        return HTMLResponse(content=index_file.read_text(encoding="utf-8"), status_code=200)
     return HTMLResponse(
         content="<h1>Frontend not found</h1><p>Place index.html in the frontend/ directory.</p>",
         status_code=404,
     )
+
+
+@app.get("/engine/feedback", response_class=HTMLResponse)
+async def serve_feedback_page(request: Request):
+    """Serve the frontend (authenticated) — React mounts FeedbackForm based on path."""
+    index_file = FRONTEND_DIR / "index.html"
+    if index_file.exists():
+        return HTMLResponse(content=index_file.read_text(encoding="utf-8"), status_code=200)
+    return HTMLResponse(content="<h1>Frontend not found</h1>", status_code=404)
 
 
 # Keep /app as an alias for backward compatibility

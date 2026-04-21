@@ -1,6 +1,6 @@
 """User model for authentication and subscriptions."""
 
-from sqlalchemy import Column, String, Boolean, JSON
+from sqlalchemy import Column, String, Boolean, JSON, DateTime
 from app.models.base import BaseModel
 
 
@@ -23,3 +23,7 @@ class User(BaseModel):
 
     # User-level investment preferences (hurdle metrics + MLA defaults)
     user_preferences = Column(JSON, nullable=True)
+
+    # First-deal feedback lifecycle
+    first_deal_at = Column(DateTime, nullable=True)
+    feedback_email_sent_at = Column(DateTime, nullable=True)
