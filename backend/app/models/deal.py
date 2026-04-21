@@ -18,8 +18,7 @@ class Deal(BaseModel):
     version = Column(String(10), nullable=True, default="1")  # '1' = legacy, '2' = V2 DCF engine
     v2_state = Column(JSON, nullable=True)  # Full V2 modeling state (assumptions, waterfall, tenants, events, capex)
 
-    # Index for common queries
+    # fund_id is indexed by BaseModel's index=True — no explicit Index needed here.
     __table_args__ = (
-        Index("ix_deal_fund_id", "fund_id"),
         Index("ix_deal_status", "status"),
     )

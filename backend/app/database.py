@@ -42,6 +42,16 @@ def init_db():
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_deal_id ON feedback (deal_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_feedback_submitted_at ON feedback (submitted_at)"))
 
+        # Drop orphan indexes that were superseded by auto-generated ones (ix_<plural>_col)
+        # from BaseModel's and explicit index=True columns. Idempotent; safe on fresh DBs.
+        for orphan in ("ix_deal_fund_id", "ix_chat_deal_id", "ix_chat_fund_id"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"DROP INDEX IF EXISTS {orphan}"))
+            except Exception as e:
+                # Never block boot on cleanup
+                print(f"[Startup] Orphan index cleanup for {orphan} skipped: {e}")
+
         if "deals" in insp.get_table_names():
             existing_cols = {c["name"] for c in insp.get_columns("deals")}
             with engine.begin() as conn:
