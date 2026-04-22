@@ -36,8 +36,6 @@ Allow: /robots.txt
 Allow: /llms.txt
 Allow: /llms-full.txt
 Allow: /.well-known/
-Disallow: /engine/login
-Disallow: /engine/signup
 Disallow: /engine/logout
 Disallow: /engine/me
 Disallow: /engine/api/
@@ -52,8 +50,6 @@ Allow: /engine/how-it-works
 Allow: /llms.txt
 Allow: /llms-full.txt
 Disallow: /engine/api/
-Disallow: /engine/login
-Disallow: /engine/signup
 
 User-agent: Google-Extended
 Allow: /engine/features
@@ -63,8 +59,6 @@ Allow: /engine/how-it-works
 Allow: /llms.txt
 Allow: /llms-full.txt
 Disallow: /engine/api/
-Disallow: /engine/login
-Disallow: /engine/signup
 
 User-agent: ClaudeBot
 Allow: /engine/features
@@ -74,14 +68,10 @@ Allow: /engine/how-it-works
 Allow: /llms.txt
 Allow: /llms-full.txt
 Disallow: /engine/api/
-Disallow: /engine/login
-Disallow: /engine/signup
 
 User-agent: anthropic-ai
 Allow: /
 Disallow: /engine/api/
-Disallow: /engine/login
-Disallow: /engine/signup
 
 User-agent: PerplexityBot
 Allow: /engine/features
