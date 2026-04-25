@@ -40,17 +40,25 @@ def _set_read_only(db: Session) -> None:
 
 
 def _sum_asking_price(db: Session) -> float:
-    """Sum asking_price across all parsed deals.
+    """Sum the per-deal price across all parsed deals.
 
-    asking_price lives inside the parsed_data JSON blob at either
-    parsed_data->'property'->>'asking_price' or
-    parsed_data->'financials'->>'asking_price'. We coalesce both.
+    Mirrors the V2-wins-over-V1 priority used in deals.py when surfacing
+    asking_price on a deal list item:
+
+      1. v2_state->'assumptions'->>'purchasePrice' (camelCase, V2 — set by
+         Claude AI extraction or user-edited assumption; canonical for V2)
+      2. parsed_data->'property'->>'asking_price' (snake_case, V1 — OM regex)
+      3. parsed_data->'financials'->>'asking_price' (V1 fallback)
+
+    Per-deal COALESCE picks the first non-null in priority order. Outer SUM
+    aggregates across deals.
     """
     if "postgresql" in settings.database_url:
         sql = text(
             """
             SELECT COALESCE(SUM(
                 COALESCE(
+                    NULLIF(v2_state->'assumptions'->>'purchasePrice', '')::numeric,
                     NULLIF(parsed_data->'property'->>'asking_price', '')::numeric,
                     NULLIF(parsed_data->'financials'->>'asking_price', '')::numeric,
                     0
@@ -58,7 +66,6 @@ def _sum_asking_price(db: Session) -> float:
             ), 0)::float
             FROM deals
             WHERE status = 'parsed'
-              AND parsed_data IS NOT NULL
             """
         )
         try:
@@ -66,15 +73,15 @@ def _sum_asking_price(db: Session) -> float:
         except Exception:
             return 0.0
 
-    # SQLite / dev fallback: iterate in Python.
+    # SQLite / dev fallback: iterate in Python with the same priority.
     total = 0.0
-    for (parsed,) in db.query(Deal.parsed_data).filter(Deal.status == "parsed").all():
-        if not parsed:
-            continue
-        prop = (parsed.get("property") or {}).get("asking_price")
-        fin = (parsed.get("financials") or {}).get("asking_price")
+    rows = db.query(Deal.parsed_data, Deal.v2_state).filter(Deal.status == "parsed").all()
+    for parsed, v2 in rows:
+        v2_pp = (v2 or {}).get("assumptions", {}).get("purchasePrice") if isinstance(v2, dict) else None
+        prop = (parsed or {}).get("property", {}).get("asking_price") if isinstance(parsed, dict) else None
+        fin = (parsed or {}).get("financials", {}).get("asking_price") if isinstance(parsed, dict) else None
         try:
-            total += float(prop or fin or 0)
+            total += float(v2_pp or prop or fin or 0)
         except (TypeError, ValueError):
             continue
     return total
