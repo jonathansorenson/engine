@@ -25,6 +25,7 @@ from app.routes import (
     chat_router,
     admin_router,
     admin_analytics_router,
+    public_metrics_router,
     export_router,
     billing_router,
     seo_router,
@@ -113,6 +114,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         "/engine/features", "/engine/pricing", "/engine/demo",
         "/engine/how-it-works", "/engine/integrations", "/engine/enterprise",
         "/engine/changelog", "/static",
+        "/engine/api/v1/public/metrics",
     }
     _DEV_PATHS = {"/docs", "/openapi.json", "/redoc"}
     PUBLIC_PATHS = _BASE_PUBLIC | _DEV_PATHS if settings.env != "production" else _BASE_PUBLIC
@@ -387,6 +389,7 @@ app.include_router(deals_router, prefix="/engine")
 app.include_router(chat_router, prefix="/engine")
 app.include_router(admin_router, prefix="/engine")
 app.include_router(admin_analytics_router, prefix="/engine")
+app.include_router(public_metrics_router, prefix="/engine")
 app.include_router(export_router, prefix="/engine")
 app.include_router(feedback_router, prefix="/engine")
 app.include_router(billing_router)
